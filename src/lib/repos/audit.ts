@@ -19,6 +19,7 @@ export const AUDIT_EVENTS = {
   INVITE_ACCEPTED: "user.invite.accepted",
   USER_ROLE_ASSIGNED: "user.role.assigned",
   USER_STATUS_CHANGED: "user.status.changed",
+  PASSWORD_CHANGED: "user.password.changed",
   AUTHORIZATION_DENIED: "authz.denied",
 } as const;
 

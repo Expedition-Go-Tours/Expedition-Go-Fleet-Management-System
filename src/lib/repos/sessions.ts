@@ -28,6 +28,7 @@ function toSessionRecord(tokenHash: string, data: DocumentData): SessionRecord {
     idleExpiresAt: toDate(data.idleExpiresAt) ?? new Date(0),
     expiresAt: toDate(data.expiresAt) ?? new Date(0),
     mfaSatisfied: Boolean(data.mfaSatisfied),
+    mustChangePassword: Boolean(data.mustChangePassword),
     userAgentLabel: data.userAgentLabel ? String(data.userAgentLabel) : undefined,
     revokedAt: toDate(data.revokedAt),
     revokeReason: data.revokeReason ? String(data.revokeReason) : undefined,

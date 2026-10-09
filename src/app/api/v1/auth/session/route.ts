@@ -23,7 +23,7 @@ import { serverEnv } from "@/lib/env";
 import { getAdminAuth } from "@/lib/firebase/admin";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { createSession } from "@/lib/repos/sessions";
-import { activateUser, getUserByFirebaseUid, touchLastLogin } from "@/lib/repos/users";
+import { getUserByFirebaseUid, touchLastLogin } from "@/lib/repos/users";
 
 /** How old a Firebase ID token's auth_time may be for session establishment. */
 const MAX_AUTH_AGE_SECONDS = 5 * 60;
@@ -87,20 +87,12 @@ export async function POST(request: NextRequest) {
       throw ApiError.forbidden("This account is not active");
     }
 
-    // First sign-in by an invited user activates the account (invite acceptance).
-    if (user.status === "INVITED") {
-      await activateUser(user.id);
-      await writeAuditEvent({
-        eventType: AUDIT_EVENTS.INVITE_ACCEPTED,
-        actorId: user.id,
-        entityType: "user",
-        entityId: user.id,
-        requestId,
-      });
-      user.status = "ACTIVE";
-    }
+    // Determine if this is a temp-password onboarding session.
+    const passwordChangeRequired = user.status === "INVITED" || Boolean(user.mustChangePassword);
 
     // MFA policy: privileged roles cannot establish a session without MFA.
+    // Exception: onboarding sessions (mustChangePassword) skip MFA — they can't
+    // enroll MFA until after the password is changed and they re-authenticate.
     const privileged = isPrivileged(user.roles);
     const secondFactor = (
       decoded as {
@@ -108,7 +100,7 @@ export async function POST(request: NextRequest) {
       }
     ).firebase?.sign_in_second_factor;
     const mfaSatisfied = typeof secondFactor === "string" && secondFactor.length > 0;
-    if (privileged && !mfaSatisfied) {
+    if (privileged && !mfaSatisfied && !passwordChangeRequired) {
       throw ApiError.forbidden("Multi-factor authentication is required", "MFA_REQUIRED");
     }
 
@@ -128,6 +120,7 @@ export async function POST(request: NextRequest) {
       idleExpiresAt: expiry.idleExpiresAt,
       expiresAt: expiry.expiresAt,
       mfaSatisfied,
+      mustChangePassword: passwordChangeRequired,
       userAgentLabel: coarseUserAgent(request.headers.get("user-agent")),
     });
 
@@ -155,9 +148,10 @@ export async function POST(request: NextRequest) {
 
     return jsonOk({
       user: toPublicUser(user),
-      permissions: [...permissionsForRoles(user.roles)],
+      permissions: passwordChangeRequired ? [] : [...permissionsForRoles(user.roles)],
       csrfToken,
       expiresAt: expiry.expiresAt.toISOString(),
+      passwordChangeRequired,
     });
   } catch (error) {
     return toErrorResponse(error);

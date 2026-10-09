@@ -84,12 +84,12 @@ docs/                  Requirements & design references (see below)
 
 ## Delivery phases
 
-| Phase | Scope                                          | Status      |
-| ----- | ---------------------------------------------- | ----------- |
-| 0     | Scaffold, design tokens, tooling, CI           | Done        |
-| 1     | Auth core (invites, sessions, sign-in/out)     | In progress |
-| 2     | RBAC, permission guards, audit logging         | Pending     |
-| 3     | Fleet domain (vehicles, work orders, expenses) | Pending     |
-| 4     | Dashboard & app shell                          | Pending     |
-| 5     | Scheduled maintenance reminders (Vercel Cron)  | Pending     |
-| 6     | Hardening (CSP, rate limiting, observability)  | Pending     |
+| Phase | Scope                                          | Status  |
+| ----- | ---------------------------------------------- | ------- |
+| 0     | Scaffold, design tokens, tooling, CI           | Done    |
+| 1     | Auth core (invites, sessions, sign-in/out)     | Done    |
+| 2     | RBAC, permission guards, audit logging         | Done    |
+| 3     | Fleet domain (vehicles, work orders, expenses) | Pending |
+| 4     | Dashboard & app shell                          | Pending |
+| 5     | Scheduled maintenance reminders (Vercel Cron)  | Pending |
+| 6     | Hardening (CSP, rate limiting, observability)  | Pending |

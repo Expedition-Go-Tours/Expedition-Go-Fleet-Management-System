@@ -8,8 +8,16 @@ lives in [`AUTHENTICATION_AUTHORIZATION.md`](./AUTHENTICATION_AUTHORIZATION.md).
 
 - **Internal only.** No marketing site, homepage, about/services/contact pages.
   The design language applies to the app shell, sign-in, and dashboard.
-- **Invite only.** There is no public sign-up. Staff are invited and transition
-  `INVITED → ACTIVE` via a single-use Firebase action link.
+- **Invite-only.** There is no public sign-up. Staff are invited and transition
+  `INVITED → ACTIVE` only after accepting their invite and setting their own
+  password (see below).
+- **Invite delivery is out-of-band.** No email provider: `POST /api/v1/users`
+  creates the account and returns a one-time temporary password that the admin
+  shares directly (phone/WhatsApp). The invitee must change it on first sign-in —
+  enforced server-side via `mustChangePassword` on the user doc and a restricted
+  session that can only call `POST /api/v1/auth/password`. Any password change
+  revokes every session for that user and forces re-authentication (preserving
+  the MFA-at-session-establishment policy).
 - **In-app reminders only.** No email provider at MVP.
 
 ## Stack decisions

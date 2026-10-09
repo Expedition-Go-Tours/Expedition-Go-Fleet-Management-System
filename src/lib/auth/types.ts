@@ -27,6 +27,8 @@ export interface AppUser {
    */
   roles: RoleKey[];
   mfaEnabled?: boolean;
+  /** True while the user must change their password (invite acceptance). */
+  mustChangePassword?: boolean;
   lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -41,6 +43,7 @@ export interface PublicUser {
   status: UserStatus;
   roles: RoleKey[];
   mfaEnabled: boolean;
+  mustChangePassword: boolean;
 }
 
 export function toPublicUser(user: AppUser): PublicUser {
@@ -51,6 +54,7 @@ export function toPublicUser(user: AppUser): PublicUser {
     status: user.status,
     roles: user.roles,
     mfaEnabled: Boolean(user.mfaEnabled),
+    mustChangePassword: Boolean(user.mustChangePassword),
   };
 }
 
@@ -65,6 +69,11 @@ export interface SessionRecord {
   /** Absolute deadline; the session cannot outlive this. */
   expiresAt: Date;
   mfaSatisfied: boolean;
+  /**
+   * Snapshot of the user's `mustChangePassword` flag at session creation.
+   * While true, the session may only call the password-change endpoint.
+   */
+  mustChangePassword?: boolean;
   userAgentLabel?: string;
   revokedAt?: Date;
   revokeReason?: string;

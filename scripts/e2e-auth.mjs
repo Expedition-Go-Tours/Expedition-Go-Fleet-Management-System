@@ -5,8 +5,9 @@
  *   npm run dev &                    # in another terminal
  *   node scripts/e2e-auth.mjs
  *
- * Covers: session establishment, INVITED activation, MFA policy, /me,
- * revocation-without-caching, CSRF-protected logout, and suspended accounts.
+ * Covers: session establishment, temp-password onboarding (INVITED → password
+ * change → ACTIVE), MFA policy, /me, revocation-without-caching, CSRF-protected
+ * logout, suspended accounts, and Phase 2 authorization (role gating).
  * Creates and cleans up its own test users.
  */
 import { readFileSync } from "node:fs";
@@ -18,6 +19,7 @@ import { getFirestore } from "firebase-admin/firestore";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const ORIGIN = process.env.E2E_ORIGIN ?? BASE_URL;
 const PASSWORD = "Phase1-Test-2424!x";
+const NEW_PASSWORD = "Phase2-Test-9876!y";
 const EMAIL_SUFFIX = process.env.E2E_EMAIL_SUFFIX ?? `${Date.now()}`;
 
 function loadEnv() {
@@ -67,13 +69,13 @@ function parseCookies(res) {
   return out;
 }
 
-async function signInPassword(email) {
+async function signInPassword(email, password = PASSWORD) {
   const res = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${env.NEXT_PUBLIC_FIREBASE_API_KEY}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password: PASSWORD, returnSecureToken: true }),
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
   );
   const data = await res.json();
@@ -109,13 +111,34 @@ async function logout(cookies) {
   return { status: res.status, body: await res.json(), cookies: parseCookies(res) };
 }
 
+async function changePassword(cookies, currentPassword, newPassword) {
+  const res = await fetch(`${BASE_URL}/api/v1/auth/password`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      cookie: cookieHeader(cookies),
+      origin: ORIGIN,
+      "x-csrf-token": cookies.egt_csrf ?? "",
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  return { status: res.status, body: await res.json(), cookies: parseCookies(res) };
+}
+
+async function getUsers(cookies) {
+  const res = await fetch(`${BASE_URL}/api/v1/users`, {
+    headers: { cookie: cookieHeader(cookies) },
+  });
+  return { status: res.status, body: await res.json() };
+}
+
 function cookieHeader(cookies) {
   return Object.entries(cookies)
     .map(([name, value]) => `${name}=${value}`)
     .join("; ");
 }
 
-async function createUser(email, status, roles) {
+async function createUser(email, status, roles, opts = {}) {
   const record = await adminAuth.createUser({ email, password: PASSWORD });
   const uid = record.uid;
   const docId = `e2e-${uid}`;
@@ -128,6 +151,7 @@ async function createUser(email, status, roles) {
       email,
       status,
       roles,
+      mustChangePassword: opts.mustChangePassword ?? false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -149,13 +173,15 @@ async function cleanup(users) {
 
 const created = [];
 try {
-  console.log(`\nPhase 1 auth e2e @ ${BASE_URL}\n`);
+  console.log(`\nPhase 2 auth e2e @ ${BASE_URL}\n`);
 
   const driver = await createUser(`driver.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["DRIVER"]);
   created.push(driver);
   const admin = await createUser(`admin.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["ADMIN"]);
   created.push(admin);
-  const invited = await createUser(`invited.${EMAIL_SUFFIX}@e2e.local`, "INVITED", ["DRIVER"]);
+  const invited = await createUser(`invited.${EMAIL_SUFFIX}@e2e.local`, "INVITED", ["DRIVER"], {
+    mustChangePassword: true,
+  });
   created.push(invited);
   const suspended = await createUser(`suspended.${EMAIL_SUFFIX}@e2e.local`, "SUSPENDED", [
     "DRIVER",
@@ -188,18 +214,90 @@ try {
     );
   }
 
-  // 3. INVITED user becomes ACTIVE on first sign-in.
+  // 3. INVITED user gets a restricted session with passwordChangeRequired.
+  let invitedCookies;
   {
     const idToken = await signInPassword(invited.email);
     const res = await establishSession(idToken);
+    invitedCookies = res.cookies;
     check(
-      "INVITED user is activated on first sign-in",
-      res.status === 200 && res.body.user?.status === "ACTIVE",
+      "INVITED user gets restricted session (200, passwordChangeRequired)",
+      res.status === 200 &&
+        res.body.passwordChangeRequired === true &&
+        res.body.permissions?.length === 0,
       JSON.stringify(res.body),
     );
   }
 
-  // 4. /me returns the user and effective permissions.
+  // 4. Restricted session cannot access protected endpoints.
+  {
+    const res = await getMe(invitedCookies);
+    check(
+      "/me works for restricted session (200 with passwordChangeRequired)",
+      res.status === 200 && res.body.passwordChangeRequired === true,
+      JSON.stringify(res.body),
+    );
+
+    const usersRes = await getUsers(invitedCookies);
+    check(
+      "restricted session blocked from /users (403 PASSWORD_CHANGE_REQUIRED)",
+      usersRes.status === 403 && usersRes.body.error?.code === "PASSWORD_CHANGE_REQUIRED",
+      JSON.stringify(usersRes.body),
+    );
+  }
+
+  // 5. Password change flow: wrong current password → 403.
+  {
+    const res = await changePassword(invitedCookies, "WrongPassword123!", NEW_PASSWORD);
+    check(
+      "password change with wrong current password fails (403)",
+      res.status === 403,
+      JSON.stringify(res.body),
+    );
+  }
+
+  // 6. Password change with weak new password → 400.
+  {
+    const res = await changePassword(invitedCookies, PASSWORD, "weak");
+    check(
+      "password change with weak new password fails (400)",
+      res.status === 400,
+      JSON.stringify(res.body),
+    );
+  }
+
+  // 7. Password change succeeds → account activated.
+  {
+    const res = await changePassword(invitedCookies, PASSWORD, NEW_PASSWORD);
+    check(
+      "password change succeeds (200, mustReauthenticate)",
+      res.status === 200 &&
+        res.body.mustReauthenticate === true &&
+        res.body.user?.status === "ACTIVE",
+      JSON.stringify(res.body),
+    );
+  }
+
+  // 8. Old session is revoked after password change.
+  {
+    const me = await getMe(invitedCookies);
+    check("old session revoked after password change (401)", me.status === 401, String(me.status));
+  }
+
+  // 9. User can sign in with NEW password after password change.
+  {
+    const idToken = await signInPassword(invited.email, NEW_PASSWORD);
+    const res = await establishSession(idToken);
+    check(
+      "user signs in with new password (200, no passwordChangeRequired)",
+      res.status === 200 &&
+        res.body.passwordChangeRequired === false &&
+        res.body.user?.status === "ACTIVE",
+      JSON.stringify(res.body),
+    );
+  }
+
+  // 10. /me returns the user and effective permissions for active driver.
   {
     const res = await getMe(driverCookies);
     const permissions = res.body.permissions ?? [];
@@ -215,7 +313,7 @@ try {
     );
   }
 
-  // 5. Revocation takes effect on the next request (no caching).
+  // 11. Revocation takes effect on the next request (no caching).
   {
     await db
       .collection("sessions")
@@ -226,7 +324,7 @@ try {
     check("revoked session is rejected immediately (401)", res.status === 401, String(res.status));
   }
 
-  // 6. CSRF-protected logout destroys the session + clears cookies.
+  // 12. CSRF-protected logout destroys the session + clears cookies.
   {
     const idToken = await signInPassword(driver.email);
     const session = await establishSession(idToken);
@@ -240,11 +338,23 @@ try {
     check("session is gone after logout (401)", me.status === 401, String(me.status));
   }
 
-  // 7. Suspended accounts are refused.
+  // 13. Suspended accounts are refused.
   {
     const idToken = await signInPassword(suspended.email);
     const res = await establishSession(idToken);
     check("suspended account is refused (403)", res.status === 403, String(res.status));
+  }
+
+  // 14. Phase 2 authorization: DRIVER cannot list users (403 user:read).
+  {
+    const idToken = await signInPassword(driver.email);
+    const session = await establishSession(idToken);
+    const res = await getUsers(session.cookies);
+    check(
+      "DRIVER cannot list users (403 user:read)",
+      res.status === 403 && res.body.error?.code === "FORBIDDEN",
+      JSON.stringify(res.body),
+    );
   }
 
   console.log(`\n${passed} passed, ${failed} failed\n`);

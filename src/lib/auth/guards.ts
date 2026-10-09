@@ -44,7 +44,13 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   if (!isSessionActive(session, now)) return null;
 
   const user = await getUserById(session.userId);
-  if (!user || user.status !== "ACTIVE") return null;
+  if (!user) return null;
+
+  // Allow INVITED users only if they have a mustChangePassword session (temp-password onboarding).
+  const pendingPasswordChange = session.mustChangePassword === true;
+  if (user.status !== "ACTIVE" && !(user.status === "INVITED" && pendingPasswordChange)) {
+    return null;
+  }
 
   // Sliding idle window, capped by the absolute deadline. Fail closed: if the
   // session store cannot be updated, reject rather than extend silently.
@@ -72,6 +78,13 @@ export async function requireAuthContext(): Promise<AuthContext> {
 
 /** Throw 403 unless the current user holds the permission. */
 export function requirePermission(context: AuthContext, permission: PermissionKey): void {
+  // Sessions awaiting password change are restricted to /auth/password only.
+  if (context.session.mustChangePassword) {
+    throw ApiError.forbidden(
+      "You must change your temporary password before continuing",
+      "PASSWORD_CHANGE_REQUIRED",
+    );
+  }
   if (!rolesHavePermission(context.user.roles, permission)) {
     throw ApiError.forbidden(`Missing permission: ${permission}`);
   }

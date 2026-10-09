@@ -20,6 +20,7 @@ export async function GET() {
     return jsonOk({
       user: toPublicUser(context.user),
       permissions: [...permissionsForRoles(context.user.roles)],
+      passwordChangeRequired: context.session.mustChangePassword === true,
     });
   } catch (error) {
     // Denials are audited so access problems are visible to operators.
