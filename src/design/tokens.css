@@ -1,0 +1,210 @@
+/*
+ * Design tokens — Expedition Go Tours Fleet Management System
+ * ==========================================================
+ * Adapted from docs/DESIGN_SYSTEM.md (the shared Expedition Go Tours visual language).
+ *
+ * ADAPTATION NOTE
+ * ---------------
+ * The source document describes a public marketing surface. It sets a
+ * viewport-proportional root font size (~10px/rem, `font-size: 0.5787vw`) so that
+ * layouts scale pixel-perfectly with the browser width. That behaviour is wrong for
+ * an internal, data-dense application: text would grow and shrink with the window,
+ * hurt legibility and break accessibility (browser zoom, OS text scaling).
+ *
+ * We therefore keep the browser-default 16px root and re-express the type scale in
+ * rem against that root, preserving the *visual character* of the system:
+ *   • black / white monochrome base with a single warm accent (#ff5500)
+ *   • oversized, tightly-tracked geometric display type (Manrope)
+ *   • mono micro-labels in uppercase with wide tracking
+ *   • generous spacing rhythm, hairline borders, restrained chrome
+ *
+ * Tokens are declared in `:root` under short prefixes, then mapped into Tailwind's
+ * theme namespaces below so they surface as utilities (bg-ink, font-heading, ...).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ---------- colour: monochrome base ---------- */
+  --c-black: #000000;
+  --c-near-black: #0c1016;
+  --c-ink: #111111;
+  --c-white: #ffffff;
+  --c-900: #1e1e1e;
+  --c-800: #23272d;
+  --c-700: #3a3e44;
+  --c-600: #50555a;
+  --c-500: #a5abad;
+  --c-400: #d9d9d9;
+  --c-300: #333333;
+
+  /* ---------- colour: interaction ---------- */
+  --c-accent: #ff5500;
+  --c-link-hover: #0016cb;
+  --c-error: #df2020;
+  --c-success: #179237;
+  --c-warning: #b45309;
+
+  /* ---------- semantic surfaces ---------- */
+  --bg-page: var(--c-white);
+  --bg-surface: #f6f6f5;
+  --bg-dark: var(--c-black);
+  --bg-panel-1: var(--c-near-black);
+  --bg-panel-2: var(--c-800);
+  --bg-panel-3: var(--c-700);
+  --bg-panel-4: var(--c-600);
+
+  /* ---------- semantic text ---------- */
+  --text-primary: var(--c-ink);
+  --text-on-dark: var(--c-white);
+  --text-muted: var(--c-500);
+  --text-faint: var(--c-400);
+
+  /* ---------- semantic borders ---------- */
+  --border-hairline: rgba(17, 17, 17, 0.14);
+  --border-strong: rgba(17, 17, 17, 0.24);
+  --border-on-dark: rgba(255, 255, 255, 0.16);
+
+  /* ---------- action ---------- */
+  --action-primary: var(--c-ink);
+  --action-primary-text: var(--c-white);
+  --action-accent: var(--c-accent);
+
+  /* ---------- type families ---------- */
+  --font-body: var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-manrope), "Helvetica Neue", Arial, sans-serif;
+  --font-label: var(--font-dm-sans), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---------- type scale (rem @ 16px root) ---------- */
+  --fs-display-xl: 4.5rem; /* 72px */
+  --fs-display-lg: 3.5rem; /* 56px */
+  --fs-display-md: 2.5rem; /* 40px */
+  --fs-heading-lg: 2rem; /* 32px */
+  --fs-heading-md: 1.5rem; /* 24px */
+  --fs-heading-sm: 1.25rem; /* 20px */
+  --fs-body-lg: 1.25rem; /* 20px */
+  --fs-body-md: 1.125rem; /* 18px */
+  --fs-body-sm: 1rem; /* 16px */
+  --fs-body-xs: 0.875rem; /* 14px */
+  --fs-ui-sm: 0.75rem; /* 12px */
+  --fs-ui-xs: 0.6875rem; /* 11px */
+
+  --tracking-display: -0.045em;
+  --tracking-heading: -0.03em;
+  --tracking-ui: 0.08em;
+
+  --leading-display: 0.95;
+  --leading-heading: 1.1;
+  --leading-body: 1.5;
+
+  /* ---------- spacing rhythm ---------- */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.25rem;
+  --s-6: 1.5rem;
+  --s-7: 2rem;
+  --s-8: 2.5rem;
+  --s-9: 3rem;
+  --s-10: 4rem;
+  --s-11: 5rem;
+  --s-12: 6rem;
+  --s-13: 8rem;
+
+  /* ---------- geometry ---------- */
+  --r-sm: 0.25rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1.25rem;
+  --r-2xl: 2rem;
+  --r-pill: 9999px;
+  --border-width: 1px;
+
+  /* ---------- motion ---------- */
+  --motion-fast: 180ms;
+  --motion-ui: 300ms;
+  --motion-standard: 400ms;
+  --motion-slow: 600ms;
+  --motion-ambient: 1200ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-smooth: cubic-bezier(0.66, 0, 0.15, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---------- layout ---------- */
+  --page-gutter: 1.5rem;
+  --container-max: 1440px;
+}
+
+/*
+ * Map the raw tokens into Tailwind's theme namespaces so they are usable as
+ * utilities and inside `@apply`. `inline` keeps the utility pointing at the
+ * underlying custom property rather than duplicating the value.
+ */
+@theme inline {
+  /* colours */
+  --color-page: var(--bg-page);
+  --color-surface: var(--bg-surface);
+  --color-dark: var(--bg-dark);
+  --color-panel-1: var(--bg-panel-1);
+  --color-panel-2: var(--bg-panel-2);
+  --color-panel-3: var(--bg-panel-3);
+  --color-panel-4: var(--bg-panel-4);
+  --color-ink: var(--text-primary);
+  --color-on-dark: var(--text-on-dark);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-hairline: var(--border-hairline);
+  --color-strong: var(--border-strong);
+  --color-on-dark-line: var(--border-on-dark);
+  --color-accent: var(--c-accent);
+  --color-error: var(--c-error);
+  --color-success: var(--c-success);
+  --color-warning: var(--c-warning);
+
+  /* type families */
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
+  --font-ui: var(--font-label);
+
+  /* type scale */
+  --text-display-xl: var(--fs-display-xl);
+  --text-display-xl--line-height: var(--leading-display);
+  --text-display-xl--letter-spacing: var(--tracking-display);
+  --text-display-lg: var(--fs-display-lg);
+  --text-display-lg--line-height: var(--leading-display);
+  --text-display-lg--letter-spacing: var(--tracking-display);
+  --text-display-md: var(--fs-display-md);
+  --text-display-md--line-height: var(--leading-display);
+  --text-display-md--letter-spacing: var(--tracking-display);
+  --text-heading-lg: var(--fs-heading-lg);
+  --text-heading-lg--line-height: var(--leading-heading);
+  --text-heading-lg--letter-spacing: var(--tracking-heading);
+  --text-heading-md: var(--fs-heading-md);
+  --text-heading-md--line-height: var(--leading-heading);
+  --text-heading-md--letter-spacing: var(--tracking-heading);
+  --text-heading-sm: var(--fs-heading-sm);
+  --text-heading-sm--line-height: var(--leading-heading);
+  --text-body-lg: var(--fs-body-lg);
+  --text-body-lg--line-height: var(--leading-body);
+  --text-body-md: var(--fs-body-md);
+  --text-body-md--line-height: var(--leading-body);
+  --text-body-sm: var(--fs-body-sm);
+  --text-body-sm--line-height: var(--leading-body);
+  --text-body-xs: var(--fs-body-xs);
+  --text-body-xs--line-height: var(--leading-body);
+  --text-ui-sm: var(--fs-ui-sm);
+  --text-ui-sm--line-height: 1.2;
+  --text-ui-sm--letter-spacing: var(--tracking-ui);
+  --text-ui-xs: var(--fs-ui-xs);
+  --text-ui-xs--line-height: 1.2;
+  --text-ui-xs--letter-spacing: var(--tracking-ui);
+
+  /* geometry */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-2xl: var(--r-2xl);
+  --radius-pill: var(--r-pill);
+}
