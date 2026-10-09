@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/Button";
 import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
+export const metadata = { title: "Styleguide" };
+
 const palette: { name: string; value: string; note: string }[] = [
   { name: "Ink", value: "#111111", note: "Primary text / primary action" },
   { name: "Accent", value: "#ff5500", note: "Attention, alerts, active state" },
@@ -13,16 +15,17 @@ const palette: { name: string; value: string; note: string }[] = [
 ];
 
 const phases = [
-  { id: "0", label: "Scaffold", state: "In progress" },
-  { id: "1", label: "Auth core", state: "Pending" },
-  { id: "2", label: "RBAC + audit", state: "Pending" },
-  { id: "3", label: "Fleet domain", state: "Pending" },
-  { id: "4", label: "Dashboard", state: "Pending" },
+  { id: "0", label: "Scaffold", state: "Done" },
+  { id: "1", label: "Auth core", state: "Done" },
+  { id: "2", label: "RBAC + audit", state: "Done" },
+  { id: "3", label: "Fleet domain", state: "Done" },
+  { id: "4", label: "Dashboard", state: "Done" },
   { id: "5", label: "Scheduled reminders", state: "Pending" },
   { id: "6", label: "Hardening", state: "Pending" },
 ] as const;
 
-export default function Home() {
+/** Internal design-system reference — not part of the product surface. */
+export default function StyleguidePage() {
   return (
     <main className="flex flex-1 flex-col">
       <section className="bg-dark text-on-dark">
@@ -40,18 +43,6 @@ export default function Home() {
               Vehicle, work-order and expense tracking for the Expedition Go Tours fleet — with
               scheduled maintenance reminders and a full audit trail.
             </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="inverse" size="lg" disabled>
-              Sign in
-            </Button>
-            <Button variant="accent" size="lg" disabled>
-              Request access
-            </Button>
-            <span className="font-ui text-on-dark/50 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-              Authentication arrives in Phase 1
-            </span>
           </div>
         </Container>
       </section>
@@ -126,9 +117,9 @@ export default function Home() {
                 <span className="font-heading text-heading-sm font-semibold">{phase.label}</span>
                 <span
                   className={
-                    phase.state === "In progress"
-                      ? "text-body-xs text-accent font-medium"
-                      : "text-body-xs text-muted"
+                    phase.state === "Pending"
+                      ? "text-body-xs text-muted"
+                      : "text-accent text-body-xs font-medium"
                   }
                 >
                   {phase.state}

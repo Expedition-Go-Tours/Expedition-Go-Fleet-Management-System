@@ -93,6 +93,8 @@ export async function POST(request: NextRequest) {
     // MFA policy: privileged roles cannot establish a session without MFA.
     // Exception: onboarding sessions (mustChangePassword) skip MFA — they can't
     // enroll MFA until after the password is changed and they re-authenticate.
+    // REQUIRE_Mfa=false is a development-only escape hatch for projects where
+    // TOTP is not yet enabled in the Firebase console (never set it in prod).
     const privileged = isPrivileged(user.roles);
     const secondFactor = (
       decoded as {
@@ -100,7 +102,7 @@ export async function POST(request: NextRequest) {
       }
     ).firebase?.sign_in_second_factor;
     const mfaSatisfied = typeof secondFactor === "string" && secondFactor.length > 0;
-    if (privileged && !mfaSatisfied && !passwordChangeRequired) {
+    if (privileged && !mfaSatisfied && !passwordChangeRequired && serverEnv.requireMfa) {
       throw ApiError.forbidden("Multi-factor authentication is required", "MFA_REQUIRED");
     }
 

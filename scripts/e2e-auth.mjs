@@ -190,15 +190,24 @@ try {
 
   console.log("  (test users created)");
 
-  // 1. Privileged role without MFA is refused.
+  // 1. MFA policy for privileged roles (respect the REQUIRE_MFA dev gate).
+  const requireMfa = env.REQUIRE_MFA !== "false";
   {
     const idToken = await signInPassword(admin.email);
     const res = await establishSession(idToken);
-    check(
-      "ADMIN without MFA is refused (403 MFA_REQUIRED)",
-      res.status === 403 && res.body.error?.code === "MFA_REQUIRED",
-      JSON.stringify(res.body),
-    );
+    if (requireMfa) {
+      check(
+        "ADMIN without MFA is refused (403 MFA_REQUIRED)",
+        res.status === 403 && res.body.error?.code === "MFA_REQUIRED",
+        JSON.stringify(res.body),
+      );
+    } else {
+      check(
+        "ADMIN session established (REQUIRE_MFA=false dev gate)",
+        res.status === 200,
+        JSON.stringify(res.body),
+      );
+    }
   }
 
   // 2. Active driver establishes a session.

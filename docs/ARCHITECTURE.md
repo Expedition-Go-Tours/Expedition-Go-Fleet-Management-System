@@ -107,6 +107,37 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 - **Providers** (garages/vendors) are plain CRUD with an `active` flag —
   deactivated providers stay in history rather than being deleted.
 
+## App shell & screens (Phase 4)
+
+- **Route groups:** `(auth)` holds the pre-login screens (sign-in, change
+  password) on a dark full-bleed layout; `(app)` holds the authenticated app
+  behind a server-side layout guard that redirects to `/sign-in` (no session)
+  or `/change-password` (restricted onboarding session). Every page inside
+  `(app)` inherits the guard.
+- **Session flow in the browser:** the Firebase client SDK signs in and hands
+  its ID token to `POST /api/v1/auth/session`; the response sets the opaque
+  cookie session and the client then **discards its Firebase auth state** — the
+  cookie is authoritative. `src/lib/client/api.ts` attaches the CSRF header
+  from the readable cookie and bounces to `/sign-in` on any 401.
+- **Server components read via repos, mutations via the API.** List/detail
+  pages call the Firestore repos directly (server-only, still behind
+  `requireAuthContext` + permission checks); every mutation goes through the
+  `/api/v1` endpoints from small client components (`StatusActions`,
+  `CreateForm`, `InviteUserForm`, `RoleEditor`, `UserStatusButton`), so the
+  audit trail and invariant checks always run.
+- **Permission-aware nav + action visibility:** the app shell filters nav items
+  by effective permissions, and each screen computes its visible action
+  buttons from the same server-side `ActionMap` used by the API — the server
+  re-checks regardless.
+- **`REQUIRE_MFA` dev gate:** privileged-role MFA enforcement (spec §4.2) can
+  be disabled with `REQUIRE_MFA=false` **only** while TOTP is not yet enabled
+  in the Firebase console. It defaults to enforced and must stay enforced in
+  production; the flag is documented in `.env.example` and the auth E2E reads
+  it to pick the expected outcome.
+- **Bootstrap/recovery script:** `scripts/create-admin.mjs` creates or updates
+  an admin directly via the Admin SDK (used for the first account and for
+  recovery if the last-admin invariant locks everyone out).
+
 ## Design system
 
 - Full visual language applies to the app (not just marketing): black/white

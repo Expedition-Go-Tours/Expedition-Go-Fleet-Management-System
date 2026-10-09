@@ -56,6 +56,7 @@ Dev tools:
 | `node scripts/verify-firebase.mjs` | Checks Admin SDK credentials against live Auth + Firestore |
 | `node scripts/e2e-auth.mjs`        | End-to-end auth flow test (needs `npm run dev`)            |
 | `node scripts/e2e-fleet.mjs`       | End-to-end fleet-domain test (needs `npm run dev`)         |
+| `node scripts/create-admin.mjs`    | Create/update an admin user (bootstrap or recovery)        |
 
 ## Project structure
 
@@ -91,6 +92,6 @@ docs/                  Requirements & design references (see below)
 | 1     | Auth core (invites, sessions, sign-in/out)     | Done    |
 | 2     | RBAC, permission guards, audit logging         | Done    |
 | 3     | Fleet domain (vehicles, work orders, expenses) | Done    |
-| 4     | Dashboard & app shell                          | Pending |
+| 4     | Dashboard & app shell                          | Done    |
 | 5     | Scheduled maintenance reminders (Vercel Cron)  | Pending |
 | 6     | Hardening (CSP, rate limiting, observability)  | Pending |
