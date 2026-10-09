@@ -16,10 +16,13 @@ lives in [`AUTHENTICATION_AUTHORIZATION.md`](./AUTHENTICATION_AUTHORIZATION.md).
 
 - **Next.js + TypeScript on Vercel** for both the UI and the API. Route handlers
   under `/api/v1/*` replace the Express layer proposed in the auth spec.
-- **Firebase only.** Firebase Authentication, Cloud Firestore, Firebase Storage.
-  The auth spec's Redis (sessions) and PostgreSQL/Prisma (data) recommendations
-  are **not** used at MVP — Firestore stores sessions and domain data. Do not
+- **Firebase only.** Firebase Authentication, Cloud Firestore, and sessions. The
+  auth spec's Redis (sessions) and PostgreSQL/Prisma (data) recommendations are
+  **not** used at MVP — Firestore stores sessions and domain data. Do not
   reintroduce Redis without an explicit decision.
+- **Object storage is Cloudflare R2** (S3-compatible), deferred to Phase 3.
+  Firebase Storage would force the paid Blaze plan; R2 keeps the project on the
+  free Spark plan with a 10 GB allowance and no egress fees.
 - **Vercel Cron** drives scheduled maintenance reminders, keeping Firebase on the
   free tier. The cron endpoint is protected by `CRON_SECRET`.
 
@@ -54,6 +57,9 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 - All data flows through `/api/v1/*` using the Admin SDK.
 - Firestore security rules are **default-deny**; the client SDK does not read
   Firestore or Storage directly.
+- Role assignments live on the `users` doc (`roles: RoleKey[]`) as the
+  authoritative source for authorization — read fresh on every request, never
+  cached — while `userRoles` retains the assignment history for audit.
 - Storage objects use randomized keys and are served through short-lived signed
   URLs issued only after the parent record has been authorized.
 

@@ -15,7 +15,7 @@ surface — the application ships the sign-in screen and the operations dashboar
 | Fonts          | DM Sans (body) + Manrope (display), self-hosted via `next/font/local` |
 | Auth           | Firebase Authentication (email/password, TOTP MFA)                    |
 | Data           | Cloud Firestore (Admin SDK, server-only)                              |
-| Files          | Firebase Storage (signed URLs)                                        |
+| Files          | Cloudflare R2 (S3-compatible) via signed URLs — Phase 3               |
 | Scheduled jobs | Vercel Cron → `/api/v1/cron/*`                                        |
 | Hosting        | Vercel                                                                |
 | Testing        | Vitest + Testing Library (unit), Playwright (e2e)                     |
@@ -49,6 +49,13 @@ renders without any environment variables.
 | `npm run format`       | Format with Prettier           |
 | `npm run format:check` | Verify formatting (used in CI) |
 
+Dev tools:
+
+| Script                             | Purpose                                                    |
+| ---------------------------------- | ---------------------------------------------------------- |
+| `node scripts/verify-firebase.mjs` | Checks Admin SDK credentials against live Auth + Firestore |
+| `node scripts/e2e-auth.mjs`        | End-to-end auth flow test (needs `npm run dev`)            |
+
 ## Project structure
 
 ```
@@ -79,8 +86,8 @@ docs/                  Requirements & design references (see below)
 
 | Phase | Scope                                          | Status      |
 | ----- | ---------------------------------------------- | ----------- |
-| 0     | Scaffold, design tokens, tooling, CI           | In progress |
-| 1     | Auth core (invites, sessions, sign-in/out)     | Pending     |
+| 0     | Scaffold, design tokens, tooling, CI           | Done        |
+| 1     | Auth core (invites, sessions, sign-in/out)     | In progress |
 | 2     | RBAC, permission guards, audit logging         | Pending     |
 | 3     | Fleet domain (vehicles, work orders, expenses) | Pending     |
 | 4     | Dashboard & app shell                          | Pending     |

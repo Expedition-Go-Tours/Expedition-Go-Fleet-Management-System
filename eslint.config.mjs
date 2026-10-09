@@ -13,6 +13,15 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    // Route handlers are not React components; the react-hooks rules (including
+    // the purity rule that flags Date.now/randomUUID in server code) don't apply.
+    files: ["src/app/api/**/route.{ts,tsx}"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+      "react-hooks/purity": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
