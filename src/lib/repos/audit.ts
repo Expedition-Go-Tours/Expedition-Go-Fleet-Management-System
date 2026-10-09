@@ -21,6 +21,20 @@ export const AUDIT_EVENTS = {
   USER_STATUS_CHANGED: "user.status.changed",
   PASSWORD_CHANGED: "user.password.changed",
   AUTHORIZATION_DENIED: "authz.denied",
+  VEHICLE_CREATED: "vehicle.created",
+  VEHICLE_UPDATED: "vehicle.updated",
+  VEHICLE_STATUS_CHANGED: "vehicle.status.changed",
+  REPORT_CREATED: "report.created",
+  REPORT_STATUS_CHANGED: "report.status.changed",
+  WORK_ORDER_CREATED: "work_order.created",
+  WORK_ORDER_UPDATED: "work_order.updated",
+  WORK_ORDER_STATUS_CHANGED: "work_order.status.changed",
+  EXPENSE_CREATED: "expense.created",
+  EXPENSE_STATUS_CHANGED: "expense.status.changed",
+  PROVIDER_CREATED: "provider.created",
+  PROVIDER_UPDATED: "provider.updated",
+  AUDIT_READ: "audit.read",
+  EXPORT_GENERATED: "export.generated",
 } as const;
 
 export type AuditEventType = (typeof AUDIT_EVENTS)[keyof typeof AUDIT_EVENTS];

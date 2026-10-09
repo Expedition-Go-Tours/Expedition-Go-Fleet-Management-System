@@ -13,6 +13,7 @@ export const COLLECTIONS = {
   serviceHistory: "serviceHistory",
   notifications: "notifications",
   auditLogs: "auditLogs",
+  providers: "providers",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

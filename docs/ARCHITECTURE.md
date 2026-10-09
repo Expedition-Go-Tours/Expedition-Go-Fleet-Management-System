@@ -75,7 +75,37 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 
 `users`, `roles`, `userRoles`, `sessions`, `invites`, `vehicles`,
 `mileageEntries`, `maintenanceReports`, `workOrders`, `expenses`,
-`serviceHistory`, `notifications`, `auditLogs`.
+`serviceHistory`, `notifications`, `auditLogs`, `providers`.
+
+## Fleet domain (Phase 3)
+
+- **Lifecycle state machines, explicit action endpoints.** Each entity's status
+  changes only through `POST /<entity>/{id}/status` with an `action` in the
+  body — never through PATCH (`status` in a PATCH body is rejected with a 400).
+  Actions live in `src/lib/domain/*` as pure `ActionMap` definitions:
+  `{ permission, from[], to }`. The generic handler
+  (`src/lib/api/action.ts`) resolves the action → checks its permission →
+  validates the source state (409 on invalid transitions) → applies → audits
+  before/after. Covered by unit tests in `src/lib/domain/lifecycle.test.ts`.
+- **Key invariants:**
+  - Vehicle `SAFETY_HOLD → ACTIVE` requires the dedicated `vehicle:release`
+    permission (no role has it by default); `ARCHIVED` is terminal; archiving
+    is blocked while open work orders exist; the odometer never decreases.
+  - Work orders run a strict forward pipeline
+    `OPEN → IN_PROGRESS → COMPLETED → CLOSED` with an explicit `reopen`.
+  - Expenses follow `PENDING → APPROVED → PAID`; `PAID` and `VOID` are
+    terminal — paid expenses are never voided in place.
+  - Report ownership: `report:read:own` scoping enforced in the list and
+    get endpoints; `report:read:all` reads everything.
+- **Money is integer minor units** (`amountMinor`, GHS exponent 2). Creation
+  accepts a decimal major-unit value and converts with string arithmetic —
+  no floats ever reach the ledger.
+- **Queries are equality-filter + in-memory sort.** Firestore composite indexes
+  are deliberately avoided at MVP: lists filter with single-field `where`s and
+  sort/limit in memory (collections are small for an internal tool). If a
+  collection grows past ~2k docs, add the composite index instead.
+- **Providers** (garages/vendors) are plain CRUD with an `active` flag —
+  deactivated providers stay in history rather than being deleted.
 
 ## Design system
 
