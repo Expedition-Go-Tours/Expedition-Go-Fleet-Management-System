@@ -166,7 +166,7 @@ export default async function DashboardPage() {
             ) : (
               <ul className="divide-hairline divide-y">
                 {centre.queue.map((item) => (
-                  <QueueRow key={`${item.kind}-${item.title}`} item={item} />
+                  <QueueRow key={item.id} item={item} />
                 ))}
               </ul>
             )}

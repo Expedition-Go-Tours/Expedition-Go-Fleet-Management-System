@@ -24,6 +24,7 @@ export interface TabOverviewData {
 }
 
 export interface TabReadingData {
+  id: string;
   km: number;
   source: string;
   status: string;
@@ -334,7 +335,7 @@ function OdometerPanel({ readings, total }: { readings: TabReadingData[]; total:
       ) : (
         <ul className="divide-hairline divide-y">
           {readings.map((r) => (
-            <li key={`${r.effectiveAt}-${r.km}`} className="px-5 py-3">
+            <li key={r.id} className="px-5 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-data font-medium text-ink">{r.km.toLocaleString()} km</span>
                 {r.deltaKm !== null && (

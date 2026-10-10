@@ -52,9 +52,26 @@ test.describe("authenticated responsive QA", () => {
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"), { timeout: 20_000 });
 
+    // The brand logo replaced the old "EG" monogram — assert it is wired up and
+    // actually resolves (a broken src would also surface via `errors` below).
+    const brandLogo = page.locator('img[alt="Expedition Go Tours"]');
+    await expect(brandLogo).toHaveCount(1);
+    await expect
+      .poll(() => brandLogo.first().evaluate((el) => (el as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0);
+
+    // Discover a concrete vehicle detail URL so the profile tabs (a common
+    // source of duplicate-key warnings from composite list keys) are exercised
+    // across every viewport as well.
+    await page.goto("/vehicles");
+    const vehicleLink = page.locator('a[href^="/vehicles/"]').first();
+    const vehicleHref =
+      (await vehicleLink.count()) > 0 ? await vehicleLink.getAttribute("href") : null;
+    const paths = vehicleHref ? [...PATHS, vehicleHref] : PATHS;
+
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize(viewport);
-      for (const path of PATHS) {
+      for (const path of paths) {
         const response = await page.goto(path);
         expect(response?.status(), `${path} @ ${viewport.width}px`).toBeLessThan(400);
         const overflow = await page.evaluate(() => {
@@ -79,6 +96,19 @@ test.describe("authenticated responsive QA", () => {
           overflow.delta,
           `horizontal overflow on ${path} @ ${viewport.width}px — ${overflow.offenders.join(" | ")}`,
         ).toBeLessThanOrEqual(2);
+      }
+    }
+
+    // Render every profile tab. React only reconciles the active panel, so a
+    // bad list key (e.g. a composite of display fields that can repeat) fires
+    // only once the tab is opened — sweep them all and let `errors` catch it.
+    if (vehicleHref) {
+      await page.goto(vehicleHref);
+      const tabButtons = page.getByRole("tab");
+      const tabCount = await tabButtons.count();
+      for (let index = 0; index < tabCount; index += 1) {
+        await tabButtons.nth(index).click();
+        await expect(tabButtons.nth(index)).toHaveAttribute("aria-selected", "true");
       }
     }
 

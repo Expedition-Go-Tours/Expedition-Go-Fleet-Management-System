@@ -45,6 +45,8 @@ export interface MaintenanceHealth {
 }
 
 export interface ActionItem {
+  /** Stable, unique key for React lists (entity id, not display text). */
+  id: string;
   kind:
     | "critical_issue"
     | "safety_hold"
@@ -138,7 +140,7 @@ export async function loadControlCentre(input: {
       openWorkOrders: workOrders.filter((wo) => OPEN_WORK_ORDER_STATUSES.has(wo.status)).length,
       waitingWorkOrders: workOrders.filter((wo) => wo.status === "WAITING").length,
     };
-    const overdueItems: { title: string; details: string; href: string }[] = [];
+    const overdueItems: { id: string; title: string; details: string; href: string }[] = [];
 
     for (const vehicle of fleetVehicles) {
       const schedules = await listSchedules(vehicle.id);
@@ -161,6 +163,7 @@ export async function loadControlCentre(input: {
 
         if (evaluated.status === "OVERDUE") {
           overdueItems.push({
+            id: `maint-${vehicle.id}-${schedule.id}`,
             title: `${vehicle.regNumber} · ${schedule.taskName}`,
             details: `Overdue by ${evaluated.remainingKm != null ? `${evaluated.remainingKm.toLocaleString()} km` : evaluated.remainingDays != null ? `${evaluated.remainingDays} day${evaluated.remainingDays === 1 ? "" : "s"}` : "date"}`,
             href: `/vehicles/${vehicle.id}?tab=maintenance`,
@@ -172,6 +175,7 @@ export async function loadControlCentre(input: {
 
     for (const item of overdueItems.slice(0, 5)) {
       result.queue.push({
+        id: item.id,
         kind: "overdue_maintenance",
         title: item.title,
         details: item.details,
@@ -186,6 +190,7 @@ export async function loadControlCentre(input: {
   const vehicleName = new Map(vehicles.map((v) => [v.id, v.regNumber]));
   for (const issue of criticalIssues.slice(0, 5)) {
     result.queue.push({
+      id: `issue-${issue.id}`,
       kind: "critical_issue",
       title: issue.title,
       details: `Critical · ${issue.number ?? "Issue"} · ${vehicleName.get(issue.vehicleId) ?? "vehicle"}`,
@@ -195,6 +200,7 @@ export async function loadControlCentre(input: {
   }
   for (const vehicle of fleetVehicles.filter((v) => v.status === "SAFETY_HOLD").slice(0, 5)) {
     result.queue.push({
+      id: `hold-${vehicle.id}`,
       kind: "safety_hold",
       title: `${vehicle.regNumber} on safety hold`,
       details: vehicle.safetyHoldReason || "Release requires explicit vehicle:release permission.",
@@ -206,6 +212,7 @@ export async function loadControlCentre(input: {
   // ---- Mandatory document health (only when documents are readable) --------
   if (canReadDocuments) {
     interface DocFinding {
+      id: string;
       title: string;
       details: string;
       href: string;
@@ -219,12 +226,14 @@ export async function loadControlCentre(input: {
         const state = documentState(doc, now, EXPIRY_WARNING_DAYS);
         if (state === "MISSING") {
           docFindings.missing.push({
+            id: `doc-${vehicle.id}-${doc.id}`,
             title: `${vehicle.regNumber} · ${docCategoryLabel(doc.category)}`,
             details: "Required document not on record",
             href: `/vehicles/${vehicle.id}?tab=documents`,
           });
         } else if (state === "EXPIRED") {
           docFindings.expired.push({
+            id: `doc-${vehicle.id}-${doc.id}`,
             title: `${vehicle.regNumber} · ${docCategoryLabel(doc.category)}`,
             details: "Expired and must be renewed before assignment",
             href: `/vehicles/${vehicle.id}?tab=documents`,
@@ -235,6 +244,7 @@ export async function loadControlCentre(input: {
 
     for (const item of [...docFindings.missing, ...docFindings.expired].slice(0, 5)) {
       result.queue.push({
+        id: item.id,
         kind: "document",
         title: item.title,
         details: item.details,
@@ -248,6 +258,7 @@ export async function loadControlCentre(input: {
   if (canReadWorkOrders) {
     for (const wo of workOrders.filter((w) => w.status === "WAITING").slice(0, 3)) {
       result.queue.push({
+        id: `wo-${wo.id}`,
         kind: "waiting_work_order",
         title: wo.title,
         details: `${wo.number} · waiting: ${wo.waitingReason ?? "awaiting parts or provider"}`,

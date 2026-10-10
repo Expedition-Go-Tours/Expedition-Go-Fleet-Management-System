@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -122,12 +123,17 @@ export function ShellLayout({
 
   const brand = (
     <div className={cn("flex items-center gap-2.5 px-3 py-4", collapsed && "lg:justify-center")}>
-      <span className="bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white">
-        EG
-      </span>
+      <Image
+        src="/lite-logo.png"
+        alt="Expedition Go Tours"
+        width={32}
+        height={32}
+        priority
+        className="h-8 w-8 shrink-0 rounded-md bg-white object-contain"
+      />
       {!collapsed && (
         <span className="flex min-w-0 flex-col">
-          <span className="font-heading truncate text-sm font-semibold text-white">Expedition Go</span>
+          <span className="font-heading truncate text-sm font-semibold text-white">Expedition Go Tours</span>
           <span className="font-ui text-[10px] uppercase tracking-[var(--tracking-ui)] text-on-dark-muted">
             Fleet operations
           </span>

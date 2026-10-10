@@ -130,6 +130,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       safetyHoldAppliedAt: formatDate(vehicle.safetyHoldAppliedAt),
     },
     readings: readings.map((r) => ({
+      id: r.id,
       km: r.km,
       source: r.source,
       status: r.status,
