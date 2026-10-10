@@ -1,3 +1,5 @@
+import { FilePlus2, ReceiptText } from "lucide-react";
+
 import { CreateForm } from "@/components/actions/CreateForm";
 import { StatusActions } from "@/components/actions/StatusActions";
 import { Container } from "@/components/layout/Container";
@@ -54,7 +56,7 @@ export default async function ExpensesPage() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${expenses.length} expense(s)`}>
+          <Card title={`${expenses.length} expense(s)`} icon={ReceiptText}>
             {expenses.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-8">No expenses recorded.</p>
             ) : (
@@ -102,7 +104,7 @@ export default async function ExpensesPage() {
         </div>
 
         {canCreate && (
-          <Card title="Record expense">
+          <Card title="Record expense" icon={FilePlus2}>
             <div className="p-5">
               <CreateForm
                 endpoint="/api/v1/expenses"

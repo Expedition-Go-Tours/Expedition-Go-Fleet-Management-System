@@ -1,3 +1,5 @@
+import { FilePlus2, Wrench } from "lucide-react";
+
 import { CreateForm } from "@/components/actions/CreateForm";
 import { StatusActions } from "@/components/actions/StatusActions";
 import { Container } from "@/components/layout/Container";
@@ -45,7 +47,7 @@ export default async function WorkOrdersPage() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${workOrders.length} work order(s)`}>
+          <Card title={`${workOrders.length} work order(s)`} icon={Wrench}>
             {workOrders.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-8">No work orders yet.</p>
             ) : (
@@ -91,7 +93,7 @@ export default async function WorkOrdersPage() {
         </div>
 
         {canCreate && (
-          <Card title="New work order">
+          <Card title="New work order" icon={FilePlus2}>
             <div className="p-5">
               <CreateForm
                 endpoint="/api/v1/work-orders"

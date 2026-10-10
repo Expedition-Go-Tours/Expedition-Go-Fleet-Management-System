@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Droplets } from "lucide-react";
+import { Droplets, Fuel, Gauge, ReceiptText } from "lucide-react";
 
 import { FuelFilters } from "@/components/fuel/FuelFilters";
 import { Card } from "@/components/ui/Card";
@@ -81,17 +81,18 @@ export default async function FuelPage({
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiCard label="Entries shown" value={rows.length} icon={<Droplets aria-hidden="true" className="h-4 w-4" />} context={`${vehicleCount} vehicle${vehicleCount === 1 ? "" : "s"}`} />
-        <KpiCard label="Volume" value={`${formatNumber(totalLitres)} L`} context="Recorded litres" />
-        <KpiCard label="Spend" value={formatMoney(totalMinor)} context="Mirrored into expenses" />
+        <KpiCard label="Volume" value={`${formatNumber(totalLitres)} L`} context="Recorded litres" icon={<Fuel aria-hidden="true" className="h-4 w-4" />} />
+        <KpiCard label="Spend" value={formatMoney(totalMinor)} context="Mirrored into expenses" icon={<ReceiptText aria-hidden="true" className="h-4 w-4" />} />
         <KpiCard
           label="Measured efficiency"
           value={measuredCount > 0 ? `${measuredCount} fill-ups` : "—"}
           tone={measuredCount > 0 ? "success" : "default"}
           context="Segments with defensible km/l"
+          icon={<Gauge aria-hidden="true" className="h-4 w-4" />}
         />
       </div>
 
-      <Card title="Fuel ledger" flush>
+      <Card title="Fuel ledger" icon={Fuel} flush>
         <div className="border-hairline border-b px-4 py-3">
           <FuelFilters
             vehicles={vehicles
@@ -115,6 +116,7 @@ export default async function FuelPage({
           ]}
           empty={
             <EmptyState
+              icon={Fuel}
               title="No fuel entries"
               description="Fuel purchases are recorded through the operations workflow — entries appear here once recorded."
             />

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CheckCircle2, Info, ShieldAlert, UserCheck } from "lucide-react";
 
 import { StatusActions } from "@/components/actions/StatusActions";
 import { ResolveIncidentButton } from "@/components/incidents/ResolveIncidentButton";
@@ -66,12 +67,12 @@ export default async function IncidentDetailPage({
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
-          <Card title="What happened">
+          <Card title="What happened" icon={ShieldAlert}>
             <p className="text-body-sm whitespace-pre-wrap text-ink">{incident.description}</p>
           </Card>
 
           {incident.resolution && (
-            <Card title="Resolution">
+            <Card title="Resolution" icon={CheckCircle2}>
               <p className="text-body-sm whitespace-pre-wrap text-ink">{incident.resolution}</p>
               {incident.resolvedByUserId && (
                 <p className="text-data-xs mt-3 text-muted">
@@ -89,7 +90,7 @@ export default async function IncidentDetailPage({
         </div>
 
         <div className="flex flex-col gap-6">
-          <Card title="Details" flush>
+          <Card title="Details" icon={Info} flush>
             <DetailRow label="Vehicle">
               {vehicle ? (
                 <Link href={`/vehicles/${vehicle.id}`} className="font-medium text-link hover:underline">
@@ -112,7 +113,7 @@ export default async function IncidentDetailPage({
           </Card>
 
           {(actions.length > 0 || (canManage && incident.status !== "RESOLVED")) && (
-            <Card title="Review" flush>
+            <Card title="Review" icon={UserCheck} flush>
               <div className="flex flex-wrap gap-2 px-5 py-4">
                 {actions.length > 0 && (
                   <StatusActions

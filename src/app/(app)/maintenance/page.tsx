@@ -1,4 +1,11 @@
 import Link from "next/link";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+} from "lucide-react";
 
 import { MaintenanceFilters } from "@/components/maintenance/MaintenanceFilters";
 import { Card } from "@/components/ui/Card";
@@ -111,6 +118,7 @@ export default async function MaintenancePage({
           tone={(counts.get("OVERDUE") ?? 0) > 0 ? "danger" : "default"}
           href="/maintenance?state=OVERDUE"
           context="Past its due point"
+          icon={<AlertTriangle aria-hidden="true" className="h-4 w-4" />}
         />
         <KpiCard
           label="Due"
@@ -118,6 +126,7 @@ export default async function MaintenancePage({
           tone="accent"
           href="/maintenance?state=DUE"
           context="Needs scheduling now"
+          icon={<CalendarClock aria-hidden="true" className="h-4 w-4" />}
         />
         <KpiCard
           label="Due soon"
@@ -125,18 +134,21 @@ export default async function MaintenancePage({
           tone="warning"
           href="/maintenance?state=DUE_SOON"
           context="Inside the warning window"
+          icon={<Clock3 aria-hidden="true" className="h-4 w-4" />}
         />
-        <KpiCard label="On schedule" value={onTime} tone="success" href="/maintenance?state=OK" context="Within limits" />
+        <KpiCard label="On schedule" value={onTime} tone="success" href="/maintenance?state=OK" context="Within limits" icon={<CheckCircle2 aria-hidden="true" className="h-4 w-4" />} />
         <KpiCard
           label="Not configured"
           value={counts.get("NOT_CONFIGURED") ?? 0}
           href="/maintenance?state=NOT_CONFIGURED"
           context="Missing baseline or interval"
+          icon={<ClipboardList aria-hidden="true" className="h-4 w-4" />}
         />
       </div>
 
       <Card
         title="Preventive maintenance board"
+        icon={CalendarClock}
         flush
         action={
           <span className="text-body-xs text-muted">
@@ -163,6 +175,7 @@ export default async function MaintenancePage({
           ]}
           empty={
             <EmptyState
+              icon={CalendarClock}
               title={validState ? STATE_LABELS[validState] : "No maintenance tasks"}
               description={
                 validState

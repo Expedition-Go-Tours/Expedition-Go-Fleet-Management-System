@@ -1,6 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, FileWarning, Wrench, ShieldAlert } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  FileText,
+  FileWarning,
+  History,
+  Info,
+  MessageSquare,
+  Paperclip,
+  ShieldAlert,
+  Wrench,
+} from "lucide-react";
 
 import { CreateWorkOrderButton } from "@/components/actions/CreateWorkOrderButton";
 import { StatusActions } from "@/components/actions/StatusActions";
@@ -69,7 +80,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
-          <Card title="Description" flush={false}>
+          <Card title="Description" icon={FileText} flush={false}>
             <p className="text-body-sm whitespace-pre-wrap text-ink">{issue.description}</p>
             {issue.affectsSafeOperation || issue.immobilized ? (
               <div className="mt-4 flex flex-wrap gap-2">
@@ -90,7 +101,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           </Card>
 
           {activeWorkOrders.length > 0 && (
-            <Card title="Linked work orders" flush>
+            <Card title="Linked work orders" icon={Wrench} flush>
               <ul className="divide-hairline divide-y">
                 {activeWorkOrders.map((wo) => (
                   <li key={wo.id}>
@@ -119,7 +130,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           )}
 
           {issue.followUps.length > 0 && (
-            <Card title={`Follow-ups (${issue.followUps.length})`} flush>
+            <Card title={`Follow-ups (${issue.followUps.length})`} icon={MessageSquare} flush>
               <ul className="divide-hairline divide-y">
                 {issue.followUps.map((f, index) => (
                   <li key={index} className="flex flex-col gap-1 px-5 py-3.5">
@@ -134,7 +145,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           )}
 
           {issue.evidenceKeys.length > 0 && (
-            <Card title={`Evidence (${issue.evidenceKeys.length})`}>
+            <Card title={`Evidence (${issue.evidenceKeys.length})`} icon={Paperclip}>
               <ul className="flex flex-col gap-1.5">
                 {issue.evidenceKeys.map((key) => (
                   <li key={key} className="text-data-xs font-mono text-muted">
@@ -151,7 +162,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         </div>
 
         <div className="flex flex-col gap-6">
-          <Card title="Details" flush>
+          <Card title="Details" icon={Info} flush>
             <DetailRow label="Vehicle">
               {vehicle ? (
                 <Link href={`/vehicles/${vehicle.id}`} className="font-medium text-link hover:underline">
@@ -177,7 +188,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           </Card>
 
           {(canTriage || canCloseIssue) && issue.status !== "CLOSED" && (
-            <Card title="Lifecycle" flush>
+            <Card title="Lifecycle" icon={History} flush>
               <div className="flex flex-col gap-2 px-5 py-4">
                 {canTriage && issue.status === "OPEN" && (
                   <StatusActions
@@ -194,7 +205,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           )}
 
           {issue.resolution && (
-            <Card title="Resolution">
+            <Card title="Resolution" icon={CheckCircle2}>
               <p className="text-body-sm whitespace-pre-wrap text-ink">{issue.resolution}</p>
               {issue.duplicateOfIssueId && (
                 <p className="text-data-xs mt-2 text-muted">

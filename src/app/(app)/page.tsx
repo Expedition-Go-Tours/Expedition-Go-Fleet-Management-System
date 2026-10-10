@@ -1,10 +1,24 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, ShieldAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarClock,
+  Car,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  KeyRound,
+  ListChecks,
+  ReceiptText,
+  Route,
+  ShieldAlert,
+  Wrench,
+} from "lucide-react";
 
+import { DashboardHero } from "@/components/dashboard/DashboardHero";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requireAuthContext } from "@/lib/auth/guards";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
@@ -34,26 +48,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Fleet control centre"
-        description={
-          <>
-            Operational status across the fleet, derived live from current records.{" "}
-            <span className="font-ui text-[10px] uppercase tracking-[var(--tracking-ui)] text-faint">
-              As of {new Date(centre.asOf).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </>
-        }
-        actions={
-          canReadVehicles ? (
-            <Link
-              href="/vehicles"
-              className="hover:bg-subtle text-body-sm flex items-center gap-1.5 rounded-md border border-hairline bg-surface px-3 py-2 font-medium text-ink transition-colors"
-            >
-              Browse fleet <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
-            </Link>
-          ) : undefined
-        }
+      <DashboardHero
+        updatedLabel={new Date(centre.asOf).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+        canBrowseFleet={canReadVehicles}
       />
 
       {!canReadVehicles && (
@@ -78,21 +75,23 @@ export default async function DashboardPage() {
       {centre.fleet && (
         <section aria-label="Fleet overview">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <KpiCard label="Total vehicles" value={formatNumber(centre.fleet.total)} href="/vehicles" context="Non-archived" />
+            <KpiCard label="Total vehicles" value={formatNumber(centre.fleet.total)} href="/vehicles" context="Non-archived" icon={<Car aria-hidden="true" className="h-4 w-4" />} />
             <KpiCard
               label="Available now"
               value={formatNumber(centre.fleet.available)}
               href="/vehicles?status=ACTIVE"
               tone={centre.fleet.available > 0 ? "success" : "default"}
               context="Active and not assigned"
+              icon={<KeyRound aria-hidden="true" className="h-4 w-4" />}
             />
-            <KpiCard label="In use" value={formatNumber(centre.fleet.inUse)} href="/vehicles?status=ACTIVE" context="Currently assigned" />
+            <KpiCard label="In use" value={formatNumber(centre.fleet.inUse)} href="/vehicles?status=ACTIVE" context="Currently assigned" icon={<Route aria-hidden="true" className="h-4 w-4" />} />
             <KpiCard
               label="In workshop"
               value={formatNumber(centre.fleet.inWorkshop)}
               href="/vehicles?status=IN_SERVICE"
               tone={centre.fleet.inWorkshop > 0 ? "warning" : "default"}
               context="Out of service for work"
+              icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
             />
             <KpiCard
               label="Safety holds"
@@ -100,6 +99,7 @@ export default async function DashboardPage() {
               href="/vehicles?status=SAFETY_HOLD"
               tone={centre.fleet.safetyHolds > 0 ? "danger" : "default"}
               context="Barred from service"
+              icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}
             />
           </div>
         </section>
@@ -113,18 +113,21 @@ export default async function DashboardPage() {
               value={formatNumber(centre.maintenance.overdue)}
               href="/maintenance?state=OVERDUE"
               tone={centre.maintenance.overdue > 0 ? "danger" : "success"}
+              icon={<AlertTriangle aria-hidden="true" className="h-4 w-4" />}
             />
             <KpiCard
               label="Due now"
               value={formatNumber(centre.maintenance.due)}
               href="/maintenance?state=DUE"
               tone={centre.maintenance.due > 0 ? "accent" : "default"}
+              icon={<CalendarClock aria-hidden="true" className="h-4 w-4" />}
             />
             <KpiCard
               label="Due soon"
               value={formatNumber(centre.maintenance.dueSoon)}
               href="/maintenance?state=DUE_SOON"
               tone={centre.maintenance.dueSoon > 0 ? "warning" : "default"}
+              icon={<Clock3 aria-hidden="true" className="h-4 w-4" />}
             />
             <KpiCard
               label="Open work orders"
@@ -132,12 +135,14 @@ export default async function DashboardPage() {
               href="/work-orders?status=OPEN"
               context={centre.maintenance.waitingWorkOrders > 0 ? `${centre.maintenance.waitingWorkOrders} waiting` : "No waiting orders"}
               tone={centre.maintenance.waitingWorkOrders > 0 ? "warning" : "default"}
+              icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
             />
             <KpiCard
               label="Schedules evaluated"
               value={formatNumber(centre.maintenance.evaluated)}
               context={`${formatNumber(centre.maintenance.notConfigured)} not configured`}
               href="/maintenance"
+              icon={<ClipboardList aria-hidden="true" className="h-4 w-4" />}
             />
           </div>
         </section>
@@ -148,6 +153,7 @@ export default async function DashboardPage() {
           <Card
             title="Priority action queue"
             description="What needs attention right now, ordered by risk."
+            icon={ListChecks}
             flush
           >
             {centre.queue.length === 0 ? (
@@ -169,7 +175,7 @@ export default async function DashboardPage() {
 
         <div className="flex flex-col gap-6">
           {centre.issuesBySeverity && (
-            <Card title="Open issues by severity" flush>
+            <Card title="Open issues by severity" icon={AlertTriangle} flush>
               {centre.issuesBySeverity.length === 0 ? (
                 <p className="text-body-xs px-5 py-6 text-muted">No open issues.</p>
               ) : (
@@ -191,6 +197,7 @@ export default async function DashboardPage() {
             <Card
               title="Recorded expenses"
               description="This calendar month (RECORDED only)"
+              icon={ReceiptText}
               action={
                 <Link href="/expenses" className="text-body-xs font-medium text-link hover:underline">
                   Open ledger

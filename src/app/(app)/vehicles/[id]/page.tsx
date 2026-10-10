@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AlertTriangle, CalendarClock, Gauge, Wrench, type LucideIcon } from "lucide-react";
 
 import { StatusActions } from "@/components/actions/StatusActions";
 import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { VehicleHero } from "@/components/vehicles/VehicleHero";
 import {
   VehicleDetailTabs,
   type VehicleDetailTabData,
@@ -177,7 +178,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
+      <VehicleHero
         title={vehicle.regNumber}
         description={`${vehicle.make} ${vehicle.model} · ${vehicle.year} · ${vehicle.type.replace(/_/g, " ").toLowerCase()}`}
         crumbs={[{ label: "Fleet" }, { label: "Vehicles", href: "/vehicles" }, { label: vehicle.regNumber }]}
@@ -202,22 +203,25 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       {/* Summary strip */}
       <Card flush>
         <div className="grid grid-cols-2 divide-x divide-hairline md:grid-cols-4">
-          <SummaryCell label="Current odometer" value={formatKm(vehicle.odometerKm)} />
+          <SummaryCell label="Current odometer" value={formatKm(vehicle.odometerKm)} icon={Gauge} />
           <SummaryCell
             label="Next service"
             value={nextService.value}
             tone={nextService.tone}
             hint={nextService.hint}
+            icon={CalendarClock}
           />
           <LinkCell
             label="Open issues"
             value={String(openIssues)}
             href={`/reports?vehicleId=${vehicle.id}`}
+            icon={AlertTriangle}
           />
           <LinkCell
             label="Open work orders"
             value={String(openWorkOrders)}
             href={`/work-orders?vehicleId=${vehicle.id}`}
+            icon={Wrench}
           />
         </div>
       </Card>
@@ -294,11 +298,13 @@ function SummaryCell({
   value,
   tone = "default",
   hint,
+  icon: Icon,
 }: {
   label: string;
   value: string;
   tone?: "default" | "accent" | "warning" | "danger";
   hint?: string;
+  icon?: LucideIcon;
 }) {
   const toneClasses = {
     default: "text-ink",
@@ -308,7 +314,8 @@ function SummaryCell({
   }[tone];
   return (
     <div className="flex flex-col gap-0.5 px-5 py-4">
-      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+      <span className="font-ui text-data-xs flex items-center gap-1.5 font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+        {Icon && <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-faint" />}
         {label}
       </span>
       <span className={`font-heading text-heading-md font-semibold tabular-nums ${toneClasses}`}>
@@ -323,14 +330,17 @@ function LinkCell({
   label,
   value,
   href,
+  icon: Icon,
 }: {
   label: string;
   value: string;
   href: string;
+  icon?: LucideIcon;
 }) {
   return (
     <Link href={href} className="hover:bg-subtle flex flex-col gap-0.5 px-5 py-4 transition-colors">
-      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+      <span className="font-ui text-data-xs flex items-center gap-1.5 font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+        {Icon && <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-faint" />}
         {label}
       </span>
       <span className="font-heading text-heading-md font-semibold tabular-nums text-ink">

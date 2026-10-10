@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 
@@ -14,11 +15,14 @@ export function Card({
   action,
   bodyClassName,
   flush,
+  icon: Icon,
 }: {
   children: ReactNode;
   className?: string;
   title?: ReactNode;
   description?: ReactNode;
+  /** Optional leading icon beside the title. */
+  icon?: LucideIcon;
   /** Trailing actions (buttons, links) on the header row. */
   action?: ReactNode;
   /** Remove default body padding (for tables and full-bleed content). */
@@ -36,8 +40,9 @@ export function Card({
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3.5">
           <div className="flex min-w-0 flex-col gap-0.5">
             {title && (
-              <h2 className="text-card-title font-heading truncate font-semibold text-ink [text-wrap:balance]">
-                {title}
+              <h2 className="text-card-title font-heading flex items-center gap-2 font-semibold text-ink [text-wrap:balance]">
+                {Icon && <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-faint" />}
+                <span className="truncate">{title}</span>
               </h2>
             )}
             {description && <p className="text-body-xs text-muted">{description}</p>}

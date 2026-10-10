@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BellRing, CheckCheck } from "lucide-react";
+import { BellRing, CheckCheck, Inbox } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -54,6 +54,7 @@ export function NotificationCentre({ notifications }: { notifications: CentreNot
   if (notifications.length === 0) {
     return (
       <EmptyState
+        icon={Inbox}
         title="Nothing yet"
         description="System and workflow notifications will appear here — maintenance due, document expiries, failed inspections and safety holds."
       />

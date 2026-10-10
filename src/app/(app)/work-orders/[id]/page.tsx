@@ -1,6 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CircleDot, FileWarning, ReceiptText } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  CircleDot,
+  FileText,
+  FileWarning,
+  History,
+  Info,
+  ReceiptText,
+  Wrench,
+} from "lucide-react";
 
 import { StatusActions } from "@/components/actions/StatusActions";
 import { Card } from "@/components/ui/Card";
@@ -130,17 +141,17 @@ export default async function WorkOrderDetailPage({
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
           {workOrder.description && (
-            <Card title="Description">
+            <Card title="Description" icon={FileText}>
               <p className="text-body-sm whitespace-pre-wrap text-ink">{workOrder.description}</p>
             </Card>
           )}
 
-          <Card title="Progress" flush>
+          <Card title="Progress" icon={History} flush>
             <Timeline workOrder={workOrder} userNames={userNames} />
           </Card>
 
           {resolvedIssues.length > 0 && (
-            <Card title={`Linked issues (${resolvedIssues.length})`} flush>
+            <Card title={`Linked issues (${resolvedIssues.length})`} icon={AlertTriangle} flush>
               <ul className="divide-hairline divide-y">
                 {resolvedIssues.map((issue) => (
                   <li key={issue.id}>
@@ -166,7 +177,7 @@ export default async function WorkOrderDetailPage({
           )}
 
           {resolvedSchedules.length > 0 && (
-            <Card title={`Maintenance schedules (${resolvedSchedules.length})`} flush>
+            <Card title={`Maintenance schedules (${resolvedSchedules.length})`} icon={CalendarClock} flush>
               <ul className="divide-hairline divide-y">
                 {resolvedSchedules.map((schedule) => (
                   <li key={schedule.id} className="flex items-center gap-3 px-5 py-2.5">
@@ -185,7 +196,7 @@ export default async function WorkOrderDetailPage({
           )}
 
           {expenses.length > 0 && (
-            <Card title={`Assigned expenses (${expenses.length})`} flush>
+            <Card title={`Assigned expenses (${expenses.length})`} icon={ReceiptText} flush>
               <ul className="divide-hairline divide-y">
                 {expenses.map((expense) => (
                   <li key={expense.id}>
@@ -216,7 +227,7 @@ export default async function WorkOrderDetailPage({
           )}
 
           {serviceRecord && (
-            <Card title="Service record" flush>
+            <Card title="Service record" icon={CheckCircle2} flush>
               <div className="divide-hairline divide-y px-5">
                 <DetailRow label="Task">{serviceRecord.taskName}</DetailRow>
                 <DetailRow label="Completed at">{formatDate(serviceRecord.completedAt)}</DetailRow>
@@ -242,7 +253,7 @@ export default async function WorkOrderDetailPage({
         </div>
 
         <div className="flex flex-col gap-6">
-          <Card title="Actions" flush>
+          <Card title="Actions" icon={Wrench} flush>
             <div className="flex flex-col gap-2 px-5 py-4">
               {actions.length === 0 && !completable && (
                 <p className="text-body-xs text-muted">No actions available in this state.</p>
@@ -261,7 +272,7 @@ export default async function WorkOrderDetailPage({
             </div>
           </Card>
 
-          <Card title="Record" flush>
+          <Card title="Record" icon={Info} flush>
             <DetailRow label="Opened by">
               {userNames.get(workOrder.createdBy) ?? workOrder.createdBy}
             </DetailRow>

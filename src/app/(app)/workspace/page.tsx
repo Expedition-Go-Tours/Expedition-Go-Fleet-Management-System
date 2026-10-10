@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { CheckCircle2, ShieldAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardList,
+  Megaphone,
+  Route,
+  ShieldAlert,
+  ShieldPlus,
+} from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -98,7 +108,7 @@ export default async function WorkspacePage() {
       />
 
       {/* Active trip */}
-      <Card title={assignment ? "Active trip" : "No active trip"}>
+      <Card title={assignment ? "Active trip" : "No active trip"} icon={Route}>
         <div className="p-5">
           {assignment && vehicle ? (
             <div className="flex flex-col gap-4">
@@ -165,6 +175,7 @@ export default async function WorkspacePage() {
           {canSubmitInspections && vehicle && (
             <Card
               title="Vehicle inspections"
+              icon={ClipboardCheck}
               action={
                 <span className="text-body-xs text-muted">
                   Odometer goes through the accepted-reading ledger
@@ -214,7 +225,7 @@ export default async function WorkspacePage() {
           )}
 
           {/* My issues */}
-          <Card title={`My reported issues (${issues.length})`}>
+          <Card title={`My reported issues (${issues.length})`} icon={AlertTriangle}>
             {issues.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-6">
                 You have not reported any issues.
@@ -248,7 +259,7 @@ export default async function WorkspacePage() {
           </Card>
 
           {/* My incidents */}
-          <Card title={`My incident reports (${incidents.length})`}>
+          <Card title={`My incident reports (${incidents.length})`} icon={ShieldPlus}>
             {incidents.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-6">
                 You have not reported any incidents.
@@ -283,7 +294,7 @@ export default async function WorkspacePage() {
 
           {/* Recent inspections */}
           {canSubmitInspections && myInspections.length > 0 && (
-            <Card title="Recent inspections">
+            <Card title="Recent inspections" icon={ClipboardList}>
               <ul className="divide-hairline divide-y">
                 {myInspections.map((inspection) => (
                   <li
@@ -315,7 +326,7 @@ export default async function WorkspacePage() {
         <div className="flex flex-col gap-6">
           {/* Report actions */}
           {(canCreateReport || canCreateIncident) && (
-            <Card title="Report">
+            <Card title="Report" icon={Megaphone}>
               <div className="flex flex-wrap gap-2 p-5">
                 {canCreateReport && (
                   <ReportProblemDialog vehicles={vehicleOptions} defaultVehicleId={vehicle?.id} />
@@ -330,6 +341,7 @@ export default async function WorkspacePage() {
           {/* Notifications */}
           <Card
             title="Notifications"
+            icon={Bell}
             action={
               <Link
                 href="/notifications"

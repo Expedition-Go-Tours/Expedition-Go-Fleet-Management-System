@@ -1,3 +1,5 @@
+import { UserPlus, Users } from "lucide-react";
+
 import { RoleEditor } from "@/components/admin/RoleEditor";
 import { UserStatusButton } from "@/components/admin/UserStatusButton";
 import { InviteUserForm } from "@/components/admin/InviteUserForm";
@@ -31,7 +33,7 @@ export default async function UsersPage() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${users.length} user(s)`}>
+          <Card title={`${users.length} user(s)`} icon={Users}>
             <ul className="divide-hairline divide-y">
               {users.map((user) => (
                 <li key={user.id} className="flex flex-col gap-3 px-5 py-4">
@@ -71,7 +73,7 @@ export default async function UsersPage() {
         </div>
 
         {canInvite && (
-          <Card title="Invite user">
+          <Card title="Invite user" icon={UserPlus}>
             <div className="p-5">
               <p className="text-body-xs text-muted mb-4">
                 You&apos;ll receive a temporary password to share with the invitee directly

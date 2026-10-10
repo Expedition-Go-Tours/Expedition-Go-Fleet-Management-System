@@ -106,7 +106,7 @@ export function GlobalSearch() {
         aria-expanded={open}
       >
         <Search aria-hidden="true" className="h-4 w-4" />
-        <span className="text-right flex-1 text-left text-[var(--fs-body-xs)]">Search the fleet…</span>
+        <span className="flex-1 text-left text-[var(--fs-body-xs)]">Search the fleet…</span>
         <kbd className="font-ui border-hairline rounded border px-1.5 py-0.5 text-[10px] text-faint">
           ⌘K
         </kbd>

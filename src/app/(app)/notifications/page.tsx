@@ -1,3 +1,5 @@
+import { Bell } from "lucide-react";
+
 import { NotificationCentre, type CentreNotification } from "@/components/notifications/NotificationCentre";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -40,7 +42,7 @@ export default async function NotificationsPage() {
         description="Workflow and system alerts addressed to your roles."
         crumbs={[{ label: "Administration" }, { label: "Notifications" }]}
       />
-      <Card flush>
+      <Card flush icon={Bell} title="All notifications">
         <NotificationCentre notifications={notifications} />
       </Card>
     </div>

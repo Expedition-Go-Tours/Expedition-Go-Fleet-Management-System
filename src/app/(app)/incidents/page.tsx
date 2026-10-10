@@ -1,3 +1,5 @@
+import { ShieldAlert, ShieldPlus } from "lucide-react";
+
 import { CreateForm } from "@/components/actions/CreateForm";
 import { StatusActions } from "@/components/actions/StatusActions";
 import { ResolveIncidentButton } from "@/components/incidents/ResolveIncidentButton";
@@ -56,7 +58,7 @@ export default async function IncidentsPage() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${incidents.length} incident(s)`}>
+          <Card title={`${incidents.length} incident(s)`} icon={ShieldAlert}>
             {incidents.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-8">No incidents reported.</p>
             ) : (
@@ -109,7 +111,7 @@ export default async function IncidentsPage() {
         </div>
 
         {canCreate && (
-          <Card title="Report an incident">
+          <Card title="Report an incident" icon={ShieldPlus}>
             <div className="p-5">
               <CreateForm
                 endpoint="/api/v1/incidents"

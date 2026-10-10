@@ -196,8 +196,13 @@ export function ShellLayout({
         </button>
       </aside>
 
-      {/* Top header */}
-      <header className="border-hairline bg-surface sticky top-0 z-20 border-b">
+      {/* Top header — offset by the fixed sidebar so the search bar isn't hidden underneath it. */}
+      <header
+        className={cn(
+          "border-hairline bg-surface sticky top-0 z-20 border-b transition-[padding] duration-200",
+          collapsed ? "lg:pl-[68px]" : "lg:pl-[15.5rem]",
+        )}
+      >
         <div className="flex h-[var(--topbar-h)] items-center gap-3 px-4 lg:px-6">
           <button
             type="button"
@@ -213,7 +218,7 @@ export function ShellLayout({
           </div>
           <div className="flex-1 md:hidden" />
 
-          <div className="flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-1.5">
             <div className="md:hidden">
               <GlobalSearch />
             </div>

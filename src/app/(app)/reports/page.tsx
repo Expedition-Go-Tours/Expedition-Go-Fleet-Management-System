@@ -1,3 +1,5 @@
+import { AlertTriangle, FileWarning } from "lucide-react";
+
 import { CreateForm } from "@/components/actions/CreateForm";
 import { CreateWorkOrderButton } from "@/components/actions/CreateWorkOrderButton";
 import { StatusActions } from "@/components/actions/StatusActions";
@@ -55,7 +57,7 @@ export default async function IssuesPage() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${issues.length} issue(s)`}>
+          <Card title={`${issues.length} issue(s)`} icon={AlertTriangle}>
             {issues.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-8">No issues reported.</p>
             ) : (
@@ -111,7 +113,7 @@ export default async function IssuesPage() {
         </div>
 
         {canCreate && (
-          <Card title="Report a problem">
+          <Card title="Report a problem" icon={FileWarning}>
             <div className="p-5">
               <CreateForm
                 endpoint="/api/v1/reports"
