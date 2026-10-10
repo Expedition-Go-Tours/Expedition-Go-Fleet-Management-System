@@ -120,6 +120,10 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
     purchases only.
   - A vehicle with a missing/expired mandatory document cannot start an
     assignment (409 naming the document).
+  - Incidents (breakdown/accident/passenger/security) are restricted:
+    anyone with `incident:create` reports; `incident:read:all` reads all else
+    own-only; review lifecycle `OPEN → UNDER_REVIEW → RESOLVED` is
+    `incident:manage`-only and resolving requires a resolution note.
   - Notifications are idempotent per `dedupeKey`; the Vercel Cron
     (`vercel.json` → `POST /api/v1/cron/reminders`, `CRON_SECRET` bearer,
     daily 07:00 UTC) generates PM / document-expiry / assignment reminders.
@@ -142,6 +146,17 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
   migration (legacy `mileage` → odometer baseline reading, expense statuses
   → `RECORDED`/`VOID`, work-order status remap, `serviceHistory` promotion).
   Run with `--dry-run` first; it never deletes data.
+
+## Deliverables verification
+
+- **Mandated boundary tests** live in `src/lib/domain/*.test.ts` (maintenance
+  oil-change 5,000/500 km boundaries, odometer ledger correctness, work-order
+  completion evidence contract, lifecycle action maps, reminders idempotency).
+- **Live scenario suites** run against a running dev server + real Firestore:
+  `scripts/e2e-accountability.mjs` (40 checks), `scripts/e2e-operations.mjs`
+  (25), `scripts/e2e-auth.mjs` (17), `scripts/e2e-fleet.mjs` (54 — vehicles,
+  reports, work orders, expenses, incidents, providers, audit). Suites are
+  independently seedable (Admin SDK) and self-cleaning.
 
 ## App shell & screens (Phase 4)
 
@@ -199,6 +214,6 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 | C     | Issue↔work-order ecosystem (report→issue→work-order→service→release) |
 | D     | Assignments, trip distance, inspections (safety-hold net) |
 | E–F   | Fuel (canonical Expense), documents (expiry gates), idempotent notifications + Vercel Cron reminders |
-| G     | Incidents, hardened indexes, responsive verification (open) |
+| G     | Incidents (restricted reports + review lifecycle); hardened indexes, responsive verification (open) |
 | 5     | Scheduled maintenance reminders (Vercel Cron) — shipped with E–F |
 | 6     | Hardening (CSP, rate limiting, observability)  |

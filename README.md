@@ -106,5 +106,6 @@ docs/                  Requirements & design references (see below)
 | D     | Assignments, trip distance, inspections           | Done    |
 | E–F   | Fuel, documents, notifications + Cron reminders   | Done    |
 | 5     | Scheduled maintenance reminders (Vercel Cron)     | Done    |
-| G     | Incidents, hardened indexes, responsive pass      | Open    |
+| G     | Incidents (restricted reports + review)           | Done    |
+| G     | Hardened indexes, responsive pass                 | Open    |
 | 6     | Hardening (CSP, rate limiting, observability)     | Pending |

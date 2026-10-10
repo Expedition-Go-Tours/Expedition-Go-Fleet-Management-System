@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/vehicles", label: "Vehicles", permission: "vehicle:read" },
   { href: "/reports", label: "Reports", permission: "report:read:own" },
   { href: "/work-orders", label: "Work orders", permission: "work_order:read" },
+  { href: "/incidents", label: "Incidents", permission: "incident:create" },
   { href: "/expenses", label: "Expenses", permission: "expense:read" },
   { href: "/users", label: "Users", permission: "user:read" },
   { href: "/audit", label: "Audit", permission: "audit:read" },

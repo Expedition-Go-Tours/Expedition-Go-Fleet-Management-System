@@ -73,6 +73,17 @@ Critical issue or failed critical inspection item → server applies
 `SAFETY_HOLD` (actor = system via submitting user's request; audited).
 Release: `vehicle:release` + reason + server check of open critical issues.
 
+## Incident lifecycle (restricted)
+
+`OPEN →(start_review) UNDER_REVIEW →(resolve) RESOLVED`; `OPEN →(resolve) RESOLVED`
+
+- Anyone with `incident:create` reports; reads are own-only unless the user
+  holds `incident:read:all`; the review lifecycle is `incident:manage`-only
+  (OPERATIONS).
+- Resolving requires a resolution note; actor + time are recorded on the
+  incident and in `incident.updated` audit events. Status is the only
+  action-gated field — descriptive fields edit via `incident:manage` PATCH.
+
 ## Expense model (no approval)
 
 `RECORDED → VOID(reason, actor)`. Fuel entries create/reference one canonical

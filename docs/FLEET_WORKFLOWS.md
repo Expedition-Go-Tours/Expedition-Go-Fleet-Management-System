@@ -271,7 +271,29 @@ POST /api/v1/cron/reminders                (CRON_SECRET bearer, Vercel Cron)
 
 ---
 
-## 9. Scenario walkthroughs (the mandated end-to-end checks)
+## 9. Incidents (restricted)
+
+```json
+POST /incidents                       { vehicleId, type, severity, description, location?, occurredAt? }
+GET  /incidents?vehicleId=            → incident:read:all sees all; otherwise your own
+POST /incidents/:id/status            { action: "start_review" } | { action: "resolve", resolution }
+GET  /incidents/:id                   → reporter or incident:read:all
+```
+
+- Breakdown / accident / passenger / security events. Any employee with
+  `incident:create` (drivers included) reports; the event is dated by
+  `occurredAt` (validated not to be in the future) and audited
+  (`incident.created`).
+- Ownership scoping: without `incident:read:all`, list/get return only
+  incidents the caller reported — the same fail-closed pattern as reports.
+- The review lifecycle `OPEN → UNDER_REVIEW → RESOLVED` is `incident:manage`-only
+  (OPERATIONS). **Resolving requires a resolution note** (same accountability
+  doctrine as issue closure) and records `resolvedByUserId` + `resolvedAt` in
+  the audit event (`incident.updated`).
+
+---
+
+## 10. Scenario walkthroughs (the mandated end-to-end checks)
 
 These are asserted by `scripts/e2e-accountability.mjs` (40) and
 `scripts/e2e-operations.mjs` (25) against live Firestore:
@@ -297,10 +319,12 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
   no-ops; unread list + read marking work per user.
 - **I — Work-order idempotency**: completion replay returns `duplicate: true`
   with the same service record; reopen+recomplete creates a fresh record.
+- **J — Incident restrictions**: drivers report and read only their own;
+  resolving without a resolution note is 400; OPERATIONS reviews/resolves.
 
 ---
 
-## 10. Failure-mode invariants (enforced, not aspirational)
+## 11. Failure-mode invariants (enforced, not aspirational)
 
 | Invariant | Enforced by |
 | --- | --- |

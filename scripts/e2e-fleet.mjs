@@ -8,11 +8,11 @@
  * Covers: vehicle reads + lifecycle transitions (permission-gated), the
  * odometer ledger (PATCH mileage retired), report ownership scoping,
  * report/work-order lifecycles including invalid transitions and
- * evidence-gated completion, expense permission gating, provider CRUD, and
- * audit access. Uses only non-privileged roles (DRIVER/OPERATIONS/
- * MAINTENANCE) so no MFA is needed; vehicle + expense fixtures are seeded
- * directly via the Admin SDK because vehicle:create / expense:create are
- * ADMIN/FINANCE baselines.
+ * evidence-gated completion, expense permission gating, incident ownership
+ * scoping + review lifecycle, provider CRUD, and audit access. Uses only
+ * non-privileged roles (DRIVER/OPERATIONS/MAINTENANCE) so no MFA is needed;
+ * vehicle + expense fixtures are seeded directly via the Admin SDK because
+ * vehicle:create / expense:create are ADMIN/FINANCE baselines.
  */
 import { readFileSync } from "node:fs";
 
@@ -748,6 +748,101 @@ try {
       "DRIVER cannot read the audit log (403 audit:read)",
       denial.status === 403 && /audit:read/.test(denial.body?.error?.message ?? ""),
       JSON.stringify(denial.body),
+    );
+  }
+
+  // ── I. Incidents: create, ownership scoping, restricted review lifecycle ─
+  let incidentId;
+  {
+    const createdInc = await send("POST", "/api/v1/incidents", sDriverA.cookies, {
+      vehicleId: "e2e-veh-1",
+      type: "BREAKDOWN",
+      severity: "HIGH",
+      location: "Spintex, Accra",
+      description: "Smoke from engine bay after highway run.",
+    });
+    check(
+      "DRIVER can report an incident (201 → OPEN)",
+      createdInc.status === 201 && createdInc.body?.incident?.status === "OPEN",
+      JSON.stringify(createdInc.body).slice(0, 250),
+    );
+    incidentId = createdInc.body?.incident?.id;
+    if (incidentId) created.docIds.push(["incidentReports", incidentId]);
+
+    const createdIncB = await send("POST", "/api/v1/incidents", sDriverB.cookies, {
+      vehicleId: "e2e-veh-2",
+      type: "PASSENGER",
+      severity: "LOW",
+      description: "Passenger complained about rattling window.",
+    });
+    check(
+      "second DRIVER incident created (201)",
+      createdIncB.status === 201 && createdIncB.body?.incident?.id,
+      JSON.stringify(createdIncB.body).slice(0, 200),
+    );
+    if (createdIncB.body?.incident?.id) {
+      created.docIds.push(["incidentReports", createdIncB.body.incident.id]);
+    }
+
+    const driverList = await get("/api/v1/incidents", sDriverA.cookies);
+    const driverIncidentIds = (driverList.body?.incidents ?? []).map((i) => i.id);
+    check(
+      "DRIVER incident list is scoped to own reports",
+      driverList.status === 200 &&
+        incidentId &&
+        driverIncidentIds.includes(incidentId) &&
+        createdIncB.body?.incident?.id &&
+        !driverIncidentIds.includes(createdIncB.body.incident.id),
+      JSON.stringify(driverIncidentIds),
+    );
+
+    const driverResolve = await send(
+      "POST",
+      `/api/v1/incidents/${incidentId}/status`,
+      sDriverA.cookies,
+      { action: "resolve", resolution: "should be denied" },
+    );
+    check(
+      "DRIVER cannot resolve incidents (403 incident:manage)",
+      driverResolve.status === 403 && /incident:manage/.test(driverResolve.body?.error?.message ?? ""),
+      JSON.stringify(driverResolve.body),
+    );
+
+    const opsList = await get("/api/v1/incidents", sOps.cookies);
+    const opsIncidentIds = (opsList.body?.incidents ?? []).map((i) => i.id);
+    check(
+      "OPERATIONS sees all incidents (incident:read:all)",
+      opsList.status === 200 &&
+        incidentId &&
+        opsIncidentIds.includes(incidentId) &&
+        opsIncidentIds.includes(createdIncB.body?.incident?.id),
+      JSON.stringify(opsIncidentIds).slice(0, 250),
+    );
+
+    const noResolution = await send(
+      "POST",
+      `/api/v1/incidents/${incidentId}/status`,
+      sOps.cookies,
+      { action: "resolve" },
+    );
+    check(
+      "resolving without a resolution note is 400 (accountability)",
+      noResolution.status === 400 && /resolution/i.test(noResolution.body?.error?.message ?? ""),
+      JSON.stringify(noResolution.body),
+    );
+
+    const resolve = await send(
+      "POST",
+      `/api/v1/incidents/${incidentId}/status`,
+      sOps.cookies,
+      { action: "resolve", resolution: "Towed to garage; alternator replaced." },
+    );
+    check(
+      "OPERATIONS resolves with resolution (200 → RESOLVED)",
+      resolve.status === 200 &&
+        resolve.body?.incident?.status === "RESOLVED" &&
+        resolve.body?.incident?.resolution,
+      JSON.stringify(resolve.body).slice(0, 250),
     );
   }
 
