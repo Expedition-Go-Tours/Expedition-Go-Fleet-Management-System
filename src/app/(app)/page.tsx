@@ -1,166 +1,256 @@
 import Link from "next/link";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, ShieldAlert } from "lucide-react";
 
-import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
-import { DisplayTitle } from "@/components/ui/DisplayTitle";
-import { Eyebrow } from "@/components/ui/Eyebrow";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requireAuthContext } from "@/lib/auth/guards";
-import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
-import { formatDate, formatKm } from "@/lib/format";
-import { listIssues } from "@/lib/repos/reports";
-import { listVehicles } from "@/lib/repos/vehicles";
-import { listWorkOrders } from "@/lib/repos/work-orders";
+import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
+import { loadControlCentre, type ActionItem } from "@/lib/dashboard/control-centre";
+import { formatMoney, formatNumber } from "@/lib/format";
 
-export const metadata = { title: "Dashboard" };
+export const metadata = { title: "Fleet control centre" };
+
+const QUEUE_ICON = {
+  critical_issue: ShieldAlert,
+  safety_hold: ShieldAlert,
+  overdue_maintenance: AlertTriangle,
+  document: AlertTriangle,
+  waiting_work_order: Clock3,
+} as const;
 
 export default async function DashboardPage() {
   const context = await requireAuthContext();
-  const canReadAllReports = rolesHavePermission(context.user.roles, PERMISSIONS.REPORT_READ_ALL);
-  const canReadWorkOrders = rolesHavePermission(context.user.roles, PERMISSIONS.WORK_ORDER_READ);
+  const permissions = [...permissionsForRoles(context.user.roles)];
+  const centre = await loadControlCentre({
+    userId: context.user.id,
+    permissions,
+  });
 
-  const [vehicles, reports, workOrders] = await Promise.all([
-    listVehicles(),
-    listIssues(
-      canReadAllReports
-        ? { status: "OPEN", limit: 50 }
-        : { reportedBy: context.user.id, status: "OPEN", limit: 50 },
-    ),
-    canReadWorkOrders ? listWorkOrders({ status: "IN_PROGRESS", limit: 50 }) : Promise.resolve([]),
-  ]);
-
-  const activeVehicles = vehicles.filter((v) => v.status === "ACTIVE");
-  const inService = vehicles.filter((v) => v.status === "IN_SERVICE");
-  const onHold = vehicles.filter((v) => v.status === "SAFETY_HOLD");
+  const canReadVehicles = permissions.includes(PERMISSIONS.VEHICLE_READ);
+  const canReadSchedules = permissions.includes(PERMISSIONS.SCHEDULE_READ);
 
   return (
-    <Container className="flex flex-col gap-10 py-10">
-      <div className="flex flex-col gap-2">
-        <Eyebrow>Fleet overview</Eyebrow>
-        <DisplayTitle size="md">Dashboard</DisplayTitle>
-      </div>
-
-      {/* Fleet status strip */}
-      <div className="border-hairline bg-hairline grid grid-cols-2 gap-px overflow-hidden rounded-xl border md:grid-cols-4">
-        <StatCell label="Fleet size" value={String(vehicles.length)} />
-        <StatCell label="Active" value={String(activeVehicles.length)} />
-        <StatCell label="In service" value={String(inService.length)} />
-        <StatCell label="Safety hold" value={String(onHold.length)} highlight={onHold.length > 0} />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Open reports */}
-        <Card
-          title={canReadAllReports ? "Open reports" : "My open reports"}
-          action={
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Fleet control centre"
+        description={
+          <>
+            Operational status across the fleet, derived live from current records.{" "}
+            <span className="font-ui text-[10px] uppercase tracking-[var(--tracking-ui)] text-faint">
+              As of {new Date(centre.asOf).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </>
+        }
+        actions={
+          canReadVehicles ? (
             <Link
-              href="/reports"
-              className="font-ui text-muted hover:text-ink text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase transition-colors"
+              href="/vehicles"
+              className="hover:bg-subtle text-body-sm flex items-center gap-1.5 rounded-md border border-hairline bg-surface px-3 py-2 font-medium text-ink transition-colors"
             >
-              View all →
+              Browse fleet <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
             </Link>
-          }
-        >
-          {reports.length === 0 ? (
-            <EmptyRow text="No open reports" />
-          ) : (
-            <ul className="divide-hairline divide-y">
-              {reports.slice(0, 6).map((report) => (
-                <li key={report.id} className="flex items-center justify-between gap-4 px-5 py-3.5">
-                  <div className="flex min-w-0 flex-col">
-                    <span className="text-body-sm truncate font-medium">{report.title}</span>
-                    <span className="text-body-xs text-muted">{formatDate(report.createdAt)}</span>
-                  </div>
-                  <StatusBadge status={report.severity} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          ) : undefined
+        }
+      />
 
-        {/* Active work orders */}
-        {canReadWorkOrders && (
-          <Card
-            title="Work in progress"
-            action={
+      {!canReadVehicles && (
+        <Card title="Your workspace">
+          <div className="flex flex-col gap-4">
+            <p className="text-body-sm text-muted">
+              You have read access to your own reports. Visit your driver workspace to manage the
+              current trip, inspections, and any reported problems.
+            </p>
+            <div>
               <Link
-                href="/work-orders"
-                className="font-ui text-muted hover:text-ink text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase transition-colors"
+                href="/workspace"
+                className="bg-accent hover:bg-accent-strong inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-medium text-white transition-colors"
               >
-                View all →
+                Open driver workspace <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>
-            }
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {centre.fleet && (
+        <section aria-label="Fleet overview">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <KpiCard label="Total vehicles" value={formatNumber(centre.fleet.total)} href="/vehicles" context="Non-archived" />
+            <KpiCard
+              label="Available now"
+              value={formatNumber(centre.fleet.available)}
+              href="/vehicles?status=ACTIVE"
+              tone={centre.fleet.available > 0 ? "success" : "default"}
+              context="Active and not assigned"
+            />
+            <KpiCard label="In use" value={formatNumber(centre.fleet.inUse)} href="/vehicles?status=ACTIVE" context="Currently assigned" />
+            <KpiCard
+              label="In workshop"
+              value={formatNumber(centre.fleet.inWorkshop)}
+              href="/vehicles?status=IN_SERVICE"
+              tone={centre.fleet.inWorkshop > 0 ? "warning" : "default"}
+              context="Out of service for work"
+            />
+            <KpiCard
+              label="Safety holds"
+              value={formatNumber(centre.fleet.safetyHolds)}
+              href="/vehicles?status=SAFETY_HOLD"
+              tone={centre.fleet.safetyHolds > 0 ? "danger" : "default"}
+              context="Barred from service"
+            />
+          </div>
+        </section>
+      )}
+
+      {centre.maintenance && (
+        <section aria-label="Maintenance health">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <KpiCard
+              label="Overdue tasks"
+              value={formatNumber(centre.maintenance.overdue)}
+              href="/maintenance?state=OVERDUE"
+              tone={centre.maintenance.overdue > 0 ? "danger" : "success"}
+            />
+            <KpiCard
+              label="Due now"
+              value={formatNumber(centre.maintenance.due)}
+              href="/maintenance?state=DUE"
+              tone={centre.maintenance.due > 0 ? "accent" : "default"}
+            />
+            <KpiCard
+              label="Due soon"
+              value={formatNumber(centre.maintenance.dueSoon)}
+              href="/maintenance?state=DUE_SOON"
+              tone={centre.maintenance.dueSoon > 0 ? "warning" : "default"}
+            />
+            <KpiCard
+              label="Open work orders"
+              value={formatNumber(centre.maintenance.openWorkOrders)}
+              href="/work-orders?status=OPEN"
+              context={centre.maintenance.waitingWorkOrders > 0 ? `${centre.maintenance.waitingWorkOrders} waiting` : "No waiting orders"}
+              tone={centre.maintenance.waitingWorkOrders > 0 ? "warning" : "default"}
+            />
+            <KpiCard
+              label="Schedules evaluated"
+              value={formatNumber(centre.maintenance.evaluated)}
+              context={`${formatNumber(centre.maintenance.notConfigured)} not configured`}
+              href="/maintenance"
+            />
+          </div>
+        </section>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <section aria-label="Priority action queue" className="xl:col-span-2">
+          <Card
+            title="Priority action queue"
+            description="What needs attention right now, ordered by risk."
+            flush
           >
-            {workOrders.length === 0 ? (
-              <EmptyRow text="No work orders in progress" />
+            {centre.queue.length === 0 ? (
+              <EmptyState
+                icon={CheckCircle2}
+                title="Nothing needs attention"
+                description="No critical issues, safety holds, overdue maintenance or expired mandatory documents right now."
+                compact
+              />
             ) : (
               <ul className="divide-hairline divide-y">
-                {workOrders.slice(0, 6).map((wo) => (
-                  <li key={wo.id} className="flex items-center justify-between gap-4 px-5 py-3.5">
-                    <div className="flex min-w-0 flex-col">
-                      <span className="text-body-sm truncate font-medium">{wo.title}</span>
-                      <span className="text-body-xs text-muted">
-                        {vehicles.find((v) => v.id === wo.vehicleId)?.regNumber ?? "—"} ·{" "}
-                        {wo.priority}
-                      </span>
-                    </div>
-                    <StatusBadge status={wo.status} />
-                  </li>
+                {centre.queue.map((item) => (
+                  <QueueRow key={`${item.kind}-${item.title}`} item={item} />
                 ))}
               </ul>
             )}
           </Card>
-        )}
+        </section>
+
+        <div className="flex flex-col gap-6">
+          {centre.issuesBySeverity && (
+            <Card title="Open issues by severity" flush>
+              {centre.issuesBySeverity.length === 0 ? (
+                <p className="text-body-xs px-5 py-6 text-muted">No open issues.</p>
+              ) : (
+                <ul className="divide-hairline divide-y">
+                  {centre.issuesBySeverity.map((row) => (
+                    <li key={row.severity} className="flex items-center justify-between gap-3 px-5 py-3">
+                      <StatusBadge status={row.severity} />
+                      <span className="font-heading text-heading-md font-semibold tabular-nums text-ink">
+                        {formatNumber(row.count)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
+
+          {centre.monthExpenses && (
+            <Card
+              title="Recorded expenses"
+              description="This calendar month (RECORDED only)"
+              action={
+                <Link href="/expenses" className="text-body-xs font-medium text-link hover:underline">
+                  Open ledger
+                </Link>
+              }
+            >
+              <div className="flex items-end justify-between gap-4">
+                <p className="font-heading text-heading-lg font-semibold tabular-nums text-ink">
+                  {formatMoney(centre.monthExpenses.totalMinor)}
+                </p>
+                <p className="text-body-xs text-muted">
+                  {formatNumber(centre.monthExpenses.count)} entr{centre.monthExpenses.count === 1 ? "y" : "ies"}
+                </p>
+              </div>
+            </Card>
+          )}
+
+          {canReadSchedules && (
+            <Link
+              href="/maintenance"
+              className="hover:bg-panel-2 group bg-panel-1 flex flex-col gap-2 rounded-lg p-5 text-on-dark transition-colors"
+            >
+              <span className="font-heading text-card-title font-semibold text-white">Maintenance centre</span>
+              <span className="text-body-xs text-on-dark-muted">
+                Fleet-wide preventive maintenance schedules, due dates and history.
+              </span>
+              <span className="mt-1 inline-flex items-center gap-1.5 text-body-xs font-medium text-accent">
+                Open maintenance <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          )}
+        </div>
       </div>
-
-      {/* Fleet health */}
-      {onHold.length > 0 && (
-        <Card title="Vehicles on safety hold">
-          <ul className="divide-hairline divide-y">
-            {onHold.map((vehicle) => (
-              <li key={vehicle.id} className="flex items-center justify-between gap-4 px-5 py-3.5">
-                <div className="flex min-w-0 flex-col">
-                  <Link
-                    href={`/vehicles/${vehicle.id}`}
-                    className="hover:text-accent text-body-sm truncate font-medium transition-colors"
-                  >
-                    {vehicle.regNumber} · {vehicle.make} {vehicle.model}
-                  </Link>
-                  <span className="text-body-xs text-muted">
-                    {vehicle.safetyHoldReason ?? "No reason recorded"}
-                  </span>
-                </div>
-                <span className="text-body-xs text-muted">{formatKm(vehicle.odometerKm)}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </Container>
-  );
-}
-
-function StatCell({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div className="bg-page flex flex-col gap-1 p-5">
-      <Eyebrow>{label}</Eyebrow>
-      <span
-        className={`font-heading text-display-md font-semibold ${highlight ? "text-accent" : ""}`}
-      >
-        {value}
-      </span>
     </div>
   );
 }
 
-function EmptyRow({ text }: { text: string }) {
-  return <p className="text-body-xs text-muted px-5 py-6">{text}</p>;
+function QueueRow({ item }: { item: ActionItem }) {
+  const Icon = QUEUE_ICON[item.kind];
+  const toneClasses = {
+    danger: "border-error/30 bg-error/10 text-error",
+    warning: "border-warning/30 bg-warning/10 text-warning",
+    accent: "border-accent/30 bg-accent/10 text-accent",
+  }[item.tone];
+
+  return (
+    <li>
+      <Link
+        href={item.href}
+        className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-subtle"
+      >
+        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${toneClasses}`}>
+          <Icon aria-hidden="true" className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="text-data block truncate font-semibold text-ink">{item.title}</span>
+          <span className="text-data-xs mt-0.5 block text-muted">{item.details}</span>
+        </span>
+        <ArrowRight aria-hidden="true" className="mt-2 h-4 w-4 shrink-0 text-faint" />
+      </Link>
+    </li>
+  );
 }

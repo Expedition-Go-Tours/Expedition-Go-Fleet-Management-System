@@ -2,9 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StatusActions } from "@/components/actions/StatusActions";
-import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
-import { DisplayTitle } from "@/components/ui/DisplayTitle";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
   VehicleDetailTabs,
@@ -12,9 +11,10 @@ import {
 } from "@/components/vehicles/VehicleDetailTabs";
 import { requireAuthContext } from "@/lib/auth/guards";
 import { permissionsForRoles } from "@/lib/auth/permissions";
+import { documentState } from "@/lib/domain/document";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
 import { VEHICLE_STATUS_ACTIONS } from "@/lib/domain/vehicle";
-import { formatDate, formatKm } from "@/lib/format";
+import { formatDate, formatIsoDate, formatKm } from "@/lib/format";
 import { listAssignments } from "@/lib/repos/assignments";
 import { listDocuments } from "@/lib/repos/documents";
 import { listFuelEntries } from "@/lib/repos/fuel";
@@ -24,8 +24,11 @@ import { listIssues } from "@/lib/repos/reports";
 import { listUsers } from "@/lib/repos/users";
 import { getVehicleById } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
+import type { MaintenanceSchedule } from "@/lib/repos/maintenance";
 
 export const metadata = { title: "Vehicle" };
+
+const EXPIRY_WARNING_DAYS = Number(process.env.DOCUMENT_EXPIRY_WARNING_DAYS ?? 30);
 
 /** Visible action buttons computed from the server-side action map + the user's permissions. */
 function visibleActions(status: string, permissions: string[]) {
@@ -70,13 +73,37 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       listUsers(),
     ]);
 
-  const driverNames = new Map(users.map((u) => [u.id, u.name]));
+  const userNames = new Map(users.map((u) => [u.id, u.name]));
+  const now = new Date();
+
+  // Evaluate every schedule with the REAL intervalDays/dueSoonDays and the
+  // Date-typed lastServiceDate — time-based tasks are no longer skipped.
+  const evaluatedSchedules = schedules.map((s) => {
+    const result = computeScheduleStatus({
+      intervalKm: s.intervalKm ?? null,
+      intervalDays: s.intervalDays ?? null,
+      dueSoonKm: s.dueSoonKm ?? null,
+      dueSoonDays: s.dueSoonDays ?? null,
+      lastServiceOdometerKm: s.lastServiceOdometerKm ?? null,
+      lastServiceDate: s.lastServiceDate ?? null,
+      currentOdometerKm: vehicle.odometerKm,
+      now,
+    });
+    return { schedule: s, result };
+  });
+
+  const openIssues = issues.filter((i) => i.status !== "CLOSED").length;
+  const openWorkOrders = workOrders.filter((w) =>
+    ["OPEN", "IN_PROGRESS", "WAITING"].includes(w.status),
+  ).length;
+
+  const nextService = nextServiceLabel(evaluatedSchedules, vehicle.odometerKm);
 
   const tabData: VehicleDetailTabData = {
     overview: {
       odometerKm: vehicle.odometerKm,
       odometerAt: formatDate(vehicle.odometerAt),
-      createdBy: vehicle.createdBy,
+      createdBy: userNames.get(vehicle.createdBy) ?? vehicle.createdBy,
       createdAt: formatDate(vehicle.createdAt),
       archivedAt: formatDate(vehicle.archivedAt),
       safetyHoldReason: vehicle.safetyHoldReason ?? null,
@@ -90,27 +117,11 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       effectiveAt: formatDate(r.effectiveAt),
       note: r.notes ?? "",
     })),
-    schedules: schedules.map((s) => {
-      const status = computeScheduleStatus({
-        intervalKm: s.intervalKm ?? null,
-        intervalDays: null,
-        dueSoonKm: s.dueSoonKm ?? null,
-        lastServiceOdometerKm: s.lastServiceOdometerKm ?? null,
-        lastServiceDate: s.lastServiceDate ?? null,
-        currentOdometerKm: vehicle.odometerKm,
-        now: new Date(),
-      });
-      return {
-        taskName: s.taskName,
-        status: status.status,
-        intervalKm: s.intervalKm ?? null,
-        lastServiceKm:
-          typeof s.lastServiceOdometerKm === "number" ? s.lastServiceOdometerKm : null,
-        lastServiceDate: formatDate(s.lastServiceDate),
-        nextDueKm: status.nextDueOdometerKm !== null ? formatKm(status.nextDueOdometerKm) : "—",
-      };
-    }),
+    schedules: evaluatedSchedules.map(({ schedule: s, result }) =>
+      scheduleToTab(s, result),
+    ),
     serviceRecords: serviceRecords.slice(0, 20).map((r) => ({
+      id: r.id,
       taskName: r.taskName,
       completedAt: formatDate(r.completedAt),
       odometerKm: r.odometerKm ?? null,
@@ -118,6 +129,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       workPerformed: r.workPerformed ?? null,
     })),
     issues: issues.map((i) => ({
+      id: i.id,
       number: i.number ?? "",
       title: i.title,
       severity: i.severity,
@@ -125,6 +137,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       createdAt: formatDate(i.createdAt),
     })),
     workOrders: workOrders.map((w) => ({
+      id: w.id,
       number: w.number ?? "",
       title: w.title,
       priority: w.priority,
@@ -132,7 +145,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       createdAt: formatDate(w.createdAt),
     })),
     assignments: assignments.map((a) => ({
-      driverName: driverNames.get(a.driverUserId) ?? a.driverUserId,
+      id: a.id,
+      driverName: userNames.get(a.driverUserId) ?? a.driverUserId,
       purpose: a.purpose,
       status: a.status,
       startKm: a.startOdometerKm ?? null,
@@ -141,56 +155,188 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       createdAt: formatDate(a.createdAt),
     })),
     fuelEntries: fuelEntries.map((f) => ({
-      transactedOn: f.transactedOn,
+      id: f.id,
+      transactedOn: formatDate(f.transactedOn),
       litres: f.litres,
       amountMinor: f.totalMinor,
+      currency: f.currency,
       odometerKm: f.odometerKm,
+      fullTank: f.fullTank,
     })),
     documents: documents.map((d) => ({
+      id: d.id,
       category: d.category,
-      status: d.mandatory || !d.expiryDate ? "MISSING" : "VALID",
-      expiryDate: d.expiryDate ?? "",
+      // Domain-computed state — mandatory-with-upload is no longer MISSSING.
+      state: documentState(d, now, EXPIRY_WARNING_DAYS),
+      hasFile: Boolean(d.fileKey),
       mandatory: d.mandatory,
+      expiryDate: formatIsoDate(d.expiryDate),
       notes: d.notes ?? null,
     })),
   };
 
   return (
-    <Container className="flex flex-col gap-8 py-10">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/vehicles"
-          className="font-ui text-muted hover:text-ink text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase transition-colors"
-        >
-          ← Vehicles
-        </Link>
-        <div className="flex flex-wrap items-center gap-4">
-          <DisplayTitle size="md">{vehicle.regNumber}</DisplayTitle>
-          <StatusBadge status={vehicle.status} />
-        </div>
-        <p className="text-body-sm text-muted">
-          {vehicle.make} {vehicle.model} · {vehicle.year} · {vehicle.type} ·{" "}
-          {formatKm(vehicle.odometerKm)}
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title={vehicle.regNumber}
+        description={`${vehicle.make} ${vehicle.model} · ${vehicle.year} · ${vehicle.type.replace(/_/g, " ").toLowerCase()}`}
+        crumbs={[{ label: "Fleet" }, { label: "Vehicles", href: "/vehicles" }, { label: vehicle.regNumber }]}
+        actions={
+          <>
+            <StatusBadge status={vehicle.status} />
+            {actions.length > 0 && (
+              <StatusActions
+                endpoint={`/api/v1/vehicles/${vehicle.id}/status`}
+                actions={actions}
+                confirm={{
+                  archive:
+                    "Archive this vehicle? It will be hidden from lists and cannot be resurrected.",
+                  safety_hold: "Place this vehicle on safety hold? It will be barred from service until released.",
+                }}
+              />
+            )}
+          </>
+        }
+      />
 
-      {actions.length > 0 && (
-        <Card title="Status actions">
-          <div className="p-5">
-            <StatusActions
-              endpoint={`/api/v1/vehicles/${vehicle.id}/status`}
-              actions={actions}
-              confirm={{
-                archive:
-                  "Archive this vehicle? It will be hidden from lists and cannot be resurrected.",
-                safety_hold: "Place this vehicle on safety hold?",
-              }}
-            />
-          </div>
-        </Card>
-      )}
+      {/* Summary strip */}
+      <Card flush>
+        <div className="grid grid-cols-2 divide-x divide-hairline md:grid-cols-4">
+          <SummaryCell label="Current odometer" value={formatKm(vehicle.odometerKm)} />
+          <SummaryCell
+            label="Next service"
+            value={nextService.value}
+            tone={nextService.tone}
+            hint={nextService.hint}
+          />
+          <LinkCell
+            label="Open issues"
+            value={String(openIssues)}
+            href={`/reports?vehicleId=${vehicle.id}`}
+          />
+          <LinkCell
+            label="Open work orders"
+            value={String(openWorkOrders)}
+            href={`/work-orders?vehicleId=${vehicle.id}`}
+          />
+        </div>
+      </Card>
 
       <VehicleDetailTabs data={tabData} />
-    </Container>
+
+      <p className="text-body-xs text-muted">
+        Odometer and maintenance figures follow the accepted readings ledger and the
+        documented schedule engine — complete history is on the Odometer and Maintenance tabs.
+      </p>
+    </div>
+  );
+}
+
+function scheduleToTab(
+  s: MaintenanceSchedule,
+  result: ReturnType<typeof computeScheduleStatus>,
+): VehicleDetailTabData["schedules"][number] {
+  return {
+    id: s.id,
+    taskName: s.taskName,
+    status: result.status,
+    category: s.category,
+    intervalKm: s.intervalKm ?? null,
+    intervalDays: s.intervalDays ?? null,
+    enabled: s.enabled,
+    lastServiceKm: typeof s.lastServiceOdometerKm === "number" ? s.lastServiceOdometerKm : null,
+    lastServiceDate: formatDate(s.lastServiceDate),
+    nextDueKm: result.nextDueOdometerKm !== null ? formatKm(result.nextDueOdometerKm) : "—",
+    nextDueDate: formatIsoDate(result.nextDueDate),
+    remainingKm: result.remainingKm,
+    remainingDays: result.remainingDays,
+  };
+}
+
+function nextServiceLabel(
+  evaluated: { schedule: MaintenanceSchedule; result: ReturnType<typeof computeScheduleStatus> }[],
+  odometerKm: number,
+): { value: string; tone: "default" | "accent" | "warning" | "danger"; hint: string } {
+  const rank = { OVERDUE: 0, DUE: 1, DUE_SOON: 2, NOT_CONFIGURED: 3, OK: 4 } as const;
+  const sorted = [...evaluated]
+    .filter((e) => e.result.status !== "OK")
+    .sort((a, b) => rank[a.result.status] - rank[b.result.status]);
+  const first = sorted[0];
+  if (!first) {
+    return { value: "On schedule", tone: "default", hint: "No task due in the configured windows" };
+  }
+  if (first.result.status === "NOT_CONFIGURED") {
+    return {
+      value: "Not configured",
+      tone: "default",
+      hint: "Some tasks lack a baseline or interval",
+    };
+  }
+  const t = first.schedule;
+  const r = first.result;
+  const remaining =
+    r.remainingKm !== null
+      ? `${r.remainingKm.toLocaleString()} km`
+      : r.remainingDays !== null
+        ? `${r.remainingDays} day${r.remainingDays === 1 ? "" : "s"}`
+        : null;
+  return {
+    value: `${t.taskName}`,
+    tone: r.status === "OVERDUE" ? "danger" : r.status === "DUE" ? "accent" : "warning",
+    hint: remaining
+      ? `${r.status === "OVERDUE" ? "Overdue by" : "Due in"} ${remaining} (${formatKm(odometerKm)})`
+      : `${r.status} — see Maintenance tab`,
+  };
+}
+
+function SummaryCell({
+  label,
+  value,
+  tone = "default",
+  hint,
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "accent" | "warning" | "danger";
+  hint?: string;
+}) {
+  const toneClasses = {
+    default: "text-ink",
+    accent: "text-accent",
+    warning: "text-warning",
+    danger: "text-error",
+  }[tone];
+  return (
+    <div className="flex flex-col gap-0.5 px-5 py-4">
+      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+        {label}
+      </span>
+      <span className={`font-heading text-heading-md font-semibold tabular-nums ${toneClasses}`}>
+        {value}
+      </span>
+      {hint && <span className="text-data-xs mt-0.5 text-muted">{hint}</span>}
+    </div>
+  );
+}
+
+function LinkCell({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  href: string;
+}) {
+  return (
+    <Link href={href} className="hover:bg-subtle flex flex-col gap-0.5 px-5 py-4 transition-colors">
+      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+        {label}
+      </span>
+      <span className="font-heading text-heading-md font-semibold tabular-nums text-ink">
+        {value}
+      </span>
+      <span className="text-data-xs mt-0.5 text-link">View records</span>
+    </Link>
   );
 }

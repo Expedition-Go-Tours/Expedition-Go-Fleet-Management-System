@@ -1,9 +1,12 @@
 import { cn } from "@/lib/cn";
 
 /*
- * Status pill used across all fleet screens. Colour is semantic but restrained:
- * green = healthy/settled, amber = needs attention, accent = urgent/active,
- * red = blocked/void, muted = inert.
+ * Status and severity indicator. Two shapes:
+ *  - pill (default): bordered chip used in lists/tables.
+ *  - dot: compact dot + label used in dense rows and summary blocks.
+ * Colour is semantic: green = healthy/settled, amber = needs attention,
+ * orange/accent = urgent/active, red = blocked/void, blue = informational,
+ * muted = inert.
  */
 
 const TONES = {
@@ -11,31 +14,46 @@ const TONES = {
   warning: "border-warning/25 bg-warning/10 text-warning",
   accent: "border-accent/30 bg-accent/10 text-accent",
   danger: "border-error/25 bg-error/10 text-error",
+  info: "border-info/20 bg-info/10 text-info",
   muted: "border-hairline bg-surface text-muted",
 } as const;
 
 export type StatusTone = keyof typeof TONES;
 
+const DOT_TONES: Record<StatusTone, string> = {
+  success: "bg-success",
+  warning: "bg-warning",
+  accent: "bg-accent",
+  danger: "bg-error",
+  info: "bg-info",
+  muted: "bg-faint",
+};
+
 const STATUS_TONES: Record<string, StatusTone> = {
   // vehicles
   ACTIVE: "success",
   IN_SERVICE: "warning",
-  SAFETY_HOLD: "accent",
+  SAFETY_HOLD: "danger",
   ARCHIVED: "muted",
   // reports
   OPEN: "accent",
-  TRIAGED: "warning",
+  TRIAGED: "info",
   CLOSED: "muted",
+  // issue severities
+  CRITICAL: "danger",
+  HIGH: "warning",
+  MEDIUM: "info",
+  LOW: "muted",
   // work orders
-  IN_PROGRESS: "warning",
-  WAITING: "accent",
+  IN_PROGRESS: "info",
+  WAITING: "warning",
   COMPLETED: "success",
   VERIFIED: "success",
   // expenses
   RECORDED: "success",
   VOID: "danger",
   // users
-  INVITED: "muted",
+  INVITED: "info",
   SUSPENDED: "danger",
   DISABLED: "danger",
   // audit outcomes
@@ -58,6 +76,10 @@ const STATUS_TONES: Record<string, StatusTone> = {
   MISSING: "danger",
   // assignments
   CANCELLED: "muted",
+  // inspections
+  PASS: "success",
+  FAIL: "danger",
+  NA: "muted",
 } as const;
 
 export function StatusBadge({
@@ -73,12 +95,42 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "rounded-pill font-ui inline-flex items-center border px-2.5 py-0.5 text-[length:var(--fs-ui-xs)] font-medium tracking-[var(--tracking-ui)] uppercase",
+        "rounded-pill font-ui inline-flex items-center whitespace-nowrap border px-2.5 py-0.5 text-[length:var(--fs-ui-xs)] font-medium tracking-[var(--tracking-ui)] uppercase",
         TONES[resolved],
         className,
       )}
     >
-      {status.replace(/_/g, " ")}
+      {formatStatusLabel(status)}
     </span>
   );
 }
+
+export function StatusDot({
+  status,
+  tone,
+  className,
+}: {
+  status: string;
+  tone?: StatusTone;
+  className?: string;
+}) {
+  const resolved = tone ?? STATUS_TONES[status] ?? "muted";
+  return (
+    <span className={cn("inline-flex items-center gap-1.5", className)}>
+      <span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", DOT_TONES[resolved])} />
+      <span className="font-ui text-ink-2 text-[length:var(--fs-data-xs)] font-medium uppercase tracking-[var(--tracking-ui)]">
+        {formatStatusLabel(status)}
+      </span>
+    </span>
+  );
+}
+
+/** "SAFETY_HOLD" → "Safety hold"; "DUE_SOON" → "Due soon". */
+export function formatStatusLabel(status: string): string {
+  return status
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export { TONES, STATUS_TONES };

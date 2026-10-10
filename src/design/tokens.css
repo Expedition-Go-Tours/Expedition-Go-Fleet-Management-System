@@ -1,25 +1,17 @@
 /*
  * Design tokens — Expedition Go Tours Fleet Management System
  * ==========================================================
- * Adapted from docs/DESIGN_SYSTEM.md (the shared Expedition Go Tours visual language).
+ * Operational adaptation of the shared Expedition Go Tours visual language
+ * (docs/DESIGN_SYSTEM.md). The marketing source uses viewport-proportional
+ * type, oversized display headings and mono uppercase micro-labels. An
+ * internal fleet-ops tool needs the inverse: a fixed 16px root, a restrained
+ * 28–32px page heading, 13–15px data text, semantic status colours used
+ * sparingly, and a warm-orange accent reserved for primary actions and
+ * meaningful highlights. The Expedition Go identity (charcoal panels,
+ * neutral-gray working surfaces, warm orange) is retained.
  *
- * ADAPTATION NOTE
- * ---------------
- * The source document describes a public marketing surface. It sets a
- * viewport-proportional root font size (~10px/rem, `font-size: 0.5787vw`) so that
- * layouts scale pixel-perfectly with the browser width. That behaviour is wrong for
- * an internal, data-dense application: text would grow and shrink with the window,
- * hurt legibility and break accessibility (browser zoom, OS text scaling).
- *
- * We therefore keep the browser-default 16px root and re-express the type scale in
- * rem against that root, preserving the *visual character* of the system:
- *   • black / white monochrome base with a single warm accent (#ff5500)
- *   • oversized, tightly-tracked geometric display type (Manrope)
- *   • mono micro-labels in uppercase with wide tracking
- *   • generous spacing rhythm, hairline borders, restrained chrome
- *
- * Tokens are declared in `:root` under short prefixes, then mapped into Tailwind's
- * theme namespaces below so they surface as utilities (bg-ink, font-heading, ...).
+ * Tokens are declared in `:root` under short prefixes, then mapped into
+ * Tailwind's theme namespaces below so they surface as utilities.
  */
 
 :root {
@@ -27,48 +19,66 @@
 
   /* ---------- colour: monochrome base ---------- */
   --c-black: #000000;
-  --c-near-black: #0c1016;
-  --c-ink: #111111;
+  --c-near-black: #0c1016; /* sidebar */
+  --c-ink: #1a1d21; /* primary text */
   --c-white: #ffffff;
-  --c-900: #1e1e1e;
-  --c-800: #23272d;
+  --c-900: #23272d;
+  --c-800: #2c3138;
   --c-700: #3a3e44;
   --c-600: #50555a;
-  --c-500: #a5abad;
-  --c-400: #d9d9d9;
-  --c-300: #333333;
+  --c-500: #6b7280; /* secondary text */
+  --c-400: #9ca3af; /* faint text */
+  --c-300: #d1d5db; /* disabled border */
 
   /* ---------- colour: interaction ---------- */
-  --c-accent: #ff5500;
-  --c-link-hover: #0016cb;
-  --c-error: #df2020;
-  --c-success: #179237;
+  --c-accent: #f15a24; /* warm orange — primary action / highlight */
+  --c-accent-strong: #d84a16;
+  --c-info: #155eef; /* neutral active states */
+  --c-error: #d92d20;
+  --c-success: #15803d;
   --c-warning: #b45309;
+  --c-link: #155eef;
 
   /* ---------- semantic surfaces ---------- */
-  --bg-page: var(--c-white);
-  --bg-surface: #f6f6f5;
+  --bg-page: #f5f5f4; /* workspace background */
+  --bg-surface: #ffffff; /* panels / cards */
+  --bg-subtle: #fafaf9; /* nested panels */
   --bg-dark: var(--c-black);
   --bg-panel-1: var(--c-near-black);
   --bg-panel-2: var(--c-800);
   --bg-panel-3: var(--c-700);
   --bg-panel-4: var(--c-600);
 
+  /* shared tinted surfaces for status chips/alert bands (10% alpha fills) */
+  --ok-tint: rgba(21, 128, 61, 0.1);
+  --warn-tint: rgba(180, 83, 9, 0.1);
+  --danger-tint: rgba(217, 45, 32, 0.09);
+  --info-tint: rgba(21, 94, 239, 0.08);
+  --accent-tint: rgba(241, 90, 36, 0.1);
+
   /* ---------- semantic text ---------- */
   --text-primary: var(--c-ink);
+  --text-secondary: var(--c-500);
   --text-on-dark: var(--c-white);
+  --text-on-dark-muted: rgba(255, 255, 255, 0.62);
   --text-muted: var(--c-500);
   --text-faint: var(--c-400);
 
   /* ---------- semantic borders ---------- */
-  --border-hairline: rgba(17, 17, 17, 0.14);
-  --border-strong: rgba(17, 17, 17, 0.24);
+  --border-hairline: rgba(26, 29, 33, 0.12);
+  --border-strong: rgba(26, 29, 33, 0.24);
   --border-on-dark: rgba(255, 255, 255, 0.16);
+  --border-accent: rgba(241, 90, 36, 0.5);
 
   /* ---------- action ---------- */
   --action-primary: var(--c-ink);
   --action-primary-text: var(--c-white);
   --action-accent: var(--c-accent);
+
+  /* ---------- shadows (restrained) ---------- */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.12);
+  --shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, 0.18);
 
   /* ---------- type families ---------- */
   --font-body: var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
@@ -76,25 +86,30 @@
   --font-label: var(--font-dm-sans), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* ---------- type scale (rem @ 16px root) ---------- */
-  --fs-display-xl: 4.5rem; /* 72px */
-  --fs-display-lg: 3.5rem; /* 56px */
-  --fs-display-md: 2.5rem; /* 40px */
-  --fs-heading-lg: 2rem; /* 32px */
-  --fs-heading-md: 1.5rem; /* 24px */
-  --fs-heading-sm: 1.25rem; /* 20px */
-  --fs-body-lg: 1.25rem; /* 20px */
-  --fs-body-md: 1.125rem; /* 18px */
-  --fs-body-sm: 1rem; /* 16px */
-  --fs-body-xs: 0.875rem; /* 14px */
+  --fs-display-xl: 2.75rem; /* 44px — reserved for hero/auth */
+  --fs-display-lg: 2.25rem; /* 36px */
+  --fs-display-md: 1.875rem; /* 30px — do NOT use for every page */
+  --fs-page-title: 1.75rem; /* 28px — ordinary app page heading */
+  --fs-section-title: 1.25rem; /* 20px — section heading */
+  --fs-card-title: 1rem; /* 16px — card header title */
+  --fs-heading-lg: 1.5rem; /* 24px */
+  --fs-heading-md: 1.125rem; /* 18px */
+  --fs-heading-sm: 1rem; /* 16px */
+  --fs-body-lg: 1rem; /* 16px */
+  --fs-body-md: 0.9375rem; /* 15px */
+  --fs-body-sm: 0.9375rem; /* 15px — default body */
+  --fs-body-xs: 0.8125rem; /* 13px — helper text, table meta */
+  --fs-data: 0.875rem; /* 14px — data tables */
+  --fs-data-xs: 0.75rem; /* 12px — compact table meta */
   --fs-ui-sm: 0.75rem; /* 12px */
-  --fs-ui-xs: 0.6875rem; /* 11px */
+  --fs-ui-xs: 0.6875rem; /* 11px — reserved for mono meta only */
 
-  --tracking-display: -0.045em;
-  --tracking-heading: -0.03em;
-  --tracking-ui: 0.08em;
+  --tracking-display: -0.02em;
+  --tracking-heading: -0.015em;
+  --tracking-ui: 0.07em;
 
-  --leading-display: 0.95;
-  --leading-heading: 1.1;
+  --leading-display: 1.05;
+  --leading-heading: 1.2;
   --leading-body: 1.5;
 
   /* ---------- spacing rhythm ---------- */
@@ -113,19 +128,19 @@
   --s-13: 8rem;
 
   /* ---------- geometry ---------- */
-  --r-sm: 0.25rem;
-  --r-md: 0.5rem;
-  --r-lg: 0.75rem;
-  --r-xl: 1.25rem;
-  --r-2xl: 2rem;
+  --r-sm: 0.375rem; /* 6px */
+  --r-md: 0.5rem; /* 8px — inputs, contained controls */
+  --r-lg: 0.625rem; /* 10px — cards */
+  --r-xl: 0.875rem; /* 14px — large surfaces */
+  --r-2xl: 1.25rem;
   --r-pill: 9999px;
   --border-width: 1px;
 
   /* ---------- motion ---------- */
-  --motion-fast: 180ms;
-  --motion-ui: 300ms;
-  --motion-standard: 400ms;
-  --motion-slow: 600ms;
+  --motion-fast: 150ms;
+  --motion-ui: 200ms;
+  --motion-standard: 300ms;
+  --motion-slow: 500ms;
   --motion-ambient: 1200ms;
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-smooth: cubic-bezier(0.66, 0, 0.15, 1);
@@ -134,6 +149,9 @@
   /* ---------- layout ---------- */
   --page-gutter: 1.5rem;
   --container-max: 1440px;
+  --sidebar-w: 15.5rem; /* 248px */
+  --topbar-h: 3.75rem; /* 60px */
+  --control-h: 2.375rem; /* 38px — standard input/button height */
 }
 
 /*
@@ -145,22 +163,28 @@
   /* colours */
   --color-page: var(--bg-page);
   --color-surface: var(--bg-surface);
+  --color-subtle: var(--bg-subtle);
   --color-dark: var(--bg-dark);
   --color-panel-1: var(--bg-panel-1);
   --color-panel-2: var(--bg-panel-2);
   --color-panel-3: var(--bg-panel-3);
   --color-panel-4: var(--bg-panel-4);
   --color-ink: var(--text-primary);
+  --color-ink-2: var(--text-secondary);
   --color-on-dark: var(--text-on-dark);
+  --color-on-dark-muted: var(--text-on-dark-muted);
   --color-muted: var(--text-muted);
   --color-faint: var(--text-faint);
   --color-hairline: var(--border-hairline);
   --color-strong: var(--border-strong);
   --color-on-dark-line: var(--border-on-dark);
   --color-accent: var(--c-accent);
+  --color-accent-strong: var(--c-accent-strong);
+  --color-info: var(--c-info);
   --color-error: var(--c-error);
   --color-success: var(--c-success);
   --color-warning: var(--c-warning);
+  --color-link: var(--c-link);
 
   /* type families */
   --font-sans: var(--font-body);
@@ -177,12 +201,19 @@
   --text-display-md: var(--fs-display-md);
   --text-display-md--line-height: var(--leading-display);
   --text-display-md--letter-spacing: var(--tracking-display);
+  --text-page-title: var(--fs-page-title);
+  --text-page-title--line-height: var(--leading-heading);
+  --text-page-title--letter-spacing: var(--tracking-heading);
+  --text-section-title: var(--fs-section-title);
+  --text-section-title--line-height: var(--leading-heading);
+  --text-section-title--letter-spacing: var(--tracking-heading);
+  --text-card-title: var(--fs-card-title);
+  --text-card-title--line-height: 1.35;
   --text-heading-lg: var(--fs-heading-lg);
   --text-heading-lg--line-height: var(--leading-heading);
   --text-heading-lg--letter-spacing: var(--tracking-heading);
   --text-heading-md: var(--fs-heading-md);
   --text-heading-md--line-height: var(--leading-heading);
-  --text-heading-md--letter-spacing: var(--tracking-heading);
   --text-heading-sm: var(--fs-heading-sm);
   --text-heading-sm--line-height: var(--leading-heading);
   --text-body-lg: var(--fs-body-lg);
@@ -193,6 +224,10 @@
   --text-body-sm--line-height: var(--leading-body);
   --text-body-xs: var(--fs-body-xs);
   --text-body-xs--line-height: var(--leading-body);
+  --text-data: var(--fs-data);
+  --text-data--line-height: 1.45;
+  --text-data-xs: var(--fs-data-xs);
+  --text-data-xs--line-height: 1.45;
   --text-ui-sm: var(--fs-ui-sm);
   --text-ui-sm--line-height: 1.2;
   --text-ui-sm--letter-spacing: var(--tracking-ui);
