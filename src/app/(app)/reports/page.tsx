@@ -12,6 +12,7 @@ import { ISSUE_CATEGORIES, REPORT_SEVERITIES } from "@/lib/domain/report";
 import { formatDate } from "@/lib/format";
 import { listIssues } from "@/lib/repos/reports";
 import { listVehicles } from "@/lib/repos/vehicles";
+import Link from "next/link";
 
 export const metadata = { title: "Issues" };
 
@@ -65,10 +66,12 @@ export default async function IssuesPage() {
                     <li key={issue.id} className="flex flex-col gap-3 px-5 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
-                          <span className="text-body-sm font-medium">
-                            {issue.number ? `${issue.number} — ` : ""}
-                            {issue.title}
-                          </span>
+                          <Link href={`/reports/${issue.id}`} className="hover:text-ink">
+                            <span className="text-body-sm font-medium text-ink">
+                              {issue.number ? `${issue.number} — ` : ""}
+                              {issue.title}
+                            </span>
+                          </Link>
                           <span className="text-body-xs text-muted">
                             {vehicleName(issue.vehicleId)} · {issue.severity} ·{" "}
                             {formatDate(issue.createdAt)}

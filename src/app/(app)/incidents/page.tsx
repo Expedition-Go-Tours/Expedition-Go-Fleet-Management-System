@@ -12,6 +12,7 @@ import { INCIDENT_SEVERITIES, INCIDENT_TYPES } from "@/lib/domain/incident";
 import { formatDate } from "@/lib/format";
 import { listIncidents } from "@/lib/repos/incidents";
 import { listVehicles } from "@/lib/repos/vehicles";
+import Link from "next/link";
 
 export const metadata = { title: "Incidents" };
 
@@ -66,9 +67,11 @@ export default async function IncidentsPage() {
                     <li key={incident.id} className="flex flex-col gap-3 px-5 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
-                          <span className="text-body-sm font-medium">
-                            {incident.type.replace(/_/g, " ")}
-                          </span>
+                          <Link href={`/incidents/${incident.id}`} className="hover:text-ink">
+                            <span className="text-body-sm font-medium text-ink">
+                              {incident.type.replace(/_/g, " ")}
+                            </span>
+                          </Link>
                           <span className="text-body-xs text-muted">
                             {vehicleName(incident.vehicleId)} · {incident.severity} ·{" "}
                             {formatDate(incident.occurredAt)}

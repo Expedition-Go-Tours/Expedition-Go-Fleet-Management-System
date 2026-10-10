@@ -11,6 +11,7 @@ import { WORK_ORDER_ACTIONS, WORK_ORDER_PRIORITIES } from "@/lib/domain/work-ord
 import { formatDate } from "@/lib/format";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
+import Link from "next/link";
 
 export const metadata = { title: "Work orders" };
 
@@ -63,7 +64,9 @@ export default async function WorkOrdersPage() {
                     <li key={wo.id} className="flex flex-col gap-3 px-5 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
-                          <span className="text-body-sm font-medium">{wo.title}</span>
+                          <Link href={`/work-orders/${wo.id}`} className="hover:text-ink">
+                            <span className="text-body-sm font-medium text-ink">{wo.title}</span>
+                          </Link>
                           <span className="text-body-xs text-muted">
                             {vehicleName(wo.vehicleId)} · {wo.priority} · {formatDate(wo.createdAt)}
                           </span>
