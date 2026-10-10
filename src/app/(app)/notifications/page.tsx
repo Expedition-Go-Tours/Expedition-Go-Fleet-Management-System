@@ -3,7 +3,8 @@ import { Bell } from "lucide-react";
 import { NotificationCentre, type CentreNotification } from "@/components/notifications/NotificationCentre";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
 import { listNotifications } from "@/lib/repos/notifications";
 
@@ -15,7 +16,7 @@ export const metadata = { title: "Notifications" };
  * are created by the reminder cron with dedupe keys.
  */
 export default async function NotificationsPage() {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission(PERMISSIONS.NOTIFICATION_READ);
 
   const byRole = await Promise.all(
     context.user.roles.map((role) => listNotifications({ recipientRole: role, limit: 200 })),

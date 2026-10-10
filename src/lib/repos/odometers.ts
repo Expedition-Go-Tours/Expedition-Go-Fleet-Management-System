@@ -286,6 +286,21 @@ export async function correctReading(
   });
 }
 
+/** Count readings for a vehicle (optionally by status) via aggregation. */
+export async function countReadings(
+  vehicleId: string,
+  options?: { status?: OdometerStatus },
+): Promise<number> {
+  let query: import("firebase-admin/firestore").Query = readingsRef().where(
+    "vehicleId",
+    "==",
+    vehicleId,
+  );
+  if (options?.status) query = query.where("status", "==", options.status);
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
 /** Ledger page for a vehicle, newest effective reading first. */
 export async function listReadings(
   vehicleId: string,

@@ -19,7 +19,7 @@ import { CloseIssueDialog } from "@/components/reports/CloseIssueDialog";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
 import { getIssueById } from "@/lib/repos/reports";
@@ -30,7 +30,10 @@ import { getWorkOrderById } from "@/lib/repos/work-orders";
 export const metadata = { title: "Issue" };
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission([
+    PERMISSIONS.REPORT_READ_OWN,
+    PERMISSIONS.REPORT_READ_ALL,
+  ]);
   const { id } = await params;
   const issue = await getIssueById(id);
   if (!issue) notFound();
@@ -78,7 +81,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
           <Card title="Description" icon={FileText} flush={false}>
             <p className="text-body-sm whitespace-pre-wrap text-ink">{issue.description}</p>

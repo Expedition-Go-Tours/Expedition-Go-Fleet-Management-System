@@ -20,7 +20,7 @@ export function CreateForm({
   fields: {
     name: string;
     label: string;
-    type?: "text" | "number" | "textarea" | "select";
+    type?: "text" | "number" | "textarea" | "select" | "date";
     required?: boolean;
     placeholder?: string;
     options?: { value: string; label: string }[];

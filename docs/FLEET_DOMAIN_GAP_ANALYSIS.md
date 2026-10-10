@@ -1,5 +1,26 @@
 # Fleet Domain Implementation Gap Analysis
 
+> **⚠️ SUPERSEDED — historical audit only.**
+>
+> This analysis was written on 2026-10-09 against commit `cc26bcd` (end of
+> Phase 4). It is kept for provenance and **no longer describes the codebase**.
+> Phase 5 and the subsequent production-remediation work implemented essentially
+> every gap listed below (odometer ledger, maintenance schedules + service
+> records, assignments/trips, inspections, incidents, fuel entries, vehicle
+> documents, notifications, a full vehicle profile with tabs/timeline, the
+> `RECORDED → VOID` expense lifecycle, the due/overdue engine, R2 attachments,
+> Vercel cron, and page/route-level authorization).
+>
+> For the current state use:
+> - `README.md` — feature status and commands
+> - `docs/FLEET_DOMAIN_MODEL.md` — entities, relationships, calculations
+> - `docs/ARCHITECTURE.md` — stack, storage, request lifecycle
+> - `docs/AUTHENTICATION_AUTHORIZATION.md` — intended authz model
+> - `docs/UI_UX_AND_RELEASE_AUDIT.md` — UI/UX + release audit
+>
+> A short reconciliation of each section follows the historical record at the
+> bottom of this file.
+
 Audited 2026-10-09 against the code at commit `cc26bcd` (Phase 4). Status
 labels in `README.md` were verified against code, tests, and live E2E runs —
 not trusted at face value.
@@ -83,3 +104,45 @@ double-submit/idempotency tests.
 `mileage` on vehicles becomes a derived projection (`odometerKm`) recomputed
 only by trusted server logic from the `odometerReadings` ledger. The expense
 lifecycle is replaced by `RECORDED → VOID` with mandatory void reason.
+
+---
+
+## Reconciliation (current state — verified against the remediation code)
+
+Every gap above is closed or intentionally resolved. Point-by-point:
+
+1. **Vehicle profile** — now a full operational profile with tabs (overview,
+   odometer, maintenance, service, issues, work orders, assignments, fuel,
+   documents) and a chronological activity timeline. Record counts use
+   Firestore aggregation (`countIssues`, `countWorkOrders`, `countReadings`,
+   `countAssignments`, `countFuelEntries`) so a badge is never a truncated page
+   slice; capped tab lists disclose “showing N of M” and link to the filtered
+   register.
+2. **Reports** — reference number, category, safety-critical/immobilized
+   flags, odometer capture, and a driver “my reports” scope exist; reports link
+   to one or more work orders; closing is evidence-gated (resolution, duplicate
+   link, or not-actionable reason). The list honours `?vehicleId=` and `?open=1`.
+3. **Work orders** — completion is evidence-gated (odometer + work performed),
+   with waiting/verify states, provider link, number, and a filtered list
+   (`?vehicleId=`, `?status=`, `?open=1`).
+4. **Expenses** — lifecycle is `RECORDED → VOID` with a mandatory, audited void
+   reason (approval happens outside the system). The vehicle is the primary
+   association and a work order is optional; amount is integer minor units via
+   the single `toPesewas` helper. No `approve`/`mark_paid` states remain.
+5. **Audit** — state changes across vehicles, odometer, service, assignments and
+   documents are recorded with actor/entity/before-after.
+6. **Firestore access** — equality-filter lists plus aggregation counts; large
+   collections stay off full scans; no composite indexes required.
+7. **Preventive maintenance / odometer ledger / assignments / inspections /
+   incidents / fuel / documents / notifications / R2 / cron** — all
+   implemented with domain modules, repos, routes, UI, and tests.
+8. **Dashboard** — KPIs share the pure `summariseFleet` logic with the vehicles
+   drill-down, so each metric and its link cannot diverge; “available” excludes
+   assigned and open-critical-issue vehicles.
+9. **Authorization** — protected pages enforce permissions at the data boundary
+   via `requirePagePermission` (404 on denial, no route/record disclosure);
+   API routes enforce `requirePermission` (401/403).
+
+The remaining “missing tests” note is resolved: the suite includes odometer
+monotonicity/correction, maintenance boundaries, lifecycle transitions, trip
+distance, and expense amount-integrity tests (see `npm test`).

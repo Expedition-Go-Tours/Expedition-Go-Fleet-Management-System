@@ -5,9 +5,10 @@ import { NextRequest } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { EXPENSE_CATEGORIES, isValidAmountMinor, type ExpenseStatus } from "@/lib/domain/expense";
+import { EXPENSE_CATEGORIES, isValidAmountMinor, toPesewas, type ExpenseStatus } from "@/lib/domain/expense";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { createExpense, listExpenses } from "@/lib/repos/expenses";
+import { getVehicleById } from "@/lib/repos/vehicles";
 import { getWorkOrderById } from "@/lib/repos/work-orders";
 
 export const runtime = "nodejs";
@@ -29,8 +30,8 @@ export async function GET(request: NextRequest) {
     const limitRaw = Number(params.get("limit"));
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 && limitRaw <= 1000 ? limitRaw : 200;
     const statusParam = params.get("status");
-    if (statusParam && !["PENDING", "APPROVED", "PAID", "VOID"].includes(statusParam)) {
-      throw ApiError.badRequest("status must be PENDING, APPROVED, PAID or VOID");
+    if (statusParam && !["RECORDED", "VOID"].includes(statusParam)) {
+      throw ApiError.badRequest("status must be RECORDED or VOID");
     }
 
     const expenses = await listExpenses({
@@ -47,9 +48,13 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/v1/expenses
- * Record an expense against a work order. Requires expense:create.
- * Amount is given as a decimal string/number in major units and stored as
- * integer minor units (never floats in the ledger).
+ * Record an expense. Requires expense:create.
+ *
+ * The VEHICLE is the primary association; a work order is optional context
+ * (repair costs may be logged before/without a work order, and general costs
+ * like insurance never have one). Approval happens outside this system, so a
+ * new expense is always RECORDED. Amount is given as a decimal string/number
+ * in major units and stored as integer minor units (never floats).
  */
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
@@ -61,12 +66,19 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body) throw ApiError.badRequest("Invalid JSON body");
 
+    const vehicleIdInput = typeof body.vehicleId === "string" ? body.vehicleId.trim() : "";
     const workOrderId = typeof body.workOrderId === "string" ? body.workOrderId.trim() : "";
     const category = typeof body.category === "string" ? body.category : "";
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "GHS";
+    const supplierName =
+      typeof body.supplierName === "string" ? body.supplierName.trim().slice(0, 200) : "";
+    const externalReference =
+      typeof body.externalReference === "string" ? body.externalReference.trim().slice(0, 200) : "";
 
-    if (!workOrderId) throw ApiError.badRequest("workOrderId is required");
+    if (!vehicleIdInput && !workOrderId) {
+      throw ApiError.badRequest("vehicleId is required (workOrderId alone is also accepted)");
+    }
     if (!(EXPENSE_CATEGORIES as readonly string[]).includes(category)) {
       throw ApiError.badRequest(`Category must be one of: ${EXPENSE_CATEGORIES.join(", ")}`);
     }
@@ -80,31 +92,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert major → minor units exactly (string-based to dodge float drift).
-    const amountRaw = body.amount;
-    let amountMinor: number;
-    if (typeof amountRaw === "number" && Number.isFinite(amountRaw)) {
-      amountMinor = Math.round(amountRaw * 10 ** exponent);
-    } else if (typeof amountRaw === "string" && /^\d+(\.\d{1,4})?$/.test(amountRaw.trim())) {
-      const [whole, frac = ""] = amountRaw.trim().split(".");
-      amountMinor = Number(whole) * 10 ** exponent + Number((frac + "0000").slice(0, exponent));
-    } else {
+    let incurredOn: Date | undefined;
+    const incurredRaw = typeof body.incurredOn === "string" ? body.incurredOn.trim() : "";
+    if (incurredRaw) {
+      const parsed = new Date(incurredRaw);
+      if (Number.isNaN(parsed.getTime())) throw ApiError.badRequest("incurredOn must be a valid date");
+      incurredOn = parsed;
+    }
+
+    // Convert major → minor units exactly (single domain helper, no float drift).
+    const amountMinor = toPesewas(body.amount, exponent);
+    if (amountMinor === null || !isValidAmountMinor(amountMinor)) {
       throw ApiError.badRequest("amount must be a positive number (major units)");
     }
-    if (!isValidAmountMinor(amountMinor)) {
-      throw ApiError.badRequest("amount is out of range or invalid");
-    }
 
-    const workOrder = await getWorkOrderById(workOrderId);
-    if (!workOrder) throw ApiError.badRequest("Unknown workOrderId");
+    // Resolve the vehicle link. A work order, when supplied, contributes its
+    // vehicleId but must not contradict an explicitly supplied vehicle.
+    let vehicleId = vehicleIdInput;
+    if (workOrderId) {
+      const workOrder = await getWorkOrderById(workOrderId);
+      if (!workOrder) throw ApiError.badRequest("Unknown workOrderId");
+      if (vehicleId && workOrder.vehicleId !== vehicleId) {
+        throw ApiError.badRequest("vehicleId does not match the work order's vehicle");
+      }
+      vehicleId = vehicleId || workOrder.vehicleId;
+    }
+    const vehicle = await getVehicleById(vehicleId);
+    if (!vehicle) throw ApiError.badRequest("Unknown vehicleId");
 
     const expense = await createExpense({
-      workOrderId,
-      vehicleId: workOrder.vehicleId,
+      vehicleId,
+      workOrderId: workOrderId || undefined,
       category: category as import("@/lib/domain/expense").Expense["category"],
       amountMinor,
       currency,
       description,
+      supplierName: supplierName || undefined,
+      externalReference: externalReference || undefined,
+      incurredOn,
       createdBy: context.user.id,
     });
 
@@ -113,7 +138,7 @@ export async function POST(request: NextRequest) {
       actorId: context.user.id,
       entityType: "expense",
       entityId: expense.id,
-      after: { workOrderId, category, currency, amountMinor },
+      after: { vehicleId, workOrderId: workOrderId || null, category, currency, amountMinor },
       requestId,
     });
 

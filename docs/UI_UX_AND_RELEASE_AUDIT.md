@@ -3,8 +3,57 @@
 > Audit performed against `main` @ `5442eaf` (Phase G shipped). Every statement
 > below was verified in source, not taken from documentation. Items marked
 > [FIX] are remediated as part of the UI/UX overhaul that this audit introduces.
+>
+> **STATUS: every [FIX] item below was delivered** in the UI/UX overhaul
+> (commit `2015385`) and the follow-on production-quality remediation recorded
+> in the addendum at the end of this file. The body is retained as the audit
+> trail; the addendum records what changed in the remediation pass and what
+> remains outstanding.
 
 ---
+
+## Addendum — production-quality remediation (post-`2015385`)
+
+The remediation pass closed the last correctness gaps that the UI overhaul left
+open. Verified by `tsc --noEmit`, `eslint`, `vitest run` (124 tests), and the
+API E2E suites.
+
+1. **Page-level authorization** — pages previously called only
+   `requireAuthContext()`, so any signed-in user could load restricted screens
+   (`/users`, `/expenses`, `/fuel`, …). Every protected page now calls
+   `requirePagePermission(...)` from `src/lib/auth/page-guard.ts`, which returns
+   `notFound()` (404) on denial so route/record existence is not disclosed.
+   API routes keep `requirePermission` (401/403).
+2. **Dashboard KPI ↔ drill-down agreement** — “Available now”, “In use”, and
+   “Open work orders” previously all linked to coarse or wrong filters. The pure
+   `summariseFleet` / `vehicleMatchesAvailability` logic in
+   `src/lib/dashboard/fleet-summary.ts` is now shared by the dashboard KPI and
+   the vehicles list, so a metric and its link cannot diverge. “Available”
+   excludes assigned vehicles and vehicles with an open safety-critical issue.
+3. **Accurate record counts** — vehicle-profile badges and “open issues / open
+   work orders” stats were derived from `limit: 10` slices. They now use
+   Firestore aggregation (`countIssueTotals`, `countWorkOrderTotals`,
+   `countReadings`, `countAssignments`, `countFuelEntries`). Capped tab lists
+   disclose “showing N of M” and link to the filtered register.
+4. **List filters that the KPIs rely on** — `/work-orders` now honours
+   `?vehicleId=`, `?status=`, and `?open=1` (with a `WorkOrderFilters` control);
+   `/reports` honours `?vehicleId=` and `?open=1` with a test-accurate count.
+5. **Expense workflow** — the create form and API now treat the **vehicle** as
+   the primary association and the work order as optional; `GET /api/v1/expenses`
+   validates `status` against `RECORDED`/`VOID` (was `PENDING/APPROVED/PAID`);
+   dead `approve`/`mark_paid` labels are gone. Amount conversion uses the single
+   domain helper `toPesewas` (no inline drift-prone duplication).
+6. **Every control performs its action** — `StatusActions` gained an optional
+   reason field. The previously-always-failing controls now work: expense
+   **Void** (reason required), work-order **Wait** (waitingReason persisted by
+   the route), and vehicle **Safety hold** (reason required). The reports list
+   now closes issues through the evidence-gated `CloseIssueDialog` instead of a
+   `StatusActions` button that could never satisfy the resolution requirement.
+7. **Tests** — added `fleet-summary.test.ts`, `assignment.test.ts` (trip
+   distance), and `expense.test.ts` (amount integrity), lifting the suite from
+   107 to 124 tests.
+
+Remaining production items are unchanged from section 6 below.
 
 ## 1. Inventory of routes and their state
 

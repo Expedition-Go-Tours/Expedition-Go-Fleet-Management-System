@@ -18,6 +18,8 @@ import { computeScheduleStatus, type ScheduleStatus } from "@/lib/domain/mainten
 import { formatDate, formatIsoDate, formatKm } from "@/lib/format";
 import { listAllSchedules, type MaintenanceSchedule } from "@/lib/repos/maintenance";
 import { listVehicles } from "@/lib/repos/vehicles";
+import { requirePagePermission } from "@/lib/auth/page-guard";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 export const metadata = { title: "Maintenance" };
 
@@ -46,6 +48,7 @@ export default async function MaintenancePage({
 }: {
   searchParams: Promise<{ state?: string; vehicleId?: string }>;
 }) {
+  await requirePagePermission(PERMISSIONS.SCHEDULE_READ);
   const { state, vehicleId } = await searchParams;
   const validState = STATE_ORDER.includes(state as ScheduleStatus) ? (state as ScheduleStatus) : null;
 

@@ -11,6 +11,8 @@ import { computeConsumption, type FuelEntry } from "@/lib/domain/fuel";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { listFuelEntries } from "@/lib/repos/fuel";
 import { listVehicles } from "@/lib/repos/vehicles";
+import { requirePagePermission } from "@/lib/auth/page-guard";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 export const metadata = { title: "Fuel" };
 
@@ -26,6 +28,7 @@ export default async function FuelPage({
 }: {
   searchParams: Promise<{ vehicleId?: string }>;
 }) {
+  await requirePagePermission(PERMISSIONS.FUEL_READ);
   const { vehicleId } = await searchParams;
 
   const [entries, vehicles] = await Promise.all([listFuelEntries({ limit: 300 }), listVehicles()]);

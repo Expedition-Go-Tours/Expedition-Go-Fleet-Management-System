@@ -8,21 +8,21 @@ import { Card } from "@/components/ui/Card";
 import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
-import { listUsers } from "@/lib/repos/users";
+import { countUsers, listUsers } from "@/lib/repos/users";
 
 export const metadata = { title: "Users" };
 
 export default async function UsersPage() {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission(PERMISSIONS.USER_READ);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canInvite = permissions.includes(PERMISSIONS.USER_INVITE);
   const canAssignRoles = permissions.includes(PERMISSIONS.USER_ROLE_ASSIGN);
   const canDisable = permissions.includes(PERMISSIONS.USER_DISABLE);
 
-  const users = await listUsers();
+  const [users, userTotal] = await Promise.all([listUsers(), countUsers()]);
 
   return (
     <Container className="flex flex-col gap-8 py-10">
@@ -31,9 +31,14 @@ export default async function UsersPage() {
         <DisplayTitle size="md">Users</DisplayTitle>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${users.length} user(s)`} icon={Users}>
+          <Card
+            title={`${userTotal} user(s)${
+              users.length < userTotal ? ` · showing ${users.length}` : ""
+            }`}
+            icon={Users}
+          >
             <ul className="divide-hairline divide-y">
               {users.map((user) => (
                 <li key={user.id} className="flex flex-col gap-3 px-5 py-4">

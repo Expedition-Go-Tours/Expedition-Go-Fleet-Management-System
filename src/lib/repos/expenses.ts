@@ -85,6 +85,24 @@ export async function getExpenseById(id: string): Promise<Expense | null> {
   return toExpense(snap.id, snap.data() ?? {});
 }
 
+/**
+ * Count expenses matching the same equality filters as `listExpenses`, via a
+ * Firestore aggregation — nothing is truncated by a `limit`, so a displayed
+ * count stays correct regardless of collection size.
+ */
+export async function countExpenses(options?: {
+  vehicleId?: string;
+  workOrderId?: string;
+  status?: ExpenseStatus;
+}): Promise<number> {
+  let query: import("firebase-admin/firestore").Query = expensesRef();
+  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
+  if (options?.workOrderId) query = query.where("workOrderId", "==", options.workOrderId);
+  if (options?.status) query = query.where("status", "==", options.status);
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
 export async function listExpenses(options?: {
   vehicleId?: string;
   workOrderId?: string;

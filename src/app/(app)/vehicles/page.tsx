@@ -9,11 +9,18 @@ import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
+import {
+  parseAvailabilityFilter,
+  vehicleMatchesAvailability,
+} from "@/lib/dashboard/fleet-summary";
 import type { Vehicle } from "@/lib/domain/vehicle";
 import { VEHICLE_STATUSES, VEHICLE_TYPES } from "@/lib/domain/vehicle";
 import { formatKm } from "@/lib/format";
+import { listAssignments } from "@/lib/repos/assignments";
+import { listIssues } from "@/lib/repos/reports";
+import { listVehicles } from "@/lib/repos/vehicles";
 
 export const metadata = { title: "Vehicles" };
 
@@ -27,13 +34,14 @@ interface Params {
   q?: string;
   status?: string;
   type?: string;
+  availability?: string;
   sort?: string;
   dir?: string;
   page?: string;
 }
 
 export default async function VehiclesPage({ searchParams }: { searchParams: Promise<Params> }) {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission(PERMISSIONS.VEHICLE_READ);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canCreate = permissions.includes(PERMISSIONS.VEHICLE_CREATE);
 
@@ -41,22 +49,41 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
   const q = (params.q ?? "").trim().toLowerCase();
   const status = (params.status ?? "").toUpperCase();
   const type = (params.type ?? "").toUpperCase();
+  const availability = parseAvailabilityFilter(params.availability);
   const sort: SortKey = SORT_KEYS.includes(params.sort as SortKey) ? (params.sort as SortKey) : "createdAt";
   const dir = params.dir === "asc" ? "asc" : "desc";
   const pageRaw = Number(params.page);
   const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
 
-  const { listVehicles } = await import("@/lib/repos/vehicles");
-  const vehicles = await listVehicles();
+  // Availability needs the same inputs the dashboard KPI used, so the metric's
+  // "Available now" / "In use" links land on exactly the matching vehicles.
+  const canSeeAssignments = permissions.includes(PERMISSIONS.ASSIGNMENT_READ);
+  const canSeeAllIssues = permissions.includes(PERMISSIONS.REPORT_READ_ALL);
+  const [vehicles, assignments, criticalOpen, criticalTriaged] = await Promise.all([
+    listVehicles(),
+    canSeeAssignments ? listAssignments({ status: "ACTIVE", limit: 500 }) : Promise.resolve([]),
+    canSeeAllIssues ? listIssues({ safetyCritical: true, status: "OPEN", limit: 500 }) : Promise.resolve([]),
+    canSeeAllIssues ? listIssues({ safetyCritical: true, status: "TRIAGED", limit: 500 }) : Promise.resolve([]),
+  ]);
+  const activeAssignmentVehicleIds = new Set(assignments.map((a) => a.vehicleId));
+  const criticalIssueVehicleIds = new Set(
+    [...criticalOpen, ...criticalTriaged].map((i) => i.vehicleId),
+  );
 
   const filtered = vehicles
     .filter((v) => (status && VEHICLE_STATUSES.includes(status as never) ? v.status === status : true))
     .filter((v) => (type && VEHICLE_TYPES.includes(type as never) ? v.type === type : true))
     .filter((v) =>
+      availability
+        ? vehicleMatchesAvailability(v, availability, activeAssignmentVehicleIds, criticalIssueVehicleIds)
+        : true,
+    )
+    .filter((v) =>
       q ? [v.regNumber, v.make, v.model, String(v.year)].join(" ").toLowerCase().includes(q) : true,
     )
     .sort((a, b) => compareVehicles(a, b, sort, dir));
 
+  const hasFilters = Boolean(q || status || type || availability);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * PAGE_SIZE;
@@ -67,6 +94,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
     if (q) url.set("q", q);
     if (status) url.set("status", status);
     if (type) url.set("type", type);
+    if (availability) url.set("availability", availability);
     if (params.sort) url.set("sort", params.sort);
     if (params.dir) url.set("dir", params.dir);
     if (nextPage > 1) url.set("page", String(nextPage));
@@ -98,13 +126,13 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
         {rows.length === 0 ? (
           <EmptyState
             icon={Car}
-            title={q || status || type ? "No vehicles match your filters" : "No vehicles registered yet"}
+            title={hasFilters ? "No vehicles match your filters" : "No vehicles registered yet"}
             description={
-              q || status || type
+              hasFilters
                 ? "Try clearing the search or changing the filters."
                 : "Register your first vehicle to start the odometer ledger."
             }
-            action={q || status || type ? <ClearFiltersLink /> : undefined}
+            action={hasFilters ? <ClearFiltersLink /> : undefined}
           />
         ) : (
           <DataTable

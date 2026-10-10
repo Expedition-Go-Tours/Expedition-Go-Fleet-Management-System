@@ -20,6 +20,7 @@
 
 import type { PermissionKey } from "@/lib/auth/permissions";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { summariseFleet, type FleetSummary } from "@/lib/dashboard/fleet-summary";
 import { computeScheduleStatus, type ScheduleStatus } from "@/lib/domain/maintenance";
 import { documentState, DOCUMENT_CATEGORIES } from "@/lib/domain/document";
 import { listAssignments } from "@/lib/repos/assignments";
@@ -31,13 +32,7 @@ import { listVehicles } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
 import type { MaintenanceReport } from "@/lib/domain/report";
 
-export interface FleetSummary {
-  total: number;
-  available: number;
-  inUse: number;
-  inWorkshop: number;
-  safetyHolds: number;
-}
+export type { FleetSummary };
 
 export interface MaintenanceHealth {
   evaluated: number;
@@ -109,11 +104,12 @@ export async function loadControlCentre(input: {
     return result;
   }
 
-  const [vehicles, activeAssignments, openIssuesAll, openCritical, triagedCritical, workOrders, expenses] =
+  const [vehicles, activeAssignments, openIssuesAll, triagedIssuesAll, openCritical, triagedCritical, workOrders, expenses] =
     await Promise.all([
       listVehicles(),
       listAssignments({ status: "ACTIVE", limit: 500 }),
       canReadAllReports ? listIssues({ status: "OPEN", limit: 500 }) : [],
+      canReadAllReports ? listIssues({ status: "TRIAGED", limit: 500 }) : [],
       canReadAllReports ? listIssues({ safetyCritical: true, status: "OPEN", limit: 200 }) : [],
       canReadAllReports ? listIssues({ safetyCritical: true, status: "TRIAGED", limit: 200 }) : [],
       canReadWorkOrders ? listWorkOrders({ limit: 500 }) : [],
@@ -123,32 +119,13 @@ export async function loadControlCentre(input: {
   const fleetVehicles = vehicles.filter((v) => v.status !== "ARCHIVED");
   const activeVehicleIds = new Set(activeAssignments.map((a) => a.vehicleId));
 
-  const fleet: FleetSummary = {
-    total: fleetVehicles.length,
-    available: 0,
-    inUse: 0,
-    inWorkshop: 0,
-    safetyHolds: 0,
-  };
-
-  // Open critical issue ids, restricted to the interrogated vehicles.
+  // Open critical issue vehicle ids, restricted to the interrogated fleet.
   const criticalOpenIds = new Set<string>(
     [...openCritical, ...triagedCritical].map((i) => i.vehicleId),
   );
 
-  for (const vehicle of fleetVehicles) {
-    if (vehicle.status === "SAFETY_HOLD") fleet.safetyHolds += 1;
-    if (vehicle.status === "IN_SERVICE") fleet.inWorkshop += 1;
-    if (vehicle.status === "ACTIVE" && activeVehicleIds.has(vehicle.id)) fleet.inUse += 1;
-    if (
-      vehicle.status === "ACTIVE" &&
-      !activeVehicleIds.has(vehicle.id) &&
-      !criticalOpenIds.has(vehicle.id)
-    ) {
-      fleet.available += 1;
-    }
-  }
-  result.fleet = fleet;
+  // Shared with the vehicles-list drill-down so the KPI and its link agree.
+  result.fleet = summariseFleet(fleetVehicles, activeVehicleIds, criticalOpenIds);
 
   // ---- Maintenance health + overdue queue items ---------------------------
   if (canReadSchedules) {
@@ -283,9 +260,9 @@ export async function loadControlCentre(input: {
 
   // ---- Open issues by severity (audience-aware) ------------------------------
   if (canReadAllReports) {
-    const openIssues = [...openIssuesAll, ...triagedCritical];
     const merged = new Map<string, MaintenanceReport>();
-    for (const issue of openIssues) merged.set(issue.id, issue);
+    for (const issue of openIssuesAll) merged.set(issue.id, issue);
+    for (const issue of triagedIssuesAll) merged.set(issue.id, issue);
     result.issuesBySeverity = countBySeverity([...merged.values()]);
   } else {
     const mine = await listIssues({ reportedBy: input.userId, limit: 200 });

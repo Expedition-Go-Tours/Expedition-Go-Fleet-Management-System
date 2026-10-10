@@ -10,21 +10,21 @@ import {
   VehicleDetailTabs,
   type VehicleDetailTabData,
 } from "@/components/vehicles/VehicleDetailTabs";
-import { requireAuthContext } from "@/lib/auth/guards";
-import { permissionsForRoles } from "@/lib/auth/permissions";
+import { requirePagePermission } from "@/lib/auth/page-guard";
+import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { documentState } from "@/lib/domain/document";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
 import { VEHICLE_STATUS_ACTIONS } from "@/lib/domain/vehicle";
 import { formatDate, formatIsoDate, formatKm } from "@/lib/format";
-import { listAssignments } from "@/lib/repos/assignments";
+import { countAssignments, listAssignments } from "@/lib/repos/assignments";
 import { listDocuments } from "@/lib/repos/documents";
-import { listFuelEntries } from "@/lib/repos/fuel";
+import { countFuelEntries, listFuelEntries } from "@/lib/repos/fuel";
 import { listSchedules, listServiceRecords } from "@/lib/repos/maintenance";
-import { listReadings } from "@/lib/repos/odometers";
-import { listIssues } from "@/lib/repos/reports";
+import { countReadings, listReadings } from "@/lib/repos/odometers";
+import { countIssueTotals, listIssues } from "@/lib/repos/reports";
 import { listUsers } from "@/lib/repos/users";
 import { getVehicleById } from "@/lib/repos/vehicles";
-import { listWorkOrders } from "@/lib/repos/work-orders";
+import { countWorkOrderTotals, listWorkOrders } from "@/lib/repos/work-orders";
 import type { MaintenanceSchedule } from "@/lib/repos/maintenance";
 
 export const metadata = { title: "Vehicle" };
@@ -53,7 +53,7 @@ function visibleActions(status: string, permissions: string[]) {
 }
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission(PERMISSIONS.VEHICLE_READ);
   const { id } = await params;
   const vehicle = await getVehicleById(id);
   if (!vehicle) notFound();
@@ -74,6 +74,16 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       listUsers(),
     ]);
 
+  // Accurate totals via Firestore aggregation — independent of the capped
+  // "recent slice" lists above, so counts can never be silently truncated.
+  const [issueTotals, workOrderTotals, readingCount, assignmentCount, fuelCount] = await Promise.all([
+    countIssueTotals({ vehicleId: vehicle.id }),
+    countWorkOrderTotals({ vehicleId: vehicle.id }),
+    countReadings(vehicle.id),
+    countAssignments({ vehicleId: vehicle.id }),
+    countFuelEntries(vehicle.id),
+  ]);
+
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const now = new Date();
 
@@ -93,14 +103,23 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     return { schedule: s, result };
   });
 
-  const openIssues = issues.filter((i) => i.status !== "CLOSED").length;
-  const openWorkOrders = workOrders.filter((w) =>
-    ["OPEN", "IN_PROGRESS", "WAITING"].includes(w.status),
-  ).length;
+  const openIssues = issueTotals.open;
+  const openWorkOrders = workOrderTotals.open;
 
   const nextService = nextServiceLabel(evaluatedSchedules, vehicle.odometerKm);
 
   const tabData: VehicleDetailTabData = {
+    vehicleId: vehicle.id,
+    counts: {
+      readings: readingCount,
+      issues: issueTotals.total,
+      openIssues: issueTotals.open,
+      workOrders: workOrderTotals.total,
+      openWorkOrders: workOrderTotals.open,
+      assignments: assignmentCount,
+      fuelEntries: fuelCount,
+      documents: documents.length,
+    },
     overview: {
       odometerKm: vehicle.odometerKm,
       odometerAt: formatDate(vehicle.odometerAt),
@@ -194,6 +213,13 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                     "Archive this vehicle? It will be hidden from lists and cannot be resurrected.",
                   safety_hold: "Place this vehicle on safety hold? It will be barred from service until released.",
                 }}
+                reason={{
+                  safety_hold: {
+                    label: "Reason for the hold",
+                    required: true,
+                    placeholder: "Brake failure reported by driver",
+                  },
+                }}
               />
             )}
           </>
@@ -214,13 +240,13 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           <LinkCell
             label="Open issues"
             value={String(openIssues)}
-            href={`/reports?vehicleId=${vehicle.id}`}
+            href={`/reports?vehicleId=${vehicle.id}&open=1`}
             icon={AlertTriangle}
           />
           <LinkCell
             label="Open work orders"
             value={String(openWorkOrders)}
-            href={`/work-orders?vehicleId=${vehicle.id}`}
+            href={`/work-orders?vehicleId=${vehicle.id}&open=1`}
             icon={Wrench}
           />
         </div>
@@ -230,7 +256,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
       <p className="text-body-xs text-muted">
         Odometer and maintenance figures follow the accepted readings ledger and the
-        documented schedule engine — complete history is on the Odometer and Maintenance tabs.
+        documented schedule engine. Tabs show the most recent records; a capped list states
+        the true total and links to the full register where one exists — counts are never
+        silently truncated.
       </p>
     </div>
   );

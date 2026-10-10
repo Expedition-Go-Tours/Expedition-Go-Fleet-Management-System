@@ -88,6 +88,12 @@ export async function getFuelEntryById(id: string): Promise<FuelEntry | null> {
   return toFuelEntry(snap.id, snap.data() ?? {});
 }
 
+/** Count fuel entries for a vehicle via aggregation. */
+export async function countFuelEntries(vehicleId: string): Promise<number> {
+  const snap = await fuelRef().where("vehicleId", "==", vehicleId).count().get();
+  return snap.data().count;
+}
+
 export async function listFuelEntries(options?: {
   vehicleId?: string;
   limit?: number;

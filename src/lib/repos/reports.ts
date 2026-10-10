@@ -164,6 +164,41 @@ export async function listIssues(options?: {
     .slice(0, options?.limit ?? 500);
 }
 
+/**
+ * Count issues matching the same equality filters as `listIssues` using a
+ * Firestore aggregation — no documents are downloaded and nothing is truncated
+ * by a `limit`, so displayed counts stay correct at any collection size.
+ */
+export async function countIssues(options?: {
+  vehicleId?: string;
+  reportedBy?: string;
+  status?: ReportStatus;
+  safetyCritical?: boolean;
+}): Promise<number> {
+  let query: import("firebase-admin/firestore").Query = issuesRef();
+  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
+  if (options?.reportedBy) query = query.where("reportedBy", "==", options.reportedBy);
+  if (options?.status) query = query.where("status", "==", options.status);
+  if (options?.safetyCritical !== undefined) {
+    query = query.where("safetyCritical", "==", options.safetyCritical);
+  }
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
+/** Total issues and the non-closed subset, in parallel. */
+export async function countIssueTotals(options?: {
+  vehicleId?: string;
+  reportedBy?: string;
+}): Promise<{ total: number; open: number }> {
+  const [total, open, triaged] = await Promise.all([
+    countIssues(options),
+    countIssues({ ...options, status: "OPEN" }),
+    countIssues({ ...options, status: "TRIAGED" }),
+  ]);
+  return { total, open: open + triaged };
+}
+
 /** Record a lifecycle transition (triage/close) with actor + timestamps. */
 export async function applyIssueStatus(
   id: string,

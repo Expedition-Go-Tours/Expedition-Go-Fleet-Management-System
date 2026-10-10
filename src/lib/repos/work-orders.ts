@@ -127,6 +127,39 @@ export async function countOpenWorkOrders(vehicleId: string): Promise<number> {
   return snap.docs.filter((doc) => doc.data().status !== "CLOSED").length;
 }
 
+/**
+ * Count work orders matching the same equality filters as `listWorkOrders`
+ * using a Firestore aggregation — nothing is truncated by a `limit`, so a
+ * displayed count is never capped by how many rows the page happened to fetch.
+ */
+export async function countWorkOrders(options?: {
+  vehicleId?: string;
+  status?: WorkOrderStatus;
+}): Promise<number> {
+  let query: import("firebase-admin/firestore").Query = workOrdersRef();
+  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
+  if (options?.status) query = query.where("status", "==", options.status);
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
+/**
+ * Total work orders and the "actively open" subset (OPEN, IN_PROGRESS,
+ * WAITING). COMPLETED/VERIFIED are awaiting closure, not open, and are
+ * excluded — matching the control-centre KPI definition.
+ */
+export async function countWorkOrderTotals(options?: {
+  vehicleId?: string;
+}): Promise<{ total: number; open: number }> {
+  const [total, open, inProgress, waiting] = await Promise.all([
+    countWorkOrders(options),
+    countWorkOrders({ ...options, status: "OPEN" }),
+    countWorkOrders({ ...options, status: "IN_PROGRESS" }),
+    countWorkOrders({ ...options, status: "WAITING" }),
+  ]);
+  return { total, open: open + inProgress + waiting };
+}
+
 export interface UpdateWorkOrderFields {
   title?: string;
   description?: string;

@@ -107,7 +107,20 @@ export interface TabDocumentData {
   notes: string | null;
 }
 
+export interface VehicleHistoryCounts {
+  readings: number;
+  issues: number;
+  openIssues: number;
+  workOrders: number;
+  openWorkOrders: number;
+  assignments: number;
+  fuelEntries: number;
+  documents: number;
+}
+
 export interface VehicleDetailTabData {
+  vehicleId: string;
+  counts: VehicleHistoryCounts;
   overview: TabOverviewData;
   readings: TabReadingData[];
   schedules: TabScheduleData[];
@@ -159,32 +172,81 @@ export function VehicleDetailTabs({ data }: { data: VehicleDetailTabData }) {
       label: "Overview",
       panel: <OverviewPanel data={data} />,
     },
-    { id: "odometer", label: "Odometer", panel: <OdometerPanel readings={data.readings} /> },
+    {
+      id: "odometer",
+      label: "Odometer",
+      panel: <OdometerPanel readings={data.readings} total={data.counts.readings} />,
+    },
     { id: "maintenance", label: "Maintenance", panel: <MaintenancePanel schedules={data.schedules} /> },
     { id: "service", label: "Service", panel: <ServicePanel records={data.serviceRecords} /> },
     {
       id: "issues",
       label: "Issues",
-      badge: <CountBadge count={data.issues.length} />,
-      panel: <IssuesPanel issues={data.issues} />,
+      badge: <CountBadge count={data.counts.issues} />,
+      panel: <IssuesPanel issues={data.issues} total={data.counts.issues} vehicleId={data.vehicleId} />,
     },
     {
       id: "work-orders",
       label: "Work orders",
-      badge: <CountBadge count={data.workOrders.length} />,
-      panel: <WorkOrdersPanel workOrders={data.workOrders} />,
+      badge: <CountBadge count={data.counts.workOrders} />,
+      panel: (
+        <WorkOrdersPanel
+          workOrders={data.workOrders}
+          total={data.counts.workOrders}
+          vehicleId={data.vehicleId}
+        />
+      ),
     },
-    { id: "assignments", label: "Assignments", panel: <AssignmentsPanel assignments={data.assignments} /> },
-    { id: "fuel", label: "Fuel", panel: <FuelPanel entries={data.fuelEntries} /> },
+    {
+      id: "assignments",
+      label: "Assignments",
+      panel: <AssignmentsPanel assignments={data.assignments} total={data.counts.assignments} />,
+    },
+    { id: "fuel", label: "Fuel", panel: <FuelPanel entries={data.fuelEntries} total={data.counts.fuelEntries} vehicleId={data.vehicleId} /> },
     {
       id: "documents",
       label: "Documents",
-      badge: <CountBadge count={data.documents.length} />,
+      badge: <CountBadge count={data.counts.documents} />,
       panel: <DocumentsPanel documents={data.documents} />,
     },
   ];
 
   return <Tabs tabs={tabs} initial="overview" />;
+}
+
+/**
+ * Footnote for a panel whose list is intentionally capped (the recent slice).
+ * The full, paginated set is one click away on the module list page, so the
+ * cap is disclosed rather than silently presented as the whole history.
+ */
+function CappedNote({
+  shown,
+  total,
+  href,
+  label,
+}: {
+  shown: number;
+  total: number;
+  href?: string;
+  label?: string;
+}) {
+  if (total <= shown) return null;
+  return (
+    <p className="border-hairline text-data-xs border-t px-5 py-2.5 text-muted">
+      Showing the {shown} most recent of {total.toLocaleString()} record(s)
+      {href && label ? (
+        <>
+          {" — "}
+          <Link href={href} className="font-medium text-link hover:underline">
+            {label}
+          </Link>
+          .
+        </>
+      ) : (
+        "."
+      )}
+    </p>
+  );
 }
 
 function CountBadge({ count }: { count: number }) {
@@ -232,11 +294,23 @@ function OverviewPanel({ data }: { data: VehicleDetailTabData }) {
             No odometer reading recorded yet — record a baseline on the Odometer tab.
           </p>
         )}
-        {/* Record counts — quick profile at a glance. */}
+        {/* Record counts — quick profile at a glance (accurate totals, not page slices). */}
         <div className="border-hairline grid grid-cols-3 divide-x divide-hairline rounded-md border">
-          <ProfileStat label="Open issues" value={data.issues.filter((i) => i.status !== "CLOSED").length} href="/reports" />
-          <ProfileStat label="Work orders" value={data.workOrders.filter((w) => ["OPEN", "IN_PROGRESS", "WAITING"].includes(w.status)).length} href="/work-orders" />
-          <ProfileStat label="Documents" value={data.documents.length} href="/documents" />
+          <ProfileStat
+            label="Open issues"
+            value={data.counts.openIssues}
+            href={`/reports?vehicleId=${data.vehicleId}`}
+          />
+          <ProfileStat
+            label="Open work orders"
+            value={data.counts.openWorkOrders}
+            href={`/work-orders?vehicleId=${data.vehicleId}&open=1`}
+          />
+          <ProfileStat
+            label="Documents"
+            value={data.counts.documents}
+            href={`/vehicles/${data.vehicleId}`}
+          />
         </div>
       </div>
     </div>
@@ -252,7 +326,7 @@ function ProfileStat({ label, value, href }: { label: string; value: number; hre
   );
 }
 
-function OdometerPanel({ readings }: { readings: TabReadingData[] }) {
+function OdometerPanel({ readings, total }: { readings: TabReadingData[]; total: number }) {
   return (
     <div className="border-hairline rounded-md border">
       {readings.length === 0 ? (
@@ -279,6 +353,7 @@ function OdometerPanel({ readings }: { readings: TabReadingData[] }) {
           ))}
         </ul>
       )}
+      <CappedNote shown={readings.length} total={total} />
     </div>
   );
 }
@@ -381,7 +456,15 @@ function ServicePanel({ records }: { records: TabServiceRecordData[] }) {
   );
 }
 
-function IssuesPanel({ issues }: { issues: TabIssueData[] }) {
+function IssuesPanel({
+  issues,
+  total,
+  vehicleId,
+}: {
+  issues: TabIssueData[];
+  total: number;
+  vehicleId: string;
+}) {
   return (
     <div className="border-hairline rounded-md border">
       <PanelHeader>Reported defects — open items first</PanelHeader>
@@ -408,11 +491,25 @@ function IssuesPanel({ issues }: { issues: TabIssueData[] }) {
           ))}
         </ul>
       )}
+      <CappedNote
+        shown={issues.length}
+        total={total}
+        href={`/reports?vehicleId=${vehicleId}`}
+        label="view all issues for this vehicle"
+      />
     </div>
   );
 }
 
-function WorkOrdersPanel({ workOrders }: { workOrders: TabWorkOrderData[] }) {
+function WorkOrdersPanel({
+  workOrders,
+  total,
+  vehicleId,
+}: {
+  workOrders: TabWorkOrderData[];
+  total: number;
+  vehicleId: string;
+}) {
   return (
     <div className="border-hairline rounded-md border">
       <PanelHeader>Repair and service orders — open first</PanelHeader>
@@ -439,11 +536,23 @@ function WorkOrdersPanel({ workOrders }: { workOrders: TabWorkOrderData[] }) {
           ))}
         </ul>
       )}
+      <CappedNote
+        shown={workOrders.length}
+        total={total}
+        href={`/work-orders?vehicleId=${vehicleId}`}
+        label="view all work orders for this vehicle"
+      />
     </div>
   );
 }
 
-function AssignmentsPanel({ assignments }: { assignments: TabAssignmentData[] }) {
+function AssignmentsPanel({
+  assignments,
+  total,
+}: {
+  assignments: TabAssignmentData[];
+  total: number;
+}) {
   return (
     <div className="border-hairline rounded-md border">
       {assignments.length === 0 ? (
@@ -470,11 +579,20 @@ function AssignmentsPanel({ assignments }: { assignments: TabAssignmentData[] })
           ))}
         </ul>
       )}
+      <CappedNote shown={assignments.length} total={total} />
     </div>
   );
 }
 
-function FuelPanel({ entries }: { entries: TabFuelData[] }) {
+function FuelPanel({
+  entries,
+  total,
+  vehicleId,
+}: {
+  entries: TabFuelData[];
+  total: number;
+  vehicleId: string;
+}) {
   return (
     <div className="border-hairline rounded-md border">
       {entries.length === 0 ? (
@@ -497,6 +615,12 @@ function FuelPanel({ entries }: { entries: TabFuelData[] }) {
           ))}
         </ul>
       )}
+      <CappedNote
+        shown={entries.length}
+        total={total}
+        href={`/fuel?vehicleId=${vehicleId}`}
+        label="view the full fuel ledger"
+      />
     </div>
   );
 }

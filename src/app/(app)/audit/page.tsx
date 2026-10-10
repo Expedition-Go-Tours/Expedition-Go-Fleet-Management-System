@@ -3,20 +3,16 @@ import { Card } from "@/components/ui/Card";
 import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
-import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
+import { requirePagePermission } from "@/lib/auth/page-guard";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
-import { redirect } from "next/navigation";
 
 export const metadata = { title: "Audit log" };
 
 export default async function AuditPage() {
-  const context = await requireAuthContext();
-  if (!rolesHavePermission(context.user.roles, PERMISSIONS.AUDIT_READ)) {
-    redirect("/");
-  }
+  await requirePagePermission(PERMISSIONS.AUDIT_READ);
 
   const snap = await getAdminDb().collection(COLLECTIONS.auditLogs).limit(200).get();
 

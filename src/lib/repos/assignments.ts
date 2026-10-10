@@ -109,6 +109,20 @@ export async function listAssignments(options?: {
     .slice(0, options?.limit ?? 100);
 }
 
+/** Count assignments matching the list filters via aggregation. */
+export async function countAssignments(options?: {
+  vehicleId?: string;
+  driverUserId?: string;
+  status?: AssignmentStatus;
+}): Promise<number> {
+  let query: import("firebase-admin/firestore").Query = assignmentsRef();
+  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
+  if (options?.driverUserId) query = query.where("driverUserId", "==", options.driverUserId);
+  if (options?.status) query = query.where("status", "==", options.status);
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
 /**
  * Complete an assignment with the end odometer. The trip distance is
  * computed from the accepted readings — a lower end reading marks the

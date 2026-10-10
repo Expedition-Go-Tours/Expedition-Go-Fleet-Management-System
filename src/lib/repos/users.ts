@@ -98,6 +98,12 @@ export async function listUsers(): Promise<AppUser[]> {
   return snap.docs.map((doc) => toAppUser(doc.id, doc.data()));
 }
 
+/** Count all users via aggregation (no document download, no limit). */
+export async function countUsers(): Promise<number> {
+  const snap = await usersRef().count().get();
+  return snap.data().count;
+}
+
 export async function setUserRoles(
   id: string,
   roles: RoleKey[],

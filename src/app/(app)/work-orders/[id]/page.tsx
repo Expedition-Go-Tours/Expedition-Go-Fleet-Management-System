@@ -22,7 +22,7 @@ import {
   type CompletionScheduleOption,
   type CompletionIssueOption,
 } from "@/components/work-orders/CompleteWorkOrderDialog";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { COMPLETABLE_STATUSES, WORK_ORDER_ACTIONS } from "@/lib/domain/work-order";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -49,7 +49,7 @@ export default async function WorkOrderDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission(PERMISSIONS.WORK_ORDER_READ);
   const { id } = await params;
   const workOrder = await getWorkOrderById(id);
   if (!workOrder) notFound();
@@ -138,7 +138,7 @@ export default async function WorkOrderDetailPage({
         </div>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
           {workOrder.description && (
             <Card title="Description" icon={FileText}>
@@ -259,7 +259,17 @@ export default async function WorkOrderDetailPage({
                 <p className="text-body-xs text-muted">No actions available in this state.</p>
               )}
               {actions.length > 0 && (
-                <StatusActions endpoint={`/api/v1/work-orders/${workOrder.id}/status`} actions={actions} />
+                <StatusActions
+                  endpoint={`/api/v1/work-orders/${workOrder.id}/status`}
+                  actions={actions}
+                  reason={{
+                    wait: {
+                      field: "waitingReason",
+                      label: "Waiting reason",
+                      placeholder: "Awaiting parts from supplier",
+                    },
+                  }}
+                />
               )}
               {canComplete && completable && (
                 <CompleteWorkOrderDialog

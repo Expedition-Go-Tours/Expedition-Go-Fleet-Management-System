@@ -79,12 +79,12 @@ export default async function DashboardPage() {
             <KpiCard
               label="Available now"
               value={formatNumber(centre.fleet.available)}
-              href="/vehicles?status=ACTIVE"
+              href="/vehicles?availability=available"
               tone={centre.fleet.available > 0 ? "success" : "default"}
-              context="Active and not assigned"
+              context="Active, unassigned, no critical issue"
               icon={<KeyRound aria-hidden="true" className="h-4 w-4" />}
             />
-            <KpiCard label="In use" value={formatNumber(centre.fleet.inUse)} href="/vehicles?status=ACTIVE" context="Currently assigned" icon={<Route aria-hidden="true" className="h-4 w-4" />} />
+            <KpiCard label="In use" value={formatNumber(centre.fleet.inUse)} href="/vehicles?availability=in_use" context="Active with a current assignment" icon={<Route aria-hidden="true" className="h-4 w-4" />} />
             <KpiCard
               label="In workshop"
               value={formatNumber(centre.fleet.inWorkshop)}
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
             <KpiCard
               label="Open work orders"
               value={formatNumber(centre.maintenance.openWorkOrders)}
-              href="/work-orders?status=OPEN"
+              href="/work-orders?open=1"
               context={centre.maintenance.waitingWorkOrders > 0 ? `${centre.maintenance.waitingWorkOrders} waiting` : "No waiting orders"}
               tone={centre.maintenance.waitingWorkOrders > 0 ? "warning" : "default"}
               icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
@@ -148,8 +148,8 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <section aria-label="Priority action queue" className="xl:col-span-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <section aria-label="Priority action queue" className="min-w-0 xl:col-span-2">
           <Card
             title="Priority action queue"
             description="What needs attention right now, ordered by risk."
@@ -173,7 +173,7 @@ export default async function DashboardPage() {
           </Card>
         </section>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           {centre.issuesBySeverity && (
             <Card title="Open issues by severity" icon={AlertTriangle} flush>
               {centre.issuesBySeverity.length === 0 ? (
@@ -254,7 +254,7 @@ function QueueRow({ item }: { item: ActionItem }) {
         </span>
         <span className="min-w-0 flex-1">
           <span className="text-data block truncate font-semibold text-ink">{item.title}</span>
-          <span className="text-data-xs mt-0.5 block text-muted">{item.details}</span>
+          <span className="text-data-xs mt-0.5 block break-words text-muted">{item.details}</span>
         </span>
         <ArrowRight aria-hidden="true" className="mt-2 h-4 w-4 shrink-0 text-faint" />
       </Link>

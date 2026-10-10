@@ -19,6 +19,7 @@ export function VehicleFilters() {
   const q = searchParams.get("q") ?? "";
   const status = searchParams.get("status") ?? "";
   const type = searchParams.get("type") ?? "";
+  const availability = searchParams.get("availability") ?? "";
 
   function update(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -26,13 +27,18 @@ export function VehicleFilters() {
       if (value) params.set(key, value);
       else params.delete(key);
     }
-    if (next.q !== undefined || next.status !== undefined || next.type !== undefined) {
+    if (
+      next.q !== undefined ||
+      next.status !== undefined ||
+      next.type !== undefined ||
+      next.availability !== undefined
+    ) {
       params.delete("page");
     }
     startTransition(() => router.replace(`/vehicles?${params.toString()}`));
   }
 
-  const hasFilters = Boolean(q || status || type);
+  const hasFilters = Boolean(q || status || type || availability);
 
   return (
     <div className="flex flex-wrap items-center gap-2" aria-busy={isPending}>
@@ -61,6 +67,16 @@ export function VehicleFilters() {
             {t}
           </option>
         ))}
+      </Select>
+      <Select
+        aria-label="Filter by availability"
+        value={availability}
+        onChange={(e) => update({ availability: e.target.value })}
+        className="w-full sm:w-auto"
+      >
+        <option value="">Any availability</option>
+        <option value="available">Available now</option>
+        <option value="in_use">In use</option>
       </Select>
       {hasFilters && (
         <button

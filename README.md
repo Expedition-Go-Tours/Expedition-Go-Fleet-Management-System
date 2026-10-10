@@ -56,7 +56,18 @@ Dev tools:
 | `node scripts/verify-firebase.mjs` | Checks Admin SDK credentials against live Auth + Firestore |
 | `node scripts/e2e-auth.mjs`        | End-to-end auth flow test (needs `npm run dev`)            |
 | `node scripts/e2e-fleet.mjs`       | End-to-end fleet-domain test (needs `npm run dev`)         |
+| `node scripts/e2e-accountability.mjs` | Ledger/hold/expense accountability test (needs `npm run dev`) |
+| `node scripts/e2e-operations.mjs`  | Assignments, fuel, documents, inspections, cron (needs `npm run dev`) |
 | `node scripts/create-admin.mjs`    | Create/update an admin user (bootstrap or recovery)        |
+
+The Playwright suite (`npm run test:e2e`) is hermetic by default. The
+`e2e/responsive.spec.ts` spec additionally checks the signed-in app for
+horizontal overflow and console errors at 1440/1280/768/390 px; it self-skips
+unless `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD` are set:
+
+```bash
+E2E_ADMIN_EMAIL=… E2E_ADMIN_PASSWORD=… npm run test:e2e
+```
 
 ## Project structure
 
@@ -83,8 +94,13 @@ docs/                  Requirements & design references (see below)
   note at the top of `src/design/tokens.css` for how it is applied to an
   application rather than a marketing site.
 - `docs/ARCHITECTURE.md` — system decisions, data model and delivery phases.
-- `docs/FLEET_DOMAIN_GAP_ANALYSIS.md` — spec↔implementation gap analysis for
-  the fleet operations ecosystem.
+- `docs/FLEET_DOMAIN_GAP_ANALYSIS.md` — **historical** (superseded) spec↔
+  implementation gap analysis from Phase 4. Kept for provenance; see the
+  reconciliation section at its foot and `docs/FLEET_DOMAIN_MODEL.md` for the
+  current state.
+- `docs/UI_UX_AND_RELEASE_AUDIT.md` — UI/UX and release audit (with a
+  remediation addendum) covering route inventory, cross-cutting defects, and
+  the production release checklist.
 - `docs/FLEET_DOMAIN_MODEL.md` — source-of-truth entities, ledger rules and
   state transitions.
 - `docs/FLEET_WORKFLOWS.md` — end-to-end operational workflows (defect→repair→

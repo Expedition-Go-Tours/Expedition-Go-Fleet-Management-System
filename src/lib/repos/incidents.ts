@@ -87,6 +87,18 @@ export async function listIncidents(options?: {
     .slice(0, options?.limit ?? 100);
 }
 
+/** Count incidents matching the same equality filters as `listIncidents`. */
+export async function countIncidents(options?: {
+  vehicleId?: string;
+  reportedBy?: string;
+}): Promise<number> {
+  let query: import("firebase-admin/firestore").Query = incidentsRef();
+  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
+  if (options?.reportedBy) query = query.where("reportedByUserId", "==", options.reportedBy);
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
 /**
  * Transition an incident's status (restricted to incident:manage). Resolving
  * requires a resolution note. Records who resolved it and when.

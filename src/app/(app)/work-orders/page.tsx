@@ -7,12 +7,18 @@ import { Card } from "@/components/ui/Card";
 import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
-import { permissionsForRoles } from "@/lib/auth/permissions";
-import { WORK_ORDER_ACTIONS, WORK_ORDER_PRIORITIES } from "@/lib/domain/work-order";
+import { WorkOrderFilters } from "@/components/work-orders/WorkOrderFilters";
+import { requirePagePermission } from "@/lib/auth/page-guard";
+import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
+import {
+  WORK_ORDER_ACTIONS,
+  WORK_ORDER_PRIORITIES,
+  WORK_ORDER_STATUSES,
+  type WorkOrderStatus,
+} from "@/lib/domain/work-order";
 import { formatDate } from "@/lib/format";
 import { listVehicles } from "@/lib/repos/vehicles";
-import { listWorkOrders } from "@/lib/repos/work-orders";
+import { countWorkOrderTotals, countWorkOrders, listWorkOrders } from "@/lib/repos/work-orders";
 import Link from "next/link";
 
 export const metadata = { title: "Work orders" };
@@ -24,19 +30,47 @@ const LABELS: Record<string, string> = {
   reopen: "Reopen",
 };
 
-export default async function WorkOrdersPage() {
-  const context = await requireAuthContext();
+const OPEN_STATUSES = new Set(["OPEN", "IN_PROGRESS", "WAITING"]);
+
+export default async function WorkOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vehicleId?: string; status?: string; open?: string }>;
+}) {
+  const context = await requirePagePermission(PERMISSIONS.WORK_ORDER_READ);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canCreate = permissions.includes("work_order:create");
-  const [workOrders, vehicles] = await Promise.all([
-    listWorkOrders({ limit: 100 }),
+
+  const params = await searchParams;
+  const vehicleId = params.vehicleId?.trim() || undefined;
+  const openOnly = params.open === "1";
+  const statusParam = (params.status ?? "").toUpperCase();
+  // `open` takes precedence over `status` so the server matches what the filter
+  // control shows (it renders "Open (active)" whenever open=1).
+  const status =
+    !openOnly && (WORK_ORDER_STATUSES as readonly string[]).includes(statusParam)
+      ? (statusParam as WorkOrderStatus)
+      : undefined;
+
+  const [workOrdersAll, vehicles, totals, statusCount] = await Promise.all([
+    listWorkOrders({ vehicleId, limit: 500 }),
     listVehicles(),
+    countWorkOrderTotals({ vehicleId }),
+    status ? countWorkOrders({ vehicleId, status }) : Promise.resolve(null),
   ]);
+
+  const workOrders = status
+    ? workOrdersAll.filter((w) => w.status === status)
+    : openOnly
+      ? workOrdersAll.filter((w) => OPEN_STATUSES.has(w.status))
+      : workOrdersAll;
+  const shownTotal = status ? (statusCount ?? workOrders.length) : openOnly ? totals.open : totals.total;
 
   const vehicleName = (id: string) => {
     const v = vehicles.find((x) => x.id === id);
     return v ? v.regNumber : "—";
   };
+  const filteredVehicle = vehicleId ? vehicles.find((v) => v.id === vehicleId) : undefined;
 
   return (
     <Container className="flex flex-col gap-8 py-10">
@@ -45,11 +79,29 @@ export default async function WorkOrdersPage() {
         <DisplayTitle size="md">Work orders</DisplayTitle>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <WorkOrderFilters vehicles={vehicles.map((v) => ({ id: v.id, label: v.regNumber }))} />
+
+      {filteredVehicle && (
+        <div className="text-body-xs flex flex-wrap items-center gap-3 text-muted">
+          <span>
+            Filtered to{" "}
+            <Link href={`/vehicles/${filteredVehicle.id}`} className="font-medium text-link hover:underline">
+              {filteredVehicle.regNumber}
+            </Link>
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${workOrders.length} work order(s)`} icon={Wrench}>
+          <Card
+            title={`${shownTotal} work order(s)${
+              workOrders.length < shownTotal ? ` · showing ${workOrders.length}` : ""
+            }`}
+            icon={Wrench}
+          >
             {workOrders.length === 0 ? (
-              <p className="text-body-xs text-muted px-5 py-8">No work orders yet.</p>
+              <p className="text-body-xs text-muted px-5 py-8">No work orders match.</p>
             ) : (
               <ul className="divide-hairline divide-y">
                 {workOrders.map((wo) => {
@@ -82,6 +134,13 @@ export default async function WorkOrdersPage() {
                         <StatusActions
                           endpoint={`/api/v1/work-orders/${wo.id}/status`}
                           actions={actions}
+                          reason={{
+                            wait: {
+                              field: "waitingReason",
+                              label: "Waiting reason",
+                              placeholder: "Awaiting parts from supplier",
+                            },
+                          }}
                         />
                       )}
                     </li>

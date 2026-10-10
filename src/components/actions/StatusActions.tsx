@@ -49,14 +49,16 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
 };
 
 /**
- * Lifecycle action buttons. Each button posts { action } to the entity's
- * status endpoint; the server enforces permission + state validity. Actions
- * with a confirmation prompt open a labelled dialog (never window.confirm).
+ * Lifecycle action buttons. Each button posts { action } (plus an optional
+ * reason field) to the entity's status endpoint; the server enforces
+ * permission + state validity. Actions with a confirmation and/or a reason
+ * open a labelled dialog (never window.confirm).
  */
 export function StatusActions({
   endpoint,
   actions,
   confirm,
+  reason,
 }: {
   /** e.g. "/api/v1/vehicles/abc/status" */
   endpoint: string;
@@ -67,17 +69,40 @@ export function StatusActions({
   }[];
   /** Optional confirmation prompt per action (e.g. archiving). */
   confirm?: Record<string, string>;
+  /**
+   * Optional free-text justification per action. `field` names the JSON key
+   * the endpoint expects (defaults to "reason"); set `required` when the route
+   * rejects an empty value.
+   */
+  reason?: Record<
+    string,
+    { field?: string; label: string; placeholder?: string; required?: boolean }
+  >;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [reasonText, setReasonText] = useState("");
 
   async function run(action: string) {
+    const reasonConfig = reason?.[action];
+    const payload: Record<string, unknown> = { action };
+    if (reasonConfig) {
+      const field = reasonConfig.field ?? "reason";
+      const text = reasonText.trim();
+      if (reasonConfig.required && !text) {
+        setError("A reason is required.");
+        return;
+      }
+      if (text) payload[field] = text;
+    }
     setBusy(action);
     setError(null);
     try {
-      await api.post(endpoint, { action });
+      await api.post(endpoint, payload);
+      setReasonText("");
+      setPending(null);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
@@ -88,12 +113,20 @@ export function StatusActions({
 
   function request(action: string) {
     const prompt = confirm?.[action];
-    if (prompt) setPending(action);
-    else void run(action);
+    const needsReason = reason?.[action];
+    if (prompt || needsReason) {
+      setReasonText("");
+      setError(null);
+      setPending(action);
+    } else {
+      void run(action);
+    }
   }
 
   const pendingAction = actions.find((a) => a.action === pending);
   const pendingPrompt = pending ? confirm?.[pending] : undefined;
+  const pendingReason = pending ? reason?.[pending] : undefined;
+  const reasonMissing = Boolean(pendingReason?.required && !reasonText.trim());
 
   return (
     <div className="flex flex-col gap-2">
@@ -115,7 +148,7 @@ export function StatusActions({
           );
         })}
       </div>
-      {error && (
+      {error && !pending && (
         <p role="alert" className="text-body-xs text-error">
           {error}
         </p>
@@ -135,6 +168,7 @@ export function StatusActions({
               variant={(pendingAction?.variant as "primary" | "outline" | "accent") ?? "primary"}
               size="sm"
               isLoading={busy === pending}
+              disabled={reasonMissing}
               onClick={() => pending && void run(pending)}
             >
               {pendingAction?.label ?? "Confirm"}
@@ -143,6 +177,20 @@ export function StatusActions({
         }
       >
         {pendingPrompt && <p className="text-body-sm text-ink">{pendingPrompt}</p>}
+        {pendingReason && (
+          <label className="mt-3 flex flex-col gap-1.5">
+            <span className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
+              {pendingReason.label}
+            </span>
+            <textarea
+              value={reasonText}
+              onChange={(event) => setReasonText(event.target.value)}
+              rows={3}
+              placeholder={pendingReason.placeholder}
+              className="border-hairline focus:border-ink text-body-sm rounded-md border px-3 py-2 transition-colors outline-none"
+            />
+          </label>
+        )}
         {error && (
           <p role="alert" className="bg-error/10 text-body-xs mt-3 rounded-md border border-error/25 p-3 text-error">
             {error}

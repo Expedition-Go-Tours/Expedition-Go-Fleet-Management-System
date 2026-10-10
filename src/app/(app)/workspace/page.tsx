@@ -22,15 +22,15 @@ import {
 } from "@/components/workspace/NotificationList";
 import { ReportIncidentDialog } from "@/components/workspace/ReportIncidentDialog";
 import { ReportProblemDialog } from "@/components/workspace/ReportProblemDialog";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { defaultChecklist } from "@/lib/domain/inspection";
 import { formatDate, formatKm } from "@/lib/format";
 import { getActiveAssignmentForDriver } from "@/lib/repos/assignments";
-import { listIncidents } from "@/lib/repos/incidents";
+import { listIncidents, countIncidents } from "@/lib/repos/incidents";
 import { listInspections } from "@/lib/repos/inspections";
 import { listNotifications } from "@/lib/repos/notifications";
-import { listIssues } from "@/lib/repos/reports";
+import { countIssueTotals, listIssues } from "@/lib/repos/reports";
 import { listVehicles } from "@/lib/repos/vehicles";
 
 export const metadata = { title: "Driver workspace" };
@@ -43,7 +43,11 @@ export const metadata = { title: "Driver workspace" };
  * the server.
  */
 export default async function WorkspacePage() {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission([
+    PERMISSIONS.ASSIGNMENT_READ,
+    PERMISSIONS.REPORT_CREATE,
+    PERMISSIONS.INSPECTION_SUBMIT,
+  ]);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canCreateReport = permissions.includes(PERMISSIONS.REPORT_CREATE);
   const canCreateIncident = permissions.includes(PERMISSIONS.INCIDENT_CREATE);
@@ -51,18 +55,28 @@ export default async function WorkspacePage() {
 
   const assignment = await getActiveAssignmentForDriver(context.user.id);
 
-  const [issues, incidents, vehicles, notificationsByRole, myInspections, assignmentInspections] =
-    await Promise.all([
-      listIssues({ reportedBy: context.user.id, limit: 10 }),
-      listIncidents({ reportedBy: context.user.id, limit: 10 }),
-      listVehicles(),
-      Promise.all(context.user.roles.map((role) => listNotifications({ recipientRole: role, limit: 500 }))),
-      listInspections({ inspectorUserId: context.user.id, limit: 8 }),
-      // Today's inspections on the assigned vehicle decide the "submitted" state.
-      assignment
-        ? listInspections({ vehicleId: assignment.vehicleId, inspectorUserId: context.user.id, limit: 100 })
-        : Promise.resolve([]),
-    ]);
+  const [
+    issues,
+    issueTotals,
+    incidents,
+    incidentTotal,
+    vehicles,
+    notificationsByRole,
+    myInspections,
+    assignmentInspections,
+  ] = await Promise.all([
+    listIssues({ reportedBy: context.user.id, limit: 10 }),
+    countIssueTotals({ reportedBy: context.user.id }),
+    listIncidents({ reportedBy: context.user.id, limit: 10 }),
+    countIncidents({ reportedBy: context.user.id }),
+    listVehicles(),
+    Promise.all(context.user.roles.map((role) => listNotifications({ recipientRole: role, limit: 500 }))),
+    listInspections({ inspectorUserId: context.user.id, limit: 8 }),
+    // Today's inspections on the assigned vehicle decide the "submitted" state.
+    assignment
+      ? listInspections({ vehicleId: assignment.vehicleId, inspectorUserId: context.user.id, limit: 100 })
+      : Promise.resolve([]),
+  ]);
 
   const vehicle = assignment ? (vehicles.find((v) => v.id === assignment.vehicleId) ?? null) : null;
 
@@ -225,7 +239,12 @@ export default async function WorkspacePage() {
           )}
 
           {/* My issues */}
-          <Card title={`My reported issues (${issues.length})`} icon={AlertTriangle}>
+          <Card
+            title={`My reported issues (${issueTotals.total})${
+              issues.length < issueTotals.total ? ` · showing ${issues.length}` : ""
+            }`}
+            icon={AlertTriangle}
+          >
             {issues.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-6">
                 You have not reported any issues.
@@ -259,7 +278,12 @@ export default async function WorkspacePage() {
           </Card>
 
           {/* My incidents */}
-          <Card title={`My incident reports (${incidents.length})`} icon={ShieldPlus}>
+          <Card
+            title={`My incident reports (${incidentTotal})${
+              incidents.length < incidentTotal ? ` · showing ${incidents.length}` : ""
+            }`}
+            icon={ShieldPlus}
+          >
             {incidents.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-6">
                 You have not reported any incidents.

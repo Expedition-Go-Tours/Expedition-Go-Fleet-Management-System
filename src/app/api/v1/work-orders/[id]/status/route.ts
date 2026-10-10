@@ -17,5 +17,8 @@ export const POST = makeActionHandler<WorkOrderStatus, WorkOrder>({
   entityType: "workOrder",
   jsonKey: "workOrder",
   load: getWorkOrderById,
-  apply: (entity, def) => applyWorkOrderStatus(entity.id, def.to),
+  apply: (entity, def, body) =>
+    applyWorkOrderStatus(entity.id, def.to, {
+      waitingReason: typeof body.waitingReason === "string" ? body.waitingReason : undefined,
+    }),
 });

@@ -8,11 +8,11 @@ import { Card } from "@/components/ui/Card";
 import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { INCIDENT_SEVERITIES, INCIDENT_TYPES } from "@/lib/domain/incident";
 import { formatDate } from "@/lib/format";
-import { listIncidents } from "@/lib/repos/incidents";
+import { countIncidents, listIncidents } from "@/lib/repos/incidents";
 import { listVehicles } from "@/lib/repos/vehicles";
 import Link from "next/link";
 
@@ -29,15 +29,20 @@ function incidentActions(status: string, permissions: string[]) {
 }
 
 export default async function IncidentsPage() {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission([
+    PERMISSIONS.INCIDENT_READ_OWN,
+    PERMISSIONS.INCIDENT_READ_ALL,
+  ]);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canCreate = permissions.includes(PERMISSIONS.INCIDENT_CREATE);
   const canReadAll = permissions.includes(PERMISSIONS.INCIDENT_READ_ALL);
   const canManage = permissions.includes(PERMISSIONS.INCIDENT_MANAGE);
 
-  const [incidents, vehicles] = await Promise.all([
-    listIncidents(canReadAll ? { limit: 100 } : { reportedBy: context.user.id, limit: 100 }),
+  const scope = canReadAll ? {} : { reportedBy: context.user.id };
+  const [incidents, vehicles, incidentTotal] = await Promise.all([
+    listIncidents({ ...scope, limit: 100 }),
     listVehicles(),
+    countIncidents(scope),
   ]);
 
   const vehicleName = (id: string) => {
@@ -56,9 +61,14 @@ export default async function IncidentsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${incidents.length} incident(s)`} icon={ShieldAlert}>
+          <Card
+            title={`${incidentTotal} incident(s)${
+              incidents.length < incidentTotal ? ` · showing ${incidents.length}` : ""
+            }`}
+            icon={ShieldAlert}
+          >
             {incidents.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-8">No incidents reported.</p>
             ) : (

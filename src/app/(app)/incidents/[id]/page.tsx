@@ -7,7 +7,7 @@ import { ResolveIncidentButton } from "@/components/incidents/ResolveIncidentBut
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
 import { getIncidentById } from "@/lib/repos/incidents";
@@ -21,7 +21,10 @@ export default async function IncidentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission([
+    PERMISSIONS.INCIDENT_READ_OWN,
+    PERMISSIONS.INCIDENT_READ_ALL,
+  ]);
   const { id } = await params;
   const incident = await getIncidentById(id);
   if (!incident) notFound();
@@ -65,7 +68,7 @@ export default async function IncidentDetailPage({
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
           <Card title="What happened" icon={ShieldAlert}>
             <p className="text-body-sm whitespace-pre-wrap text-ink">{incident.description}</p>

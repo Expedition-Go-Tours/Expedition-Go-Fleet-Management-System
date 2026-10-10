@@ -7,32 +7,39 @@ import { Card } from "@/components/ui/Card";
 import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
-import { permissionsForRoles } from "@/lib/auth/permissions";
+import { requirePagePermission } from "@/lib/auth/page-guard";
+import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { EXPENSE_ACTIONS, EXPENSE_CATEGORIES } from "@/lib/domain/expense";
 import { formatMoney } from "@/lib/format";
-import { listExpenses } from "@/lib/repos/expenses";
+import { listExpenses, countExpenses } from "@/lib/repos/expenses";
+import { listVehicles } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
+import Link from "next/link";
 
 export const metadata = { title: "Expenses" };
 
 const LABELS: Record<string, string> = {
-  approve: "Approve",
-  mark_paid: "Mark paid",
   void: "Void",
 };
 
 export default async function ExpensesPage() {
-  const context = await requireAuthContext();
+  const context = await requirePagePermission(PERMISSIONS.EXPENSE_READ);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canCreate = permissions.includes("expense:create");
   const canExport = permissions.includes("expense:export");
-  const [expenses, workOrders] = await Promise.all([
+  const [expenses, workOrders, vehicles, expenseTotal] = await Promise.all([
     listExpenses({ limit: 200 }),
     listWorkOrders({ limit: 200 }),
+    listVehicles(),
+    countExpenses(),
   ]);
 
-  const woTitle = (id: string) => {
+  const vehicleName = (id: string) => {
+    const v = vehicles.find((x) => x.id === id);
+    return v ? v.regNumber : "—";
+  };
+  const woTitle = (id: string | undefined) => {
+    if (!id) return null;
     const wo = workOrders.find((x) => x.id === id);
     return wo ? wo.title : "—";
   };
@@ -54,9 +61,14 @@ export default async function ExpensesPage() {
         )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title={`${expenses.length} expense(s)`} icon={ReceiptText}>
+          <Card
+            title={`${expenseTotal} expense(s)${
+              expenses.length < expenseTotal ? ` · showing ${expenses.length}` : ""
+            }`}
+            icon={ReceiptText}
+          >
             {expenses.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-8">No expenses recorded.</p>
             ) : (
@@ -69,6 +81,7 @@ export default async function ExpensesPage() {
                         permissions.includes(def.permission),
                     )
                     .map(([action]) => ({ action, label: LABELS[action] ?? action }));
+                  const workOrderLabel = woTitle(expense.workOrderId);
 
                   return (
                     <li key={expense.id} className="flex flex-col gap-3 px-5 py-4">
@@ -76,7 +89,14 @@ export default async function ExpensesPage() {
                         <div className="flex min-w-0 flex-col">
                           <span className="text-body-sm font-medium">{expense.description}</span>
                           <span className="text-body-xs text-muted">
-                            {expense.category} · {woTitle(expense.workOrderId ?? "")}
+                            <Link
+                              href={`/vehicles/${expense.vehicleId}`}
+                              className="font-medium text-link hover:underline"
+                            >
+                              {vehicleName(expense.vehicleId)}
+                            </Link>{" "}
+                            · {expense.category}
+                            {workOrderLabel ? ` · ${workOrderLabel}` : ""}
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
@@ -91,7 +111,14 @@ export default async function ExpensesPage() {
                           endpoint={`/api/v1/expenses/${expense.id}/status`}
                           actions={actions}
                           confirm={{
-                            void: "Void this expense? This cannot be undone.",
+                            void: "Void this expense? The record is kept but excluded from totals.",
+                          }}
+                          reason={{
+                            void: {
+                              label: "Reason for voiding",
+                              required: true,
+                              placeholder: "Duplicate of another entry",
+                            },
                           }}
                         />
                       )}
@@ -111,11 +138,23 @@ export default async function ExpensesPage() {
                 submitLabel="Record"
                 fields={[
                   {
-                    name: "workOrderId",
-                    label: "Work order",
+                    name: "vehicleId",
+                    label: "Vehicle",
                     type: "select",
                     required: true,
-                    options: workOrders.map((wo) => ({ value: wo.id, label: wo.title })),
+                    options: vehicles.map((v) => ({
+                      value: v.id,
+                      label: `${v.regNumber} — ${v.make} ${v.model}`,
+                    })),
+                  },
+                  {
+                    name: "workOrderId",
+                    label: "Work order (optional)",
+                    type: "select",
+                    options: workOrders.map((wo) => ({
+                      value: wo.id,
+                      label: `${wo.number ? `${wo.number} — ` : ""}${wo.title}`,
+                    })),
                   },
                   {
                     name: "category",
@@ -132,6 +171,16 @@ export default async function ExpensesPage() {
                     placeholder: "250.00",
                   },
                   { name: "description", label: "Description", required: true },
+                  {
+                    name: "supplierName",
+                    label: "Supplier (optional)",
+                    placeholder: "Kofi Auto Parts",
+                  },
+                  {
+                    name: "incurredOn",
+                    label: "Date incurred (optional)",
+                    type: "date",
+                  },
                 ]}
               />
             </div>
