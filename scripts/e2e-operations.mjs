@@ -21,6 +21,8 @@ import { cert, deleteApp, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
+import { sweepE2eFixtures } from "./lib/e2e-cleanup.mjs";
+
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const ORIGIN = process.env.E2E_ORIGIN ?? BASE_URL;
 const PASSWORD = "Fleet-OPS-2424!x";
@@ -143,6 +145,9 @@ async function createUser(email, roles) {
 
 const created = { users: [], docIds: [] };
 async function cleanup() {
+  // Remove dependent records before the vehicles/users they reference.
+  const vehicleIds = created.docIds.filter(([c]) => c === "vehicles").map(([, id]) => id);
+  await sweepE2eFixtures(db, { vehicleIds, userIds: created.users.map((u) => u.uid) });
   for (const user of created.users) {
     await db
       .collection("assignmentReservations")

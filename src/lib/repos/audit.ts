@@ -17,6 +17,7 @@ export const AUDIT_EVENTS = {
   LOGOUT: "auth.logout",
   INVITE_CREATED: "user.invite.created",
   INVITE_ACCEPTED: "user.invite.accepted",
+  USER_UPDATED: "user.updated",
   USER_ROLE_ASSIGNED: "user.role.assigned",
   USER_STATUS_CHANGED: "user.status.changed",
   PASSWORD_CHANGED: "user.password.changed",

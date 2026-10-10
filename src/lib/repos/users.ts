@@ -104,6 +104,35 @@ export async function countUsers(): Promise<number> {
   return snap.data().count;
 }
 
+/** Profile fields an administrator may correct on an employee's behalf. */
+export interface UpdateUserProfileInput {
+  name?: string;
+  /** `null`/empty clears the number. */
+  phone?: string | null;
+}
+
+/**
+ * Correct an employee's profile record (name/phone). Roles and status have
+ * their own dedicated endpoints with their own invariants, and the email is
+ * deliberately not editable here — it is the Firebase Auth identity key.
+ */
+export async function updateUserProfile(
+  id: string,
+  input: UpdateUserProfileInput,
+): Promise<AppUser> {
+  const { FieldValue } = await import("firebase-admin/firestore");
+  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+  if (input.name !== undefined) update.name = input.name;
+  if (input.phone !== undefined)
+    update.phone = input.phone && input.phone !== "" ? input.phone : null;
+
+  await usersRef().doc(id).update(update);
+
+  const updated = await getUserById(id);
+  if (!updated) throw new Error("User not found after profile update");
+  return updated;
+}
+
 export async function setUserRoles(
   id: string,
   roles: RoleKey[],

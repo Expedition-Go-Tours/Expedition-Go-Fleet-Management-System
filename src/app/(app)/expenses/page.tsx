@@ -46,7 +46,7 @@ export default async function ExpensesPage() {
 
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4" data-tour="expense-header">
         <div className="flex flex-col gap-2">
           <Eyebrow>Finance</Eyebrow>
           <DisplayTitle size="md">Expenses</DisplayTitle>
@@ -54,6 +54,7 @@ export default async function ExpensesPage() {
         {canExport && (
           <a
             href="/api/v1/expenses/export"
+            data-tour="expense-export"
             className="border-strong hover:border-ink rounded-pill font-ui border px-4 py-2 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase transition-colors"
           >
             Export CSV ↓
@@ -64,6 +65,7 @@ export default async function ExpensesPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <Card
+            dataTour="expense-ledger"
             title={`${expenseTotal} expense(s)${
               expenses.length < expenseTotal ? ` · showing ${expenses.length}` : ""
             }`}
@@ -131,7 +133,7 @@ export default async function ExpensesPage() {
         </div>
 
         {canCreate && (
-          <Card title="Record expense" icon={FilePlus2}>
+          <Card title="Record expense" icon={FilePlus2} dataTour="expense-create">
             <div className="p-5">
               <CreateForm
                 endpoint="/api/v1/expenses"

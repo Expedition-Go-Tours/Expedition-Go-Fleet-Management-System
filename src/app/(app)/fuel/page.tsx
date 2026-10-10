@@ -110,7 +110,7 @@ export default async function FuelPage({
         />
       </div>
 
-      <Card title="Fuel ledger" icon={Fuel} flush>
+      <Card title="Fuel ledger" icon={Fuel} flush dataTour="fuel-ledger">
         <div className="border-hairline border-b px-4 py-3">
           <FuelFilters
             vehicles={vehicles

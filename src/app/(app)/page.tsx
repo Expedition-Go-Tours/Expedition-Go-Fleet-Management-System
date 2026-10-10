@@ -53,16 +53,18 @@ export default async function DashboardPage() {
         <BackButton label="Back to previous page" fallbackHref="/" />
       </div>
 
-      <DashboardHero
-        updatedLabel={new Date(centre.asOf).toLocaleString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
-        canBrowseFleet={canReadVehicles}
-      />
+      <div data-tour="dashboard-overview">
+        <DashboardHero
+          updatedLabel={new Date(centre.asOf).toLocaleString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+          canBrowseFleet={canReadVehicles}
+        />
+      </div>
 
       {!canReadVehicles && (
-        <Card title="Your workspace">
+        <Card title="Your workspace" dataTour="dashboard-workspace">
           <div className="flex flex-col gap-4">
             <p className="text-body-sm text-muted">
               You have read access to your own reports. Visit your driver workspace to manage the
@@ -81,7 +83,7 @@ export default async function DashboardPage() {
       )}
 
       {centre.fleet && (
-        <section aria-label="Fleet overview">
+        <section aria-label="Fleet overview" data-tour="dashboard-kpis">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Total vehicles"
@@ -126,7 +128,7 @@ export default async function DashboardPage() {
       )}
 
       {centre.maintenance && (
-        <section aria-label="Maintenance health">
+        <section aria-label="Maintenance health" data-tour="dashboard-maintenance">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Overdue tasks"
@@ -173,7 +175,11 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <section aria-label="Priority action queue" className="min-w-0 xl:col-span-2">
+        <section
+          aria-label="Priority action queue"
+          className="min-w-0 xl:col-span-2"
+          data-tour="dashboard-queue"
+        >
           <Card
             title="Priority action queue"
             description="What needs attention right now, ordered by risk."

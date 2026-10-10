@@ -26,6 +26,7 @@ export const COLLECTIONS = {
   serviceHistory: "serviceHistory", // deprecated alias kept for migration
   auditLogs: "auditLogs",
   providers: "providers",
+  onboarding: "onboarding",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

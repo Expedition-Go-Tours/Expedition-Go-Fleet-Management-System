@@ -40,7 +40,7 @@ export default async function AuditPage() {
         <p className="text-body-xs text-muted">Last {entries.length} events (newest first).</p>
       </div>
 
-      <Card>
+      <Card dataTour="audit-log">
         {entries.length === 0 ? (
           <p className="text-body-xs text-muted px-5 py-8">No audit events yet.</p>
         ) : (

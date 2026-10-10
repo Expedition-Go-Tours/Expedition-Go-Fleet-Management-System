@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
-import { NAV_GROUPS } from "@/components/layout/nav";
+import { NAV_GROUPS, navTourId } from "@/components/layout/nav";
+import { HelpMenu } from "@/components/onboarding/HelpMenu";
 import {
   NotificationBell,
   type BellNotification,
@@ -106,6 +107,7 @@ export function ShellLayout({
                     <Link
                       href={item.href}
                       onClick={onNavigate}
+                      data-tour={navTourId(item.href)}
                       title={innerCollapsed ? item.label : undefined}
                       aria-current={active ? "page" : undefined}
                       className={cn(
@@ -226,6 +228,7 @@ export function ShellLayout({
         <div className="flex h-[var(--topbar-h)] items-center gap-3 px-4 lg:px-6">
           <button
             type="button"
+            data-tour="nav-mobile-menu"
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
             className="hover:bg-subtle rounded-md p-2 lg:hidden"
@@ -242,10 +245,12 @@ export function ShellLayout({
             <div className="md:hidden">
               <GlobalSearch enableHotkey={false} />
             </div>
+            <HelpMenu />
             <NotificationBell notifications={notifications} unreadCount={unreadCount} />
             <div className="relative">
               <button
                 type="button"
+                data-tour="header-account"
                 onClick={() => setUserMenuOpen((o) => !o)}
                 aria-label="Account menu"
                 aria-expanded={userMenuOpen}

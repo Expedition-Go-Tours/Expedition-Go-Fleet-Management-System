@@ -138,13 +138,18 @@ export default async function WorkspacePage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        dataTour="driver-welcome"
         title="Driver workspace"
         description="Your trip, inspections and reports — everything on the record is written through the fleet API."
         crumbs={[{ label: "Overview" }, { label: "Driver workspace" }]}
       />
 
       {/* Active trip */}
-      <Card title={assignment ? "Active trip" : "No active trip"} icon={Route}>
+      <Card
+        title={assignment ? "Active trip" : "No active trip"}
+        icon={Route}
+        dataTour="driver-trip"
+      >
         <div className="p-5">
           {assignment && vehicle ? (
             <div className="flex flex-col gap-4">
@@ -216,10 +221,11 @@ export default async function WorkspacePage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
           {/* Inspections */}
-          {canSubmitInspections && vehicle && (
+          {canSubmitInspections && (
             <Card
               title="Vehicle inspections"
               icon={ClipboardCheck}
+              dataTour="driver-inspections"
               action={
                 <span className="text-body-xs text-muted">
                   Odometer goes through the accepted-reading ledger
@@ -232,38 +238,45 @@ export default async function WorkspacePage() {
                   Failed critical items raise linked issues and a safety hold — that cannot be
                   undone from the workspace.
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {preTripSubmitted ? (
-                    <span className="text-success border-success/25 bg-success/10 text-body-xs inline-flex items-center gap-1.5 rounded-md border px-3 py-2 font-medium">
-                      <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
-                      Pre-trip submitted today
-                    </span>
-                  ) : (
-                    <InspectionDialog
-                      vehicleId={vehicle.id}
-                      vehicleLabel={vehicle.regNumber}
-                      type="PRE_TRIP"
-                      assignmentId={assignment?.id}
-                      currentOdometerKm={vehicle.odometerKm}
-                      checklist={checklist}
-                    />
-                  )}
-                  {returnSubmitted ? (
-                    <span className="text-success border-success/25 bg-success/10 text-body-xs inline-flex items-center gap-1.5 rounded-md border px-3 py-2 font-medium">
-                      <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
-                      Return submitted today
-                    </span>
-                  ) : (
-                    <InspectionDialog
-                      vehicleId={vehicle.id}
-                      vehicleLabel={vehicle.regNumber}
-                      type="RETURN"
-                      assignmentId={assignment?.id}
-                      currentOdometerKm={vehicle.odometerKm}
-                      checklist={checklist}
-                    />
-                  )}
-                </div>
+                {!vehicle ? (
+                  <p className="text-body-xs text-muted">
+                    Inspections become available as soon as you have an active trip. Start one above
+                    or wait for operations to assign you a vehicle.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {preTripSubmitted ? (
+                      <span className="text-success border-success/25 bg-success/10 text-body-xs inline-flex items-center gap-1.5 rounded-md border px-3 py-2 font-medium">
+                        <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+                        Pre-trip submitted today
+                      </span>
+                    ) : (
+                      <InspectionDialog
+                        vehicleId={vehicle.id}
+                        vehicleLabel={vehicle.regNumber}
+                        type="PRE_TRIP"
+                        assignmentId={assignment?.id}
+                        currentOdometerKm={vehicle.odometerKm}
+                        checklist={checklist}
+                      />
+                    )}
+                    {returnSubmitted ? (
+                      <span className="text-success border-success/25 bg-success/10 text-body-xs inline-flex items-center gap-1.5 rounded-md border px-3 py-2 font-medium">
+                        <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+                        Return submitted today
+                      </span>
+                    ) : (
+                      <InspectionDialog
+                        vehicleId={vehicle.id}
+                        vehicleLabel={vehicle.regNumber}
+                        type="RETURN"
+                        assignmentId={assignment?.id}
+                        currentOdometerKm={vehicle.odometerKm}
+                        checklist={checklist}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -274,6 +287,7 @@ export default async function WorkspacePage() {
               issues.length < issueTotals.total ? ` · showing ${issues.length}` : ""
             }`}
             icon={AlertTriangle}
+            dataTour="driver-records"
           >
             {issues.length === 0 ? (
               <p className="text-body-xs text-muted px-5 py-6">You have not reported any issues.</p>
@@ -379,7 +393,7 @@ export default async function WorkspacePage() {
         <div className="flex flex-col gap-6">
           {/* Report actions */}
           {(canCreateReport || canCreateIncident) && (
-            <Card title="Report" icon={Megaphone}>
+            <Card title="Report" icon={Megaphone} dataTour="driver-report">
               <div className="flex flex-wrap gap-2 p-5">
                 {canCreateReport && (
                   <ReportProblemDialog vehicles={vehicleOptions} defaultVehicleId={vehicle?.id} />
@@ -395,6 +409,7 @@ export default async function WorkspacePage() {
           <Card
             title="Notifications"
             icon={Bell}
+            dataTour="driver-notifications"
             action={
               <Link
                 href="/notifications"

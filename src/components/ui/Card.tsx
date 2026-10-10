@@ -16,6 +16,7 @@ export function Card({
   bodyClassName,
   flush,
   icon: Icon,
+  dataTour,
 }: {
   children: ReactNode;
   className?: string;
@@ -28,9 +29,11 @@ export function Card({
   /** Remove default body padding (for tables and full-bleed content). */
   flush?: boolean;
   bodyClassName?: string;
+  /** Stable `data-tour` hook targeted by the guided tours. */
+  dataTour?: string;
 }) {
   return (
-    <section className={cn("card-surface overflow-hidden", className)}>
+    <section className={cn("card-surface overflow-hidden", className)} data-tour={dataTour}>
       {(title || description || action) && (
         <header className="border-hairline flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
           <div className="flex min-w-0 flex-col gap-0.5">

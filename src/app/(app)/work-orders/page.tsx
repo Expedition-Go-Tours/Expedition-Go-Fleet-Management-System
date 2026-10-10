@@ -93,7 +93,7 @@ export default async function WorkOrdersPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3" data-tour="work-orders-board">
         <div className="xl:col-span-2">
           <Card
             title={`${shownTotal} work order(s)${
@@ -119,7 +119,11 @@ export default async function WorkOrdersPage({
                     }));
 
                   return (
-                    <li key={wo.id} className="flex flex-col gap-3 px-5 py-4">
+                    <li
+                      key={wo.id}
+                      className="flex flex-col gap-3 px-5 py-4"
+                      data-tour="work-order-row"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
                           <Link href={`/work-orders/${wo.id}`} className="hover:text-ink">

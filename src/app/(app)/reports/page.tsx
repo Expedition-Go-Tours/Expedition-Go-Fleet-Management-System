@@ -94,7 +94,7 @@ export default async function IssuesPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3" data-tour="reports-board">
         <div className="xl:col-span-2">
           <Card
             title={`${shownTotal} ${openOnly ? "open " : ""}issue(s)${
@@ -115,7 +115,11 @@ export default async function IssuesPage({
                     <li key={issue.id} className="flex flex-col gap-3 px-5 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
-                          <Link href={`/reports/${issue.id}`} className="hover:text-ink">
+                          <Link
+                            href={`/reports/${issue.id}`}
+                            className="hover:text-ink"
+                            data-tour="report-open"
+                          >
                             <span className="text-body-sm text-ink font-medium">
                               {issue.number ? `${issue.number} — ` : ""}
                               {issue.title}

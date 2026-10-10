@@ -74,6 +74,7 @@ export const PERMISSIONS = {
   AUDIT_READ: "audit:read",
   USER_READ: "user:read",
   USER_INVITE: "user:invite",
+  USER_UPDATE: "user:update",
   USER_DISABLE: "user:disable",
   USER_ROLE_ASSIGN: "user:role:assign",
   SETTINGS_UPDATE: "settings:update",

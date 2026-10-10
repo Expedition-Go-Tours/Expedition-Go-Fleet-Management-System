@@ -24,6 +24,8 @@ import { cert, deleteApp, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
+import { sweepE2eFixtures } from "./lib/e2e-cleanup.mjs";
+
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const ORIGIN = process.env.E2E_ORIGIN ?? BASE_URL;
 const PASSWORD = "Fleet-OPS-2424!x";
@@ -156,6 +158,10 @@ async function createVehicle(label, odometerKm) {
 
 const created = { users: [], vehicles: [], assignments: [] };
 async function cleanup() {
+  await sweepE2eFixtures(db, {
+    vehicleIds: created.vehicles,
+    userIds: created.users.map((u) => u.uid),
+  });
   for (const vehicleId of created.vehicles) {
     const readings = await db
       .collection("odometerReadings")

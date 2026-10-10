@@ -117,7 +117,7 @@ export default async function MaintenancePage({
         crumbs={[{ label: "Fleet" }, { label: "Maintenance" }]}
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5" data-tour="maintenance-kpis">
         <KpiCard
           label="Overdue"
           value={counts.get("OVERDUE") ?? 0}
@@ -163,6 +163,7 @@ export default async function MaintenancePage({
         title="Preventive maintenance board"
         icon={CalendarClock}
         flush
+        dataTour="maintenance-board"
         action={
           <span className="text-body-xs text-muted">
             {totalConfigured > 0

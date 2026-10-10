@@ -123,6 +123,7 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
     <>
       <button
         type="button"
+        data-tour="header-search"
         onClick={() => setOpen(true)}
         className="hover:bg-subtle focus-visible:outline-accent border-hairline text-body-sm text-muted bg-surface flex h-9 w-full items-center gap-2 rounded-md border px-3 transition-colors"
         aria-haspopup="dialog"

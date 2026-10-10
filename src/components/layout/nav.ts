@@ -93,3 +93,14 @@ export function visibleNavGroups(permissions: string[]): NavGroup[] {
     }),
   })).filter((group) => group.items.length > 0);
 }
+
+/**
+ * Stable `data-tour` hook for a sidebar entry: `/` → `nav-dashboard`,
+ * `/vehicles` → `nav-vehicles`. Guided tours target these instead of CSS
+ * selectors, so restyling the sidebar can never break a tour.
+ */
+export function navTourId(href: string): string {
+  if (href === "/") return "nav-dashboard";
+  const segment = href.replace(/^\/+/, "").split("/")[0];
+  return `nav-${segment || "dashboard"}`;
+}

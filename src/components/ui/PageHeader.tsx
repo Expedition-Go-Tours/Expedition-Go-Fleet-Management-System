@@ -19,15 +19,18 @@ export function PageHeader({
   crumbs,
   actions,
   className,
+  dataTour,
 }: {
   title: string;
   description?: ReactNode;
   crumbs?: Crumb[];
   actions?: ReactNode;
   className?: string;
+  /** Stable `data-tour` hook targeted by the guided tours. */
+  dataTour?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("flex flex-col gap-3", className)} data-tour={dataTour}>
       {crumbs && crumbs.length > 0 && (
         <nav aria-label="Breadcrumb" className="text-body-xs text-muted flex items-center gap-1.5">
           {crumbs.map((crumb, index) => (

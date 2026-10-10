@@ -127,15 +127,22 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        dataTour="vehicles-header"
         title="Vehicles"
         description={`${filtered.length} vehicle${filtered.length === 1 ? "" : "s"} in the fleet.`}
         crumbs={[{ label: "Fleet" }, { label: "Vehicles" }]}
-        actions={<AddVehicleDialog canCreate={canCreate} />}
+        actions={
+          <div data-tour="vehicle-create">
+            <AddVehicleDialog canCreate={canCreate} />
+          </div>
+        }
       />
 
-      <VehicleFilters />
+      <div data-tour="vehicle-filters">
+        <VehicleFilters />
+      </div>
 
-      <Card flush>
+      <Card flush dataTour="vehicle-list">
         {rows.length === 0 ? (
           <EmptyState
             icon={Car}
