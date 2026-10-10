@@ -4,8 +4,7 @@ import { InviteUserForm } from "@/components/admin/InviteUserForm";
 import { UserDirectory } from "@/components/admin/UserDirectory";
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
-import { DisplayTitle } from "@/components/ui/DisplayTitle";
-import { Eyebrow } from "@/components/ui/Eyebrow";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { formatDateTime } from "@/lib/format";
@@ -40,14 +39,11 @@ export default async function UsersPage() {
 
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <div className="flex flex-col gap-2">
-        <Eyebrow>Administration</Eyebrow>
-        <DisplayTitle size="md">Users</DisplayTitle>
-        <p className="text-body-xs text-muted">
-          Every employee account and its roles. Filter by role to see just drivers, then edit a
-          record in place when you need to correct it for them.
-        </p>
-      </div>
+      <PageHeader
+        title="Users"
+        description="Every employee account and its roles. Filter by role to see just drivers, then edit a record in place when you need to correct it for them."
+        crumbs={[{ label: "Administration" }, { label: "Users" }]}
+      />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">

@@ -41,7 +41,11 @@ export function VehicleFilters() {
   const hasFilters = Boolean(q || status || type || availability);
 
   return (
-    <div className="flex flex-wrap items-center gap-2" aria-busy={isPending}>
+    <div
+      className="flex flex-wrap items-center gap-2 transition-opacity"
+      style={{ opacity: isPending ? 0.6 : 1 }}
+      aria-busy={isPending}
+    >
       <div className="relative w-full sm:w-64">
         <Search
           aria-hidden="true"
@@ -77,7 +81,7 @@ export function VehicleFilters() {
         <option value="">All types</option>
         {VEHICLE_TYPES.map((t) => (
           <option key={t} value={t}>
-            {t}
+            {t.replace(/_/g, " ")}
           </option>
         ))}
       </Select>

@@ -73,14 +73,18 @@ export async function getIncidentById(id: string): Promise<IncidentReport | null
 export async function listIncidents(options?: {
   vehicleId?: string;
   reportedBy?: string;
+  severity?: string;
+  status?: string;
   limit?: number;
 }): Promise<IncidentReport[]> {
   let query: import("firebase-admin/firestore").Query = incidentsRef();
   if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
   if (options?.reportedBy) query = query.where("reportedByUserId", "==", options.reportedBy);
+  if (options?.status) query = query.where("status", "==", options.status);
   const snap = await query.limit(2000).get();
   return snap.docs
     .map((d) => toIncident(d.id, d.data()))
+    .filter((d) => (options?.severity ? d.severity === options.severity : true))
     .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
     .slice(0, options?.limit ?? 100);
 }

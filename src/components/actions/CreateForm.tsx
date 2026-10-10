@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { Field, Input, Select, Textarea } from "@/components/ui/fields";
 import { api } from "@/lib/client/api";
 
 /**
@@ -20,7 +21,7 @@ export function CreateForm({
   fields: {
     name: string;
     label: string;
-    type?: "text" | "number" | "textarea" | "select" | "date";
+    type?: "text" | "number" | "textarea" | "select" | "date" | "email" | "tel";
     required?: boolean;
     placeholder?: string;
     /** `step` for number inputs; defaults to a whole number (browser default). */
@@ -62,46 +63,46 @@ export function CreateForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        {fields.map((field) => (
-          <label key={field.name} className="flex flex-col gap-1.5">
-            <span className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-              {field.label}
-            </span>
-            {field.type === "textarea" ? (
-              <textarea
-                name={field.name}
-                required={field.required}
-                placeholder={field.placeholder}
-                rows={3}
-                className="border-hairline focus:border-ink text-body-sm rounded-md border px-3 py-2 transition-colors outline-none"
-              />
-            ) : field.type === "select" ? (
-              <select
-                name={field.name}
-                required={field.required}
-                defaultValue={field.defaultValue ?? ""}
-                className="border-hairline focus:border-ink text-body-sm rounded-md border bg-white px-3 py-2 transition-colors outline-none"
-              >
-                {!field.required && <option value="">—</option>}
-                {field.options?.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                name={field.name}
-                type={field.type ?? "text"}
-                required={field.required}
-                placeholder={field.placeholder}
-                step={field.step}
-                defaultValue={field.defaultValue}
-                className="border-hairline focus:border-ink text-body-sm rounded-md border px-3 py-2 transition-colors outline-none"
-              />
-            )}
-          </label>
-        ))}
+        {fields.map((field) => {
+          const id = `create-${field.name}`;
+          return (
+            <Field key={field.name} label={field.label} htmlFor={id} required={field.required}>
+              {field.type === "textarea" ? (
+                <Textarea
+                  id={id}
+                  name={field.name}
+                  required={field.required}
+                  placeholder={field.placeholder}
+                  rows={3}
+                />
+              ) : field.type === "select" ? (
+                <Select
+                  id={id}
+                  name={field.name}
+                  required={field.required}
+                  defaultValue={field.defaultValue ?? ""}
+                >
+                  {!field.required && <option value="">—</option>}
+                  {field.options?.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  id={id}
+                  name={field.name}
+                  type={field.type ?? "text"}
+                  required={field.required}
+                  placeholder={field.placeholder}
+                  step={field.step}
+                  defaultValue={field.defaultValue}
+                />
+              )}
+            </Field>
+          );
+        })}
       </div>
 
       {error && (
@@ -111,8 +112,8 @@ export function CreateForm({
       )}
 
       <div>
-        <Button type="submit" variant="primary" size="sm" disabled={busy}>
-          {busy ? "Saving…" : submitLabel}
+        <Button type="submit" variant="primary" size="sm" isLoading={busy}>
+          {submitLabel}
         </Button>
       </div>
     </form>

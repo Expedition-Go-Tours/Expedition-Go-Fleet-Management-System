@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { DashboardHero } from "@/components/dashboard/DashboardHero";
-import { BackButton } from "@/components/layout/BackButton";
+import { ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -49,10 +49,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <BackButton label="Back to previous page" fallbackHref="/" />
-      </div>
-
       <div data-tour="dashboard-overview">
         <DashboardHero
           updatedLabel={new Date(centre.asOf).toLocaleString("en-GB", {
@@ -70,13 +66,15 @@ export default async function DashboardPage() {
               You have read access to your own reports. Visit your driver workspace to manage the
               current trip, inspections, and any reported problems.
             </p>
+            <ul className="text-body-xs text-muted list-disc pl-5">
+              <li>Start and end trips</li>
+              <li>Submit daily inspections</li>
+              <li>Report problems or defects</li>
+            </ul>
             <div>
-              <Link
-                href="/workspace"
-                className="bg-accent hover:bg-accent-strong inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-medium text-white transition-colors"
-              >
+              <ButtonLink href="/workspace" variant="primary" size="sm">
                 Open driver workspace <ArrowRight aria-hidden="true" className="h-4 w-4" />
-              </Link>
+              </ButtonLink>
             </div>
           </div>
         </Card>

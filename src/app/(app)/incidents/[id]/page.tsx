@@ -1,18 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Info, ShieldAlert, UserCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, Info, ShieldAlert, UserCheck, Wrench } from "lucide-react";
 
 import { StatusActions } from "@/components/actions/StatusActions";
 import { ResolveIncidentButton } from "@/components/incidents/ResolveIncidentButton";
 import { Card } from "@/components/ui/Card";
+import { DetailRow } from "@/components/ui/DetailRow";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
-import { formatDate } from "@/lib/format";
+import { formatDate, humanizeEnum } from "@/lib/format";
 import { getIncidentById } from "@/lib/repos/incidents";
 import { listUsers } from "@/lib/repos/users";
 import { getVehicleById } from "@/lib/repos/vehicles";
+import { listWorkOrders } from "@/lib/repos/work-orders";
+import { listIssues } from "@/lib/repos/reports";
 
 export const metadata = { title: "Incident" };
 
@@ -33,7 +36,12 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   // needs incident:read:all.
   if (!canReadAll && incident.reportedByUserId !== context.user.id) notFound();
 
-  const [vehicle, users] = await Promise.all([getVehicleById(incident.vehicleId), listUsers()]);
+  const [vehicle, users, vehicleWorkOrders, vehicleIssues] = await Promise.all([
+    getVehicleById(incident.vehicleId),
+    listUsers(),
+    listWorkOrders({ vehicleId: incident.vehicleId, limit: 10 }),
+    listIssues({ vehicleId: incident.vehicleId, limit: 10 }),
+  ]);
   const userNames = new Map(users.map((u) => [u.id, u.name]));
 
   const actions =
@@ -44,17 +52,17 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={incident.type.replace(/_/g, " ")}
+        title={humanizeEnum(incident.type)}
         description={
           <>
-            {incident.severity.toLowerCase()} severity · occurred {formatDate(incident.occurredAt)}
+            {humanizeEnum(incident.severity)} severity · occurred {formatDate(incident.occurredAt)}
             {incident.location ? ` · ${incident.location}` : ""}
           </>
         }
         crumbs={[
           { label: "Finance & compliance" },
           { label: "Incidents", href: "/incidents" },
-          { label: incident.type.replace(/_/g, " ").toLowerCase() },
+          { label: humanizeEnum(incident.type) },
         ]}
         actions={
           <>
@@ -83,6 +91,55 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
             </Card>
           )}
 
+          {(vehicleWorkOrders.length > 0 || vehicleIssues.length > 0) && (
+            <Card title="Related records" icon={Wrench} flush>
+              <ul className="divide-hairline divide-y">
+                {vehicleWorkOrders.map((wo) => (
+                  <li key={wo.id}>
+                    <Link
+                      href={`/work-orders/${wo.id}`}
+                      className="hover:bg-subtle flex items-center justify-between gap-3 px-5 py-3 transition-colors"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <Wrench aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-data text-ink truncate font-medium">
+                            {wo.title}
+                          </span>
+                          <span className="text-data-xs text-muted">
+                            Work order · {wo.status} · {formatDate(wo.createdAt)}
+                          </span>
+                        </span>
+                      </span>
+                      <ArrowRight aria-hidden="true" className="text-faint h-4 w-4" />
+                    </Link>
+                  </li>
+                ))}
+                {vehicleIssues.map((issue) => (
+                  <li key={issue.id}>
+                    <Link
+                      href={`/reports/${issue.id}`}
+                      className="hover:bg-subtle flex items-center justify-between gap-3 px-5 py-3 transition-colors"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <ShieldAlert aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-data text-ink truncate font-medium">
+                            {issue.title}
+                          </span>
+                          <span className="text-data-xs text-muted">
+                            Issue · {issue.severity} · {formatDate(issue.createdAt)}
+                          </span>
+                        </span>
+                      </span>
+                      <ArrowRight aria-hidden="true" className="text-faint h-4 w-4" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
           <p className="text-body-xs text-muted">
             Incident reports are restricted records: reporters see their own; read-all and review
             are permission-gated. Every status change is audited with the actor id.
@@ -103,7 +160,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
                 "—"
               )}
             </DetailRow>
-            <DetailRow label="Type">{incident.type.replace(/_/g, " ")}</DetailRow>
+            <DetailRow label="Type">{humanizeEnum(incident.type)}</DetailRow>
             <DetailRow label="Severity">
               <StatusBadge status={incident.severity} />
             </DetailRow>
@@ -132,17 +189,6 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 px-5 py-2.5">
-      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
-        {label}
-      </span>
-      <span className="text-data text-ink text-right">{children}</span>
     </div>
   );
 }

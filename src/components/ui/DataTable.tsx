@@ -43,7 +43,12 @@ export function DataTable({
   // `!empty` previously hid every row on pages that always pass an `empty` node.
   const hasRows = Children.count(children) > 0;
   return (
-    <div className={cn("w-full overflow-x-auto", className)}>
+    <div
+      className={cn("w-full overflow-x-auto", className)}
+      tabIndex={0}
+      role="region"
+      aria-label={`${caption || "Data"} table — scroll horizontally if needed`}
+    >
       <table className="w-full border-collapse text-left">
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
@@ -54,6 +59,13 @@ export function DataTable({
                 <th
                   key={column.key}
                   scope="col"
+                  aria-sort={
+                    column.sortDir === "asc"
+                      ? "ascending"
+                      : column.sortDir === "desc"
+                        ? "descending"
+                        : undefined
+                  }
                   className={cn(
                     "font-ui bg-subtle text-muted px-4 py-2.5 text-[length:var(--fs-data-xs)] font-semibold tracking-[var(--tracking-ui)] whitespace-nowrap uppercase",
                     column.className,

@@ -16,7 +16,7 @@ import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { documentState } from "@/lib/domain/document";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
 import { VEHICLE_STATUS_ACTIONS } from "@/lib/domain/vehicle";
-import { formatDate, formatIsoDate, formatKm } from "@/lib/format";
+import { formatDate, formatIsoDate, formatKm, humanizeEnum } from "@/lib/format";
 import { countAssignments, listAssignments } from "@/lib/repos/assignments";
 import { listDocuments } from "@/lib/repos/documents";
 import { countFuelEntries, listFuelEntries } from "@/lib/repos/fuel";
@@ -221,7 +221,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     <div className="flex flex-col gap-6">
       <VehicleHero
         title={vehicle.regNumber}
-        description={`${vehicle.make} ${vehicle.model} · ${vehicle.year} · ${vehicle.type.replace(/_/g, " ").toLowerCase()}`}
+        description={`${vehicle.make} ${vehicle.model} · ${vehicle.year} · ${humanizeEnum(vehicle.type)}`}
         crumbs={[
           { label: "Fleet" },
           { label: "Vehicles", href: "/vehicles" },

@@ -1,15 +1,34 @@
+import Link from "next/link";
+
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
-import { DisplayTitle } from "@/components/ui/DisplayTitle";
-import { Eyebrow } from "@/components/ui/Eyebrow";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { COLLECTIONS } from "@/lib/db/collections";
+import { formatDateTime } from "@/lib/format";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
 
 export const metadata = { title: "Audit log" };
+
+const ENTITY_ROUTES: Record<string, string> = {
+  vehicle: "/vehicles",
+  user: "/users",
+  report: "/reports",
+  work_order: "/work-orders",
+  assignment: "/vehicles",
+  expense: "/expenses",
+  incident: "/incidents",
+  vehicleDocument: "/vehicles",
+};
+
+function entityHref(entityType: string | null, entityId: string | null): string | null {
+  if (!entityType || !entityId) return null;
+  const base = ENTITY_ROUTES[entityType];
+  return base ? `${base}/${entityId}` : null;
+}
 
 export default async function AuditPage() {
   await requirePagePermission(PERMISSIONS.AUDIT_READ);
@@ -34,11 +53,11 @@ export default async function AuditPage() {
 
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <div className="flex flex-col gap-2">
-        <Eyebrow>Compliance</Eyebrow>
-        <DisplayTitle size="md">Audit log</DisplayTitle>
-        <p className="text-body-xs text-muted">Last {entries.length} events (newest first).</p>
-      </div>
+      <PageHeader
+        title="Audit log"
+        description={`Last ${entries.length} events (newest first).`}
+        crumbs={[{ label: "Administration" }, { label: "Audit log" }]}
+      />
 
       <Card dataTour="audit-log">
         {entries.length === 0 ? (
@@ -52,12 +71,24 @@ export default async function AuditPage() {
                     {entry.eventType}
                   </span>
                   <span className="text-body-xs text-muted truncate">
-                    {entry.entityType && `${entry.entityType} ${entry.entityId ?? ""}`}
+                    {entry.entityType && (
+                      <>
+                        {(() => {
+                          const href = entityHref(entry.entityType, entry.entityId);
+                          const label = `${entry.entityType} ${entry.entityId ?? ""}`;
+                          return href ? (
+                            <Link href={href} className="text-link font-medium hover:underline">
+                              {label}
+                            </Link>
+                          ) : (
+                            label
+                          );
+                        })()}
+                      </>
+                    )}
                     {entry.reason && ` — ${entry.reason}`}
                   </span>
-                  <span className="text-body-xs text-muted">
-                    {entry.createdAt.toLocaleString("en-GB")}
-                  </span>
+                  <span className="text-body-xs text-muted">{formatDateTime(entry.createdAt)}</span>
                 </div>
                 <StatusBadge status={entry.outcome} />
               </li>

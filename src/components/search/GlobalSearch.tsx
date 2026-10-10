@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Car, FileWarning, Loader2, Search, Wrench } from "lucide-react";
 
@@ -25,6 +26,7 @@ const GROUPS: {
 ];
 
 export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,6 +34,7 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!enableHotkey) return;
@@ -47,6 +50,38 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
+  }, [open]);
+
+  // Trap Tab focus inside the search dialog while it is open.
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Tab") {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        const focusables = dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0]!;
+        const last = focusables[focusables.length - 1]!;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
+    };
   }, [open]);
 
   // Clear any in-flight debounce when the component unmounts.
@@ -115,7 +150,10 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
     } else if (event.key === "Enter" && total > 0) {
       event.preventDefault();
       const target = flat[Math.min(active, total - 1)];
-      if (target) window.location.assign(target.href);
+      if (target) {
+        close();
+        router.push(target.href);
+      }
     }
   }
 
@@ -146,6 +184,7 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
             className="absolute inset-0 h-full w-full cursor-default bg-black/45 backdrop-blur-[1px]"
           />
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Global search"

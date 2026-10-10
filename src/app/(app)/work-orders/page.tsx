@@ -1,11 +1,10 @@
-import { FilePlus2, Wrench } from "lucide-react";
+import { ChevronLeft, ChevronRight, FilePlus2, Wrench } from "lucide-react";
 
 import { CreateForm } from "@/components/actions/CreateForm";
 import { StatusActions } from "@/components/actions/StatusActions";
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
-import { DisplayTitle } from "@/components/ui/DisplayTitle";
-import { Eyebrow } from "@/components/ui/Eyebrow";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { WorkOrderFilters } from "@/components/work-orders/WorkOrderFilters";
 import { requirePagePermission } from "@/lib/auth/page-guard";
@@ -25,11 +24,12 @@ import Link from "next/link";
 export const metadata = { title: "Work orders" };
 
 const OPEN_STATUSES = new Set(["OPEN", "IN_PROGRESS", "WAITING"]);
+const PAGE_SIZE = 20;
 
 export default async function WorkOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ vehicleId?: string; status?: string; open?: string }>;
+  searchParams: Promise<{ vehicleId?: string; status?: string; open?: string; page?: string }>;
 }) {
   const context = await requirePagePermission(PERMISSIONS.WORK_ORDER_READ);
   const permissions = [...permissionsForRoles(context.user.roles)];
@@ -39,6 +39,8 @@ export default async function WorkOrdersPage({
   const vehicleId = params.vehicleId?.trim() || undefined;
   const openOnly = params.open === "1";
   const statusParam = (params.status ?? "").toUpperCase();
+  const pageRaw = Number(params.page);
+  const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
   // `open` takes precedence over `status` so the server matches what the filter
   // control shows (it renders "Open (active)" whenever open=1).
   const status =
@@ -70,12 +72,27 @@ export default async function WorkOrdersPage({
   };
   const filteredVehicle = vehicleId ? vehicles.find((v) => v.id === vehicleId) : undefined;
 
+  const totalPages = Math.max(1, Math.ceil(workOrders.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const rows = workOrders.slice(pageStart, pageStart + PAGE_SIZE);
+
+  function pageHref(nextPage: number): string {
+    const url = new URLSearchParams();
+    if (vehicleId) url.set("vehicleId", vehicleId);
+    if (openOnly) url.set("open", "1");
+    if (status) url.set("status", status);
+    if (nextPage > 1) url.set("page", String(nextPage));
+    const query = url.toString();
+    return query ? `/work-orders?${query}` : "/work-orders";
+  }
+
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <div className="flex flex-col gap-2">
-        <Eyebrow>Repairs</Eyebrow>
-        <DisplayTitle size="md">Work orders</DisplayTitle>
-      </div>
+      <PageHeader
+        title="Work orders"
+        crumbs={[{ label: "Maintenance" }, { label: "Work orders" }]}
+      />
 
       <WorkOrderFilters vehicles={vehicles.map((v) => ({ id: v.id, label: v.regNumber }))} />
 
@@ -105,7 +122,7 @@ export default async function WorkOrdersPage({
               <p className="text-body-xs text-muted px-5 py-8">No work orders match.</p>
             ) : (
               <ul className="divide-hairline divide-y">
-                {workOrders.map((wo) => {
+                {rows.map((wo) => {
                   // Show only actions valid from the current state and permitted.
                   const actions = Object.entries(WORK_ORDER_ACTIONS)
                     .filter(
@@ -156,6 +173,30 @@ export default async function WorkOrdersPage({
                 })}
               </ul>
             )}
+            {workOrders.length > PAGE_SIZE && (
+              <div className="border-hairline bg-subtle flex items-center justify-between gap-3 border-t px-4 py-2.5">
+                <p className="text-data-xs text-muted">
+                  Showing {pageStart + 1}–{pageStart + rows.length} of {workOrders.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <PagerLink
+                    href={pageHref(safePage - 1)}
+                    disabled={safePage <= 1}
+                    label="Previous page"
+                    icon={<ChevronLeft aria-hidden="true" className="h-4 w-4" />}
+                  />
+                  <span className="text-data-xs text-muted px-2">
+                    Page {safePage} of {totalPages}
+                  </span>
+                  <PagerLink
+                    href={pageHref(safePage + 1)}
+                    disabled={safePage >= totalPages}
+                    label="Next page"
+                    icon={<ChevronRight aria-hidden="true" className="h-4 w-4" />}
+                  />
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 
@@ -198,5 +239,37 @@ export default async function WorkOrdersPage({
         )}
       </div>
     </Container>
+  );
+}
+
+function PagerLink({
+  href,
+  disabled,
+  label,
+  icon,
+}: {
+  href: string;
+  disabled: boolean;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  if (disabled) {
+    return (
+      <span
+        className="text-faint flex h-8 w-8 items-center justify-center rounded-md"
+        aria-disabled="true"
+      >
+        {icon}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="hover:bg-subtle hover:text-ink text-muted border-hairline bg-surface flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+    >
+      {icon}
+    </Link>
   );
 }

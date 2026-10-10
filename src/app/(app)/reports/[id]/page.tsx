@@ -17,11 +17,12 @@ import { CreateWorkOrderButton } from "@/components/actions/CreateWorkOrderButto
 import { StatusActions } from "@/components/actions/StatusActions";
 import { CloseIssueDialog } from "@/components/reports/CloseIssueDialog";
 import { Card } from "@/components/ui/Card";
+import { DetailRow } from "@/components/ui/DetailRow";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
-import { formatDate } from "@/lib/format";
+import { formatDate, humanizeEnum } from "@/lib/format";
 import { getIssueById } from "@/lib/repos/reports";
 import { listUsers } from "@/lib/repos/users";
 import { getVehicleById } from "@/lib/repos/vehicles";
@@ -72,7 +73,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         description={
           <>
             {issue.number ? `${issue.number} · ` : "Issue "}
-            {issue.category?.replace(/_/g, " ").toLowerCase()} · reported{" "}
+            {issue.category ? humanizeEnum(issue.category) : "—"} · reported{" "}
             {formatDate(issue.createdAt)}
           </>
         }
@@ -128,7 +129,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                             {wo.title}
                           </span>
                           <span className="text-data-xs text-muted">
-                            {wo.number} · {wo.priority.toLowerCase()}
+                            {wo.number} · {humanizeEnum(wo.priority)}
                           </span>
                         </span>
                       </span>
@@ -168,8 +169,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                 ))}
               </ul>
               <p className="text-body-xs text-muted mt-3">
-                Evidence files are stored privately in object storage — keys shown are the audit
-                references, not public URLs.
+                Evidence files are stored securely in private object storage. The keys above are
+                audit references for traceability. Contact your fleet administrator to access
+                original files if needed.
               </p>
             </Card>
           )}
@@ -193,7 +195,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             <DetailRow label="Severity">
               <StatusBadge status={issue.severity} />
             </DetailRow>
-            <DetailRow label="Category">{issue.category?.replace(/_/g, " ") ?? "—"}</DetailRow>
+            <DetailRow label="Category">
+              {issue.category ? humanizeEnum(issue.category) : "—"}
+            </DetailRow>
             <DetailRow label="Odometer at report">
               {typeof issue.odometerKm === "number"
                 ? `${issue.odometerKm.toLocaleString()} km`
@@ -242,17 +246,6 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 px-5 py-2.5">
-      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
-        {label}
-      </span>
-      <span className="text-data text-ink text-right">{children}</span>
     </div>
   );
 }

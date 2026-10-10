@@ -15,6 +15,7 @@ import {
 
 import { StatusActions } from "@/components/actions/StatusActions";
 import { Card } from "@/components/ui/Card";
+import { DetailRow, StripCell } from "@/components/ui/DetailRow";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
@@ -29,7 +30,7 @@ import {
   WORK_ORDER_ACTIONS,
   WORK_ORDER_ACTION_LABELS,
 } from "@/lib/domain/work-order";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, humanizeEnum } from "@/lib/format";
 import { listExpenses } from "@/lib/repos/expenses";
 import { getScheduleById, getServiceRecordById } from "@/lib/repos/maintenance";
 import { getIssueById } from "@/lib/repos/reports";
@@ -91,7 +92,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
         title={workOrder.title}
         description={
           <>
-            {workOrder.number} · {workOrder.priority.toLowerCase()} priority · opened{" "}
+            {workOrder.number} · {humanizeEnum(workOrder.priority)} priority · opened{" "}
             {formatDate(workOrder.openedAt)}
           </>
         }
@@ -165,7 +166,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
                             {issue.title}
                           </span>
                           <span className="text-data-xs text-muted">
-                            {issue.number ?? "Issue"} · {issue.severity.toLowerCase()}
+                            {issue.number ?? "Issue"} · {humanizeEnum(issue.severity)}
                           </span>
                         </span>
                       </span>
@@ -213,7 +214,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
                         <ReceiptText aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />
                         <span className="flex min-w-0 flex-col">
                           <span className="text-data text-ink truncate font-medium">
-                            {expense.category.replace(/_/g, " ").toLowerCase()}
+                            {humanizeEnum(expense.category)}
                           </span>
                           <span className="text-data-xs text-muted">
                             {formatDate(expense.incurredOn)}
@@ -235,7 +236,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
 
           {serviceRecord && (
             <Card title="Service record" icon={CheckCircle2} flush>
-              <div className="divide-hairline divide-y px-5">
+              <div className="divide-hairline divide-y">
                 <DetailRow label="Task">{serviceRecord.taskName}</DetailRow>
                 <DetailRow label="Completed at">{formatDate(serviceRecord.completedAt)}</DetailRow>
                 <DetailRow label="Odometer">
@@ -335,28 +336,6 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
   );
 }
 
-function StripCell({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 px-5 py-4">
-      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
-        {label}
-      </span>
-      <span className="text-data text-ink font-medium">{children}</span>
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 py-2.5">
-      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
-        {label}
-      </span>
-      <span className="text-data text-ink text-right">{children}</span>
-    </div>
-  );
-}
-
 function scheduleIntervalLabel(intervalKm?: number, intervalDays?: number): string {
   if (intervalKm && intervalDays)
     return `every ${intervalKm.toLocaleString()} km or ${intervalDays} days`;
@@ -404,11 +383,11 @@ function Timeline({
         const done = step.at !== undefined;
         const isLast = index === steps.length - 1;
         return (
-          <li key={step.label} className="relative flex gap-3 px-5 pt-4 pb-4">
+          <li key={step.label} className="relative flex gap-3 px-4 pt-4 pb-4 sm:px-5">
             {!isLast && (
               <span
                 aria-hidden="true"
-                className={`absolute top-9 left-[1.625rem] h-full w-px ${
+                className={`absolute top-9 left-6 h-full w-px sm:left-7 ${
                   done ? "bg-accent" : "bg-[var(--border-hairline)]"
                 }`}
               />

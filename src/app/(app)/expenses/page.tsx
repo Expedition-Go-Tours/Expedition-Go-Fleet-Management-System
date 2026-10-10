@@ -1,16 +1,16 @@
-import { FilePlus2, ReceiptText } from "lucide-react";
+import { ChevronLeft, ChevronRight, FilePlus2, ReceiptText } from "lucide-react";
 
 import { CreateForm } from "@/components/actions/CreateForm";
 import { StatusActions } from "@/components/actions/StatusActions";
+import { ExpenseFilters } from "@/components/expenses/ExpenseFilters";
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
-import { DisplayTitle } from "@/components/ui/DisplayTitle";
-import { Eyebrow } from "@/components/ui/Eyebrow";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { EXPENSE_ACTIONS, EXPENSE_CATEGORIES } from "@/lib/domain/expense";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, humanizeEnum } from "@/lib/format";
 import { listExpenses, countExpenses } from "@/lib/repos/expenses";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
@@ -22,17 +22,44 @@ const LABELS: Record<string, string> = {
   void: "Void",
 };
 
-export default async function ExpensesPage() {
+const PAGE_SIZE = 20;
+
+export default async function ExpensesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string; vehicleId?: string; page?: string }>;
+}) {
   const context = await requirePagePermission(PERMISSIONS.EXPENSE_READ);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canCreate = permissions.includes("expense:create");
   const canExport = permissions.includes("expense:export");
+
+  const params = await searchParams;
+  const category = params.category?.trim() || undefined;
+  const vehicleId = params.vehicleId?.trim() || undefined;
+  const pageRaw = Number(params.page);
+  const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+
   const [expenses, workOrders, vehicles, expenseTotal] = await Promise.all([
-    listExpenses({ limit: 200 }),
+    listExpenses({ category, vehicleId, limit: 500 }),
     listWorkOrders({ limit: 200 }),
     listVehicles(),
-    countExpenses(),
+    countExpenses({ vehicleId }),
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(expenses.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const rows = expenses.slice(pageStart, pageStart + PAGE_SIZE);
+
+  function pageHref(nextPage: number): string {
+    const url = new URLSearchParams();
+    if (category) url.set("category", category);
+    if (vehicleId) url.set("vehicleId", vehicleId);
+    if (nextPage > 1) url.set("page", String(nextPage));
+    const query = url.toString();
+    return query ? `/expenses?${query}` : "/expenses";
+  }
 
   const vehicleName = (id: string) => {
     const v = vehicles.find((x) => x.id === id);
@@ -46,21 +73,24 @@ export default async function ExpensesPage() {
 
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-4" data-tour="expense-header">
-        <div className="flex flex-col gap-2">
-          <Eyebrow>Finance</Eyebrow>
-          <DisplayTitle size="md">Expenses</DisplayTitle>
-        </div>
-        {canExport && (
-          <a
-            href="/api/v1/expenses/export"
-            data-tour="expense-export"
-            className="border-strong hover:border-ink rounded-pill font-ui border px-4 py-2 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase transition-colors"
-          >
-            Export CSV ↓
-          </a>
-        )}
-      </div>
+      <PageHeader
+        title="Expenses"
+        crumbs={[{ label: "Finance & compliance" }, { label: "Expenses" }]}
+        dataTour="expense-header"
+        actions={
+          canExport ? (
+            <a
+              href="/api/v1/expenses/export"
+              data-tour="expense-export"
+              className="border-strong hover:border-ink rounded-pill font-ui border px-4 py-2 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase transition-colors"
+            >
+              Export CSV ↓
+            </a>
+          ) : undefined
+        }
+      />
+
+      <ExpenseFilters vehicles={vehicles.map((v) => ({ id: v.id, label: v.regNumber }))} />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
@@ -75,7 +105,7 @@ export default async function ExpensesPage() {
               <p className="text-body-xs text-muted px-5 py-8">No expenses recorded.</p>
             ) : (
               <ul className="divide-hairline divide-y">
-                {expenses.map((expense) => {
+                {rows.map((expense) => {
                   const actions = Object.entries(EXPENSE_ACTIONS)
                     .filter(
                       ([, def]) =>
@@ -97,7 +127,7 @@ export default async function ExpensesPage() {
                             >
                               {vehicleName(expense.vehicleId)}
                             </Link>{" "}
-                            · {expense.category}
+                            · {humanizeEnum(expense.category)}
                             {workOrderLabel ? ` · ${workOrderLabel}` : ""}
                           </span>
                         </div>
@@ -128,6 +158,30 @@ export default async function ExpensesPage() {
                   );
                 })}
               </ul>
+            )}
+            {expenses.length > PAGE_SIZE && (
+              <div className="border-hairline bg-subtle flex items-center justify-between gap-3 border-t px-4 py-2.5">
+                <p className="text-data-xs text-muted">
+                  Showing {pageStart + 1}–{pageStart + rows.length} of {expenses.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <PagerLink
+                    href={pageHref(safePage - 1)}
+                    disabled={safePage <= 1}
+                    label="Previous page"
+                    icon={<ChevronLeft aria-hidden="true" className="h-4 w-4" />}
+                  />
+                  <span className="text-data-xs text-muted px-2">
+                    Page {safePage} of {totalPages}
+                  </span>
+                  <PagerLink
+                    href={pageHref(safePage + 1)}
+                    disabled={safePage >= totalPages}
+                    label="Next page"
+                    icon={<ChevronRight aria-hidden="true" className="h-4 w-4" />}
+                  />
+                </div>
+              </div>
             )}
           </Card>
         </div>
@@ -191,5 +245,37 @@ export default async function ExpensesPage() {
         )}
       </div>
     </Container>
+  );
+}
+
+function PagerLink({
+  href,
+  disabled,
+  label,
+  icon,
+}: {
+  href: string;
+  disabled: boolean;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  if (disabled) {
+    return (
+      <span
+        className="text-faint flex h-8 w-8 items-center justify-center rounded-md"
+        aria-disabled="true"
+      >
+        {icon}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="hover:bg-subtle hover:text-ink text-muted border-hairline bg-surface flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+    >
+      {icon}
+    </Link>
   );
 }

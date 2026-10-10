@@ -9,16 +9,6 @@ type ContainerProps = {
   size?: "default" | "wide";
 };
 
-export function Container({ children, className, size = "default" }: ContainerProps) {
-  return (
-    <div
-      className={cn(
-        "mx-auto w-full px-6",
-        size === "wide" ? "max-w-[1600px]" : "max-w-[1440px]",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+export function Container({ children, className, size }: ContainerProps) {
+  return <div className={cn(size === "wide" && "max-w-[1600px]", className)}>{children}</div>;
 }

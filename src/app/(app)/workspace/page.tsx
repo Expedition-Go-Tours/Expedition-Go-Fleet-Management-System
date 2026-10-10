@@ -26,7 +26,7 @@ import { ReportProblemDialog } from "@/components/workspace/ReportProblemDialog"
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { defaultChecklist } from "@/lib/domain/inspection";
-import { formatDate, formatKm } from "@/lib/format";
+import { formatDate, formatKm, humanizeEnum } from "@/lib/format";
 import { getActiveAssignmentForDriver } from "@/lib/repos/assignments";
 import { listIncidents, countIncidents } from "@/lib/repos/incidents";
 import { listInspections } from "@/lib/repos/inspections";
@@ -151,51 +151,54 @@ export default async function WorkspacePage() {
         dataTour="driver-trip"
       >
         <div className="p-5">
-          {assignment && vehicle ? (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <Link
-                  href={`/vehicles/${vehicle.id}`}
-                  className="text-body-sm text-link font-semibold hover:underline"
-                >
-                  {vehicle.regNumber} — {vehicle.make} {vehicle.model}
-                </Link>
-                <StatusBadge status={assignment.status} />
-                <span className="font-ui text-muted ml-auto text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-                  {assignment.purpose.replace(/_/g, " ")}
-                </span>
-              </div>
-              <p className="text-body-xs text-muted">
-                Started {formatDate(assignment.startedAt)} at{" "}
-                {formatKm(assignment.startOdometerKm ?? 0)} — current reading{" "}
-                {formatKm(vehicle.odometerKm)}.
-              </p>
-
-              {vehicle.status === "SAFETY_HOLD" && (
-                <div className="border-error/30 bg-error/10 text-error flex items-start gap-2 rounded-md border p-3">
-                  <ShieldAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p className="text-body-xs">
-                    This vehicle is on safety hold. It must not be driven until maintenance releases
-                    the hold — report the situation to operations before leaving the depot.
-                  </p>
+          {assignment ? (
+            vehicle ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    href={`/vehicles/${vehicle.id}`}
+                    className="text-body-sm text-link font-semibold hover:underline"
+                  >
+                    {vehicle.regNumber} — {vehicle.make} {vehicle.model}
+                  </Link>
+                  <StatusBadge status={assignment.status} />
+                  <span className="font-ui text-muted ml-auto text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
+                    {humanizeEnum(assignment.purpose)}
+                  </span>
                 </div>
-              )}
+                <p className="text-body-xs text-muted">
+                  Started {formatDate(assignment.startedAt)} at{" "}
+                  {formatKm(assignment.startOdometerKm ?? 0)} — current reading{" "}
+                  {formatKm(vehicle.odometerKm)}.
+                </p>
 
-              <EndAssignmentButton
-                assignmentId={assignment.id}
-                minKm={assignment.startOdometerKm ?? 0}
-                vehicleLabel={vehicle.regNumber}
-              />
-            </div>
-          ) : assignment ? (
-            <div className="flex flex-col gap-2 py-2">
-              <p className="text-body-xs text-muted">
-                Assigned vehicle not found — contact operations.
-              </p>
-              <p className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-                Assignment {assignment.id}
-              </p>
-            </div>
+                {vehicle.status === "SAFETY_HOLD" && (
+                  <div className="border-error/30 bg-error/10 text-error flex items-start gap-2 rounded-md border p-3">
+                    <ShieldAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p className="text-body-xs">
+                      This vehicle is on safety hold. It must not be driven until maintenance
+                      releases the hold — report the situation to operations before leaving the
+                      depot.
+                    </p>
+                  </div>
+                )}
+
+                <EndAssignmentButton
+                  assignmentId={assignment.id}
+                  minKm={assignment.startOdometerKm ?? 0}
+                  vehicleLabel={vehicle.regNumber}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 py-2">
+                <p className="text-body-xs text-muted">
+                  Assigned vehicle not found — contact operations.
+                </p>
+                <p className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
+                  Assignment {assignment.id}
+                </p>
+              </div>
+            )
           ) : (
             <div className="flex flex-col gap-3 py-2">
               <p className="text-body-sm text-ink">You have no assigned trip.</p>
@@ -343,7 +346,7 @@ export default async function WorkspacePage() {
                       >
                         <div className="min-w-0">
                           <p className="text-body-sm text-ink font-medium">
-                            {incident.type.replace(/_/g, " ").toLowerCase()} — {incident.severity}
+                            {humanizeEnum(incident.type)} — {humanizeEnum(incident.severity)}
                           </p>
                           <p className="text-body-xs text-muted mt-0.5">
                             {v ? v.regNumber : "—"} · {formatDate(incident.occurredAt)}

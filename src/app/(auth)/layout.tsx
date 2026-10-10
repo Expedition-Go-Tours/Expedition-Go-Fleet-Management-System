@@ -8,7 +8,7 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <main className="bg-dark text-on-dark flex min-h-screen flex-col">
-      <Container className="flex flex-1 flex-col justify-center py-16">
+      <Container className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col justify-center px-6 py-16">
         <div className="mx-auto flex w-full max-w-md flex-col gap-10">
           <div className="flex flex-col gap-3">
             <Eyebrow className="text-on-dark/60">Expedition Go Tours · Fleet Operations</Eyebrow>

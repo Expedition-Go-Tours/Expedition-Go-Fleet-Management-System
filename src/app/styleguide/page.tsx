@@ -6,11 +6,11 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 export const metadata = { title: "Styleguide" };
 
 const palette: { name: string; value: string; note: string }[] = [
-  { name: "Ink", value: "#111111", note: "Primary text / primary action" },
-  { name: "Accent", value: "#ff5500", note: "Attention, alerts, active state" },
+  { name: "Ink", value: "#1a1d21", note: "Primary text / primary action" },
+  { name: "Accent", value: "#f15a24", note: "Attention, alerts, active state" },
   { name: "Dark", value: "#000000", note: "Dark surfaces & inverse text" },
   { name: "Panel", value: "#0c1016", note: "Cards on dark surfaces" },
-  { name: "Muted", value: "#a5abad", note: "Secondary text" },
+  { name: "Muted", value: "#6b7280", note: "Secondary text" },
   { name: "Faint", value: "#d9d9d9", note: "Dividers, disabled" },
 ];
 
@@ -29,7 +29,7 @@ export default function StyleguidePage() {
   return (
     <main className="flex flex-1 flex-col">
       <section className="bg-dark text-on-dark">
-        <Container className="flex flex-col gap-10 py-16 md:py-24">
+        <Container className="mx-auto flex w-full max-w-[1440px] flex-col gap-10 px-6 py-16 md:py-24">
           <div className="flex items-center justify-between gap-6">
             <Eyebrow className="text-on-dark/70">Expedition Go Tours · Fleet Operations</Eyebrow>
             <Eyebrow className="text-on-dark/70">Internal · Invite only</Eyebrow>
@@ -47,7 +47,7 @@ export default function StyleguidePage() {
         </Container>
       </section>
 
-      <Container className="flex flex-1 flex-col gap-14 py-16">
+      <Container className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-14 px-6 py-16">
         <section className="flex flex-col gap-6">
           <Eyebrow>Palette</Eyebrow>
           <div className="border-hairline bg-hairline grid grid-cols-2 gap-px overflow-hidden rounded-xl border sm:grid-cols-3 lg:grid-cols-6">

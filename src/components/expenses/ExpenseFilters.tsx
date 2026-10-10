@@ -5,25 +5,19 @@ import { useTransition } from "react";
 import { X } from "lucide-react";
 
 import { Select } from "@/components/ui/fields";
-
-const STATE_OPTIONS = [
-  { value: "OVERDUE", label: "Overdue" },
-  { value: "DUE", label: "Due" },
-  { value: "DUE_SOON", label: "Due soon" },
-  { value: "OK", label: "On schedule" },
-  { value: "NOT_CONFIGURED", label: "Not configured" },
-] as const;
+import { EXPENSE_CATEGORIES } from "@/lib/domain/expense";
+import { humanizeEnum } from "@/lib/format";
 
 /**
- * Maintenance board filters. State lives in the URL so the server page owns
- * the derivation: `state` (schedule state) and `vehicleId` (specific unit).
+ * Expenses board filters. State lives in the URL so the server page owns
+ * filtering: `category` (exact type) and `vehicleId` (specific unit).
  */
-export function MaintenanceFilters({ vehicles }: { vehicles: { id: string; label: string }[] }) {
+export function ExpenseFilters({ vehicles }: { vehicles: { id: string; label: string }[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const state = searchParams.get("state") ?? "";
+  const category = searchParams.get("category") ?? "";
   const vehicleId = searchParams.get("vehicleId") ?? "";
 
   function update(next: Record<string, string>) {
@@ -32,23 +26,23 @@ export function MaintenanceFilters({ vehicles }: { vehicles: { id: string; label
       if (value) params.set(key, value);
       else params.delete(key);
     }
-    startTransition(() => router.replace(`/maintenance?${params.toString()}`));
+    startTransition(() => router.replace(`/expenses?${params.toString()}`));
   }
 
-  const hasFilters = Boolean(state || vehicleId);
+  const hasFilters = Boolean(category || vehicleId);
 
   return (
     <div className="flex flex-wrap items-center gap-2" aria-busy={isPending}>
       <Select
-        aria-label="Filter by state"
-        value={state}
-        onChange={(e) => update({ state: e.target.value })}
+        aria-label="Filter by category"
+        value={category}
+        onChange={(e) => update({ category: e.target.value })}
         className="w-full sm:w-48"
       >
-        <option value="">All states</option>
-        {STATE_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
+        <option value="">All categories</option>
+        {EXPENSE_CATEGORIES.map((c) => (
+          <option key={c} value={c}>
+            {humanizeEnum(c)}
           </option>
         ))}
       </Select>
@@ -68,7 +62,7 @@ export function MaintenanceFilters({ vehicles }: { vehicles: { id: string; label
       {hasFilters && (
         <button
           type="button"
-          onClick={() => router.replace("/maintenance")}
+          onClick={() => router.replace("/expenses")}
           className="hover:bg-subtle text-body-sm text-muted inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium transition-colors"
         >
           <X aria-hidden="true" className="h-3.5 w-3.5" />

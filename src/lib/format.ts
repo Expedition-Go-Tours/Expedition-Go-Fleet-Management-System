@@ -85,3 +85,11 @@ export function formatDays(days: number): string {
 export function joinMeta(parts: Array<string | null | undefined>): string {
   return parts.filter(Boolean).join(" · ");
 }
+
+/** "BREAKDOWN" → "Breakdown", "FLAT_TIRE" → "Flat tire". */
+export function humanizeEnum(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/^\w/, (c) => c.toUpperCase());
+}

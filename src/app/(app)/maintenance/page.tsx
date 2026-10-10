@@ -9,7 +9,7 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { computeScheduleStatus, type ScheduleStatus } from "@/lib/domain/maintenance";
-import { formatDate, formatIsoDate, formatKm } from "@/lib/format";
+import { formatDate, formatIsoDate, formatKm, humanizeEnum } from "@/lib/format";
 import { listAllSchedules, type MaintenanceSchedule } from "@/lib/repos/maintenance";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { requirePagePermission } from "@/lib/auth/page-guard";
@@ -214,9 +214,7 @@ export default async function MaintenancePage({
               </Td>
               <Td>
                 <span className="text-data text-ink font-medium">{row.schedule.taskName}</span>
-                <CellMeta className="block">
-                  {row.schedule.category.replace(/_/g, " ").toLowerCase()}
-                </CellMeta>
+                <CellMeta className="block">{humanizeEnum(row.schedule.category)}</CellMeta>
               </Td>
               <Td>
                 <span className="text-data text-ink">{intervalLabel(row.schedule)}</span>

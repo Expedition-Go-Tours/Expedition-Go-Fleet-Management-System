@@ -5,6 +5,7 @@ import { FileWarning, Wrench } from "lucide-react";
 
 import { StatusBadge, StatusDot, formatStatusLabel } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
+import { formatMoney } from "@/lib/format";
 
 /*
  * Tabbed vehicle profile. The server page pre-fetches and pre-formats every
@@ -316,7 +317,7 @@ function OverviewPanel({ data }: { data: VehicleDetailTabData }) {
           <ProfileStat
             label="Open issues"
             value={data.counts.openIssues}
-            href={`/reports?vehicleId=${data.vehicleId}`}
+            href={`/reports?vehicleId=${data.vehicleId}&open=1`}
           />
           <ProfileStat
             label="Open work orders"
@@ -708,11 +709,4 @@ function DocumentsPanel({ documents }: { documents: TabDocumentData[] }) {
   );
 }
 
-function formatMoney(amountMinor: number, currency: string): string {
-  const symbols: Record<string, string> = { GHS: "GH₵", USD: "$", EUR: "€" };
-  const symbol = symbols[currency] ?? `${currency} `;
-  return `${symbol}${(amountMinor / 100).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
+// formatMoney is imported from @/lib/format

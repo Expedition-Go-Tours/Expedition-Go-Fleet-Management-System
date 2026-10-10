@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { Field, Input, Select } from "@/components/ui/fields";
 import { api } from "@/lib/client/api";
 import { ROLE_KEYS } from "@/lib/auth/types";
 
@@ -73,56 +74,35 @@ export function InviteUserForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1.5">
-        <span className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-          Full name
-        </span>
-        <input
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="border-hairline focus:border-ink text-body-sm rounded-md border px-3 py-2 transition-colors outline-none"
-        />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-          Email
-        </span>
-        <input
+      <Field label="Full name" htmlFor="invite-name" required>
+        <Input id="invite-name" required value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Field label="Email" htmlFor="invite-email" required>
+        <Input
+          id="invite-email"
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="border-hairline focus:border-ink text-body-sm rounded-md border px-3 py-2 transition-colors outline-none"
         />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-          Phone (optional)
-        </span>
-        <input
+      </Field>
+      <Field label="Phone (optional)" htmlFor="invite-phone">
+        <Input
+          id="invite-phone"
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          className="border-hairline focus:border-ink text-body-sm rounded-md border px-3 py-2 transition-colors outline-none"
         />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-          Role
-        </span>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="border-hairline focus:border-ink text-body-sm rounded-md border bg-white px-3 py-2 transition-colors outline-none"
-        >
+      </Field>
+      <Field label="Role" htmlFor="invite-role">
+        <Select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)}>
           {ROLE_KEYS.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
       {error && (
         <p role="alert" className="text-body-xs text-error">
@@ -131,8 +111,8 @@ export function InviteUserForm() {
       )}
 
       <div>
-        <Button type="submit" variant="primary" size="sm" disabled={busy}>
-          {busy ? "Creating…" : "Create invite"}
+        <Button type="submit" variant="primary" size="sm" isLoading={busy}>
+          Create invite
         </Button>
       </div>
     </form>

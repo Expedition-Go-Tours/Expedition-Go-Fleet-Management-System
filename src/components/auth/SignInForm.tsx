@@ -128,7 +128,7 @@ export function SignInForm() {
       </div>
 
       {error && (
-        <p role="alert" className="text-body-xs text-accent">
+        <p role="alert" className="text-body-xs text-error">
           {error}
         </p>
       )}

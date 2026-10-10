@@ -44,7 +44,7 @@ export default async function NotificationsPage() {
       <PageHeader
         title="Notifications"
         description="Workflow and system alerts addressed to your roles."
-        crumbs={[{ label: "Administration" }, { label: "Notifications" }]}
+        crumbs={[{ label: "Notifications" }]}
       />
       <Card flush icon={Bell} title="All notifications">
         <NotificationCentre notifications={notifications} />

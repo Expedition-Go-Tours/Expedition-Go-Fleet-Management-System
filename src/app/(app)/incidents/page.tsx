@@ -1,17 +1,17 @@
-import { ShieldAlert, ShieldPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShieldAlert, ShieldPlus } from "lucide-react";
 
 import { CreateForm } from "@/components/actions/CreateForm";
 import { StatusActions } from "@/components/actions/StatusActions";
+import { IncidentFilters } from "@/components/incidents/IncidentFilters";
 import { ResolveIncidentButton } from "@/components/incidents/ResolveIncidentButton";
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
-import { DisplayTitle } from "@/components/ui/DisplayTitle";
-import { Eyebrow } from "@/components/ui/Eyebrow";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { INCIDENT_SEVERITIES, INCIDENT_TYPES } from "@/lib/domain/incident";
-import { formatDate } from "@/lib/format";
+import { formatDate, humanizeEnum } from "@/lib/format";
 import { countIncidents, listIncidents } from "@/lib/repos/incidents";
 import { listVehicles } from "@/lib/repos/vehicles";
 import Link from "next/link";
@@ -28,7 +28,13 @@ function incidentActions(status: string, permissions: string[]) {
     .map(([action]) => ({ action, label: labels[action] ?? action }));
 }
 
-export default async function IncidentsPage() {
+const PAGE_SIZE = 20;
+
+export default async function IncidentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ severity?: string; status?: string; page?: string }>;
+}) {
   const context = await requirePagePermission([
     PERMISSIONS.INCIDENT_READ_OWN,
     PERMISSIONS.INCIDENT_READ_ALL,
@@ -38,12 +44,34 @@ export default async function IncidentsPage() {
   const canReadAll = permissions.includes(PERMISSIONS.INCIDENT_READ_ALL);
   const canManage = permissions.includes(PERMISSIONS.INCIDENT_MANAGE);
 
+  const params = await searchParams;
+  const severity = params.severity?.trim() || undefined;
+  const status = params.status?.trim() || undefined;
+  const pageRaw = Number(params.page);
+  const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+
   const scope = canReadAll ? {} : { reportedBy: context.user.id };
-  const [incidents, vehicles, incidentTotal] = await Promise.all([
-    listIncidents({ ...scope, limit: 100 }),
+  const [incidentsAll, vehicles, incidentTotal] = await Promise.all([
+    listIncidents({ ...scope, severity, status, limit: 500 }),
     listVehicles(),
     countIncidents(scope),
   ]);
+
+  const incidents = incidentsAll;
+
+  const totalPages = Math.max(1, Math.ceil(incidents.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const rows = incidents.slice(pageStart, pageStart + PAGE_SIZE);
+
+  function pageHref(nextPage: number): string {
+    const url = new URLSearchParams();
+    if (severity) url.set("severity", severity);
+    if (status) url.set("status", status);
+    if (nextPage > 1) url.set("page", String(nextPage));
+    const query = url.toString();
+    return query ? `/incidents?${query}` : "/incidents";
+  }
 
   const vehicleName = (id: string) => {
     const v = vehicles.find((x) => x.id === id);
@@ -52,14 +80,13 @@ export default async function IncidentsPage() {
 
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <div className="flex flex-col gap-2">
-        <Eyebrow>Restricted</Eyebrow>
-        <DisplayTitle size="md">Incidents</DisplayTitle>
-        <p className="text-body-sm text-muted">
-          Breakdown / accident / passenger / security events. Restricted to
-          {canReadAll ? " those with incident:read:all" : " your own reports"}.
-        </p>
-      </div>
+      <PageHeader
+        title={canReadAll ? "Incidents" : "My incidents"}
+        description={`Breakdown / accident / passenger / security events. Restricted to${canReadAll ? " those with incident:read:all" : " your own reports"}.`}
+        crumbs={[{ label: "Finance & compliance" }, { label: "Incidents" }]}
+      />
+
+      <IncidentFilters />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
@@ -73,7 +100,7 @@ export default async function IncidentsPage() {
               <p className="text-body-xs text-muted px-5 py-8">No incidents reported.</p>
             ) : (
               <ul className="divide-hairline divide-y">
-                {incidents.map((incident) => {
+                {rows.map((incident) => {
                   const actions = incidentActions(incident.status, permissions);
                   return (
                     <li key={incident.id} className="flex flex-col gap-3 px-5 py-4">
@@ -81,7 +108,7 @@ export default async function IncidentsPage() {
                         <div className="flex min-w-0 flex-col">
                           <Link href={`/incidents/${incident.id}`} className="hover:text-ink">
                             <span className="text-body-sm text-ink font-medium">
-                              {incident.type.replace(/_/g, " ")}
+                              {humanizeEnum(incident.type)}
                             </span>
                           </Link>
                           <span className="text-body-xs text-muted">
@@ -116,6 +143,30 @@ export default async function IncidentsPage() {
                   );
                 })}
               </ul>
+            )}
+            {incidents.length > PAGE_SIZE && (
+              <div className="border-hairline bg-subtle flex items-center justify-between gap-3 border-t px-4 py-2.5">
+                <p className="text-data-xs text-muted">
+                  Showing {pageStart + 1}–{pageStart + rows.length} of {incidents.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <PagerLink
+                    href={pageHref(safePage - 1)}
+                    disabled={safePage <= 1}
+                    label="Previous page"
+                    icon={<ChevronLeft aria-hidden="true" className="h-4 w-4" />}
+                  />
+                  <span className="text-data-xs text-muted px-2">
+                    Page {safePage} of {totalPages}
+                  </span>
+                  <PagerLink
+                    href={pageHref(safePage + 1)}
+                    disabled={safePage >= totalPages}
+                    label="Next page"
+                    icon={<ChevronRight aria-hidden="true" className="h-4 w-4" />}
+                  />
+                </div>
+              </div>
             )}
           </Card>
         </div>
@@ -167,5 +218,37 @@ export default async function IncidentsPage() {
         )}
       </div>
     </Container>
+  );
+}
+
+function PagerLink({
+  href,
+  disabled,
+  label,
+  icon,
+}: {
+  href: string;
+  disabled: boolean;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  if (disabled) {
+    return (
+      <span
+        className="text-faint flex h-8 w-8 items-center justify-center rounded-md"
+        aria-disabled="true"
+      >
+        {icon}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="hover:bg-subtle hover:text-ink text-muted border-hairline bg-surface flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+    >
+      {icon}
+    </Link>
   );
 }

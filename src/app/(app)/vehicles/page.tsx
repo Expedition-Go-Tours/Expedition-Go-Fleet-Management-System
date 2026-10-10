@@ -5,7 +5,7 @@ import { TableSort } from "@/components/ui/TableSort";
 import { AddVehicleDialog } from "@/components/vehicles/AddVehicleDialog";
 import { VehicleFilters } from "@/components/vehicles/VehicleFilters";
 import { Card } from "@/components/ui/Card";
-import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
+import { CellMeta, DataTable, type DataTableColumn, Td } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -14,7 +14,7 @@ import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { parseAvailabilityFilter, vehicleMatchesAvailability } from "@/lib/dashboard/fleet-summary";
 import type { Vehicle } from "@/lib/domain/vehicle";
 import { VEHICLE_STATUSES, VEHICLE_TYPES } from "@/lib/domain/vehicle";
-import { formatKm } from "@/lib/format";
+import { formatKm, humanizeEnum } from "@/lib/format";
 import { listAssignments } from "@/lib/repos/assignments";
 import { listIssues } from "@/lib/repos/reports";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -112,15 +112,24 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
     return query ? `${BASE_PATH}?${query}` : BASE_PATH;
   }
 
-  const columns = [
+  const columns: DataTableColumn[] = [
     { key: "vehicle", header: "Vehicle" },
     { key: "type", header: "Type" },
-    { key: "year", header: <TableSort label="Year" sortKey="year" basePath={BASE_PATH} /> },
+    {
+      key: "year",
+      header: <TableSort label="Year" sortKey="year" basePath={BASE_PATH} />,
+      sortDir: sort === "year" ? dir : null,
+    },
     {
       key: "odometer",
       header: <TableSort label="Odometer" sortKey="odometerKm" basePath={BASE_PATH} />,
+      sortDir: sort === "odometerKm" ? dir : null,
     },
-    { key: "status", header: <TableSort label="Status" sortKey="status" basePath={BASE_PATH} /> },
+    {
+      key: "status",
+      header: <TableSort label="Status" sortKey="status" basePath={BASE_PATH} />,
+      sortDir: sort === "status" ? dir : null,
+    },
     { key: "chevron", header: "", className: "w-10" },
   ];
 
@@ -196,7 +205,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                   </Link>
                 </Td>
                 <Td>
-                  <CellMeta>{vehicle.type}</CellMeta>
+                  <CellMeta>{humanizeEnum(vehicle.type)}</CellMeta>
                 </Td>
                 <Td>
                   <CellMeta>{vehicle.year}</CellMeta>
@@ -207,7 +216,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                   </span>
                   {vehicle.odometerSource && (
                     <CellMeta className="block">
-                      via {vehicle.odometerSource.replace(/_/g, " ").toLowerCase()}
+                      via {humanizeEnum(vehicle.odometerSource)}
                     </CellMeta>
                   )}
                 </Td>

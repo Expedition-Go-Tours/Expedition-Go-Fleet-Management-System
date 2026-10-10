@@ -49,6 +49,9 @@ const STATUS_TONES: Record<string, StatusTone> = {
   WAITING: "warning",
   COMPLETED: "success",
   VERIFIED: "success",
+  // work order priorities
+  NORMAL: "muted",
+  URGENT: "danger",
   // expenses
   RECORDED: "success",
   VOID: "danger",

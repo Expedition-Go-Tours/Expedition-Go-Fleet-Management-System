@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
 import { NAV_GROUPS, navTourId } from "@/components/layout/nav";
@@ -50,20 +50,67 @@ export function ShellLayout({
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const mobileDrawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
-  // Close the mobile navigation drawer on Escape, matching the modal behaviour
-  // used everywhere else in the app.
+  // Close the user menu on outside click or Escape, mirroring NotificationBell.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setUserMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [userMenuOpen]);
+
+  // Close the mobile navigation drawer on Escape and trap focus inside it,
+  // matching the modal behaviour used everywhere else in the app.
   useEffect(() => {
     if (!mobileOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    mobileDrawerRef.current?.focus();
+
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setMobileOpen(false);
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        return;
+      }
+      if (event.key === "Tab") {
+        const drawer = mobileDrawerRef.current;
+        if (!drawer) return;
+        const focusables = drawer.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0]!;
+        const last = focusables[focusables.length - 1]!;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     }
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
+    };
   }, [mobileOpen]);
 
   async function signOut() {
@@ -86,6 +133,7 @@ export function ShellLayout({
     items: group.items.filter((item) => visibleHrefs.includes(item.href)),
   })).filter((group) => group.items.length > 0);
 
+  // Sidebar widths correspond to --sidebar-w (15.5rem) declared in tokens.css.
   const sideWidth = collapsed ? "w-[68px]" : "w-[15.5rem]";
 
   function renderNav(innerCollapsed: boolean, onNavigate?: () => void) {
@@ -170,7 +218,11 @@ export function ShellLayout({
             onClick={() => setMobileOpen(false)}
             className="absolute inset-0 h-full w-full cursor-default bg-black/50"
           />
-          <div className="bg-panel-1 absolute inset-y-0 left-0 flex w-72 flex-col shadow-[var(--shadow-lg)]">
+          <div
+            ref={mobileDrawerRef}
+            tabIndex={-1}
+            className="bg-panel-1 absolute inset-y-0 left-0 flex w-72 flex-col shadow-[var(--shadow-lg)] outline-none"
+          >
             <div className="flex items-center justify-between pr-2">
               {brand}
               <button
@@ -222,6 +274,7 @@ export function ShellLayout({
       <header
         className={cn(
           "border-hairline bg-surface sticky top-0 z-20 border-b transition-[padding] duration-200",
+          // pl values mirror --sidebar-w from tokens.css
           collapsed ? "lg:pl-[68px]" : "lg:pl-[15.5rem]",
         )}
       >
@@ -247,7 +300,7 @@ export function ShellLayout({
             </div>
             <HelpMenu />
             <NotificationBell notifications={notifications} unreadCount={unreadCount} />
-            <div className="relative">
+            <div ref={userMenuRef} className="relative">
               <button
                 type="button"
                 data-tour="header-account"
@@ -302,6 +355,7 @@ export function ShellLayout({
       <div
         className={cn(
           "transition-[padding] duration-200",
+          // pl values mirror --sidebar-w from tokens.css
           collapsed ? "lg:pl-[68px]" : "lg:pl-[15.5rem]",
         )}
       >
