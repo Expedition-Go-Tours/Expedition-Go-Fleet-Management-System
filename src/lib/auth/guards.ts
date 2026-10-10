@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 
 import { ApiError } from "@/lib/api/errors";
-import { isTrustedOrigin, verifyCsrf } from "@/lib/auth/csrf";
+import { isTrustedOrigin, verifyCsrfAny } from "@/lib/auth/csrf";
 import {
   CSRF_HEADER,
   csrfCookieName,
@@ -102,9 +102,14 @@ export async function assertCsrfAndOrigin(): Promise<void> {
   }
 
   const cookieStore = await cookies();
-  const cookieToken = cookieStore.get(csrfCookieName(secureCookies()))?.value ?? null;
   const headerToken = headerStore.get(CSRF_HEADER);
-  if (!verifyCsrf(headerToken, cookieToken)) {
+  // Accept either first-party cookie name so a stale cookie from the other
+  // scheme (http vs https) cannot lock a user out of every write.
+  const cookieTokens = [
+    cookieStore.get(csrfCookieName(true))?.value ?? null,
+    cookieStore.get(csrfCookieName(false))?.value ?? null,
+  ];
+  if (!verifyCsrfAny(headerToken, cookieTokens)) {
     throw ApiError.forbidden("Invalid CSRF token");
   }
 }

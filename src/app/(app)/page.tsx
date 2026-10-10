@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { DashboardHero } from "@/components/dashboard/DashboardHero";
+import { BackButton } from "@/components/layout/BackButton";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -48,6 +49,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <div>
+        <BackButton label="Back to previous page" fallbackHref="/" />
+      </div>
+
       <DashboardHero
         updatedLabel={new Date(centre.asOf).toLocaleString("en-GB", {
           hour: "2-digit",

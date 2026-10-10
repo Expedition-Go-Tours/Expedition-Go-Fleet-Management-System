@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { generateCsrfToken, isTrustedOrigin, safeEqual, verifyCsrf } from "@/lib/auth/csrf";
+import {
+  generateCsrfToken,
+  isTrustedOrigin,
+  safeEqual,
+  verifyCsrf,
+  verifyCsrfAny,
+} from "@/lib/auth/csrf";
 
 describe("verifyCsrf", () => {
   it("accepts a matching header/cookie pair", () => {
@@ -14,6 +20,27 @@ describe("verifyCsrf", () => {
     expect(verifyCsrf(null, token)).toBe(false);
     expect(verifyCsrf(token, null)).toBe(false);
     expect(verifyCsrf("", "")).toBe(false);
+  });
+});
+
+describe("verifyCsrfAny", () => {
+  it("accepts a header matching either candidate cookie", () => {
+    const secure = generateCsrfToken();
+    const plain = generateCsrfToken();
+    expect(verifyCsrfAny(secure, [secure, plain])).toBe(true);
+    expect(verifyCsrfAny(plain, [secure, plain])).toBe(true);
+  });
+
+  it("tolerates a missing candidate cookie when the other matches", () => {
+    const plain = generateCsrfToken();
+    expect(verifyCsrfAny(plain, [null, plain])).toBe(true);
+  });
+
+  it("rejects a header that matches no candidate", () => {
+    const token = generateCsrfToken();
+    expect(verifyCsrfAny(token, [null, null])).toBe(false);
+    expect(verifyCsrfAny(token, [generateCsrfToken(), generateCsrfToken()])).toBe(false);
+    expect(verifyCsrfAny(null, [token, token])).toBe(false);
   });
 });
 

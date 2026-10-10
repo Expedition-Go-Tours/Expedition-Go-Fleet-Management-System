@@ -34,3 +34,19 @@ export function verifyCsrf(headerToken: string | null, cookieToken: string | nul
   if (!headerToken || !cookieToken) return false;
   return safeEqual(headerToken, cookieToken);
 }
+
+/**
+ * Validate the header against any of the candidate cookie values.
+ *
+ * A browser that has visited both a secure (https) and a non-secure (http)
+ * deployment can hold both the `__Host-` and the plain CSRF cookie at once.
+ * Accepting either first-party value keeps writes working across schemes; the
+ * protection is unchanged because a custom `x-csrf-token` header cannot be
+ * forged cross-origin, and both cookies are first-party only.
+ */
+export function verifyCsrfAny(
+  headerToken: string | null,
+  cookieTokens: readonly (string | null)[],
+): boolean {
+  return cookieTokens.some((cookieToken) => verifyCsrf(headerToken, cookieToken));
+}

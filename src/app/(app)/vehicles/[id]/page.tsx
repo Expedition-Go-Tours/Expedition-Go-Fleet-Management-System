@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, CalendarClock, Gauge, Wrench, type LucideIcon } from "lucide-react";
 
 import { StatusActions } from "@/components/actions/StatusActions";
+import { StartAssignmentDialog } from "@/components/assignments/StartAssignmentDialog";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { VehicleHero } from "@/components/vehicles/VehicleHero";
@@ -116,6 +117,18 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   const openIssues = issueTotals.open;
   const openWorkOrders = workOrderTotals.open;
 
+  // Staff (assignment:create) may assign an active driver to an available
+  // vehicle. The server re-checks reservations, safety hold and permissions;
+  // this only decides whether the control is offered at all.
+  const canAssign = permissions.includes(PERMISSIONS.ASSIGNMENT_CREATE);
+  const hasActiveAssignment = assignments.some((a) => a.status === "ACTIVE");
+  const driverOptions = users
+    .filter((u) => u.roles.includes("DRIVER") && u.status === "ACTIVE")
+    .map((u) => ({ id: u.id, label: `${u.name} · ${u.email}` }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const canAssignHere =
+    canAssign && vehicle.status === "ACTIVE" && !hasActiveAssignment && driverOptions.length > 0;
+
   const nextService = nextServiceLabel(evaluatedSchedules, vehicle.odometerKm);
 
   const tabData: VehicleDetailTabData = {
@@ -217,6 +230,22 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         actions={
           <>
             <StatusBadge status={vehicle.status} />
+            {canAssignHere && (
+              <StartAssignmentDialog
+                canAssignOthers
+                drivers={driverOptions}
+                defaultVehicleId={vehicle.id}
+                label="Assign driver"
+                variant="outline"
+                vehicles={[
+                  {
+                    id: vehicle.id,
+                    label: `${vehicle.regNumber} — ${vehicle.make} ${vehicle.model}`,
+                    odometerKm: vehicle.odometerKm,
+                  },
+                ]}
+              />
+            )}
             {actions.length > 0 && (
               <StatusActions
                 endpoint={`/api/v1/vehicles/${vehicle.id}/status`}

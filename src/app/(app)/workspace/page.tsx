@@ -11,6 +11,7 @@ import {
   ShieldPlus,
 } from "lucide-react";
 
+import { StartAssignmentDialog } from "@/components/assignments/StartAssignmentDialog";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -52,6 +53,9 @@ export default async function WorkspacePage() {
   const canCreateReport = permissions.includes(PERMISSIONS.REPORT_CREATE);
   const canCreateIncident = permissions.includes(PERMISSIONS.INCIDENT_CREATE);
   const canSubmitInspections = permissions.includes(PERMISSIONS.INSPECTION_SUBMIT);
+  const canStartAssignment =
+    permissions.includes(PERMISSIONS.ASSIGNMENT_START) ||
+    permissions.includes(PERMISSIONS.ASSIGNMENT_CREATE);
 
   const assignment = await getActiveAssignmentForDriver(context.user.id);
 
@@ -98,6 +102,18 @@ export default async function WorkspacePage() {
     .slice()
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
     .map((v) => ({ id: v.id, label: `${v.regNumber} — ${v.make} ${v.model}` }));
+
+  // Only in-service vehicles can be started; the server still bars safety
+  // holds / conflicts, this just avoids offering an impossible choice.
+  const assignableVehicles = vehicles
+    .filter((v) => v.status === "ACTIVE")
+    .slice()
+    .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
+    .map((v) => ({
+      id: v.id,
+      label: `${v.regNumber} — ${v.make} ${v.model}`,
+      odometerKm: v.odometerKm,
+    }));
 
   const checklist = defaultChecklist().map((item) => ({
     key: item.key,
@@ -179,9 +195,19 @@ export default async function WorkspacePage() {
             <div className="flex flex-col gap-3 py-2">
               <p className="text-body-sm text-ink">You have no assigned trip.</p>
               <p className="text-body-xs text-muted">
-                Contact operations to be assigned a vehicle. Inspections and end-of-trip readings
-                can only be submitted against an active assignment.
+                Start a trip to take a vehicle out, or contact operations to be assigned one.
+                Inspections and end-of-trip readings can only be submitted against an active
+                assignment.
               </p>
+              {canStartAssignment && assignableVehicles.length > 0 && (
+                <div className="pt-1">
+                  <StartAssignmentDialog
+                    vehicles={assignableVehicles}
+                    label="Start a trip"
+                    variant="primary"
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
