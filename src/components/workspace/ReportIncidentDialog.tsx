@@ -89,7 +89,10 @@ export function ReportIncidentDialog({
       >
         <form id="incident-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           {error && (
-            <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error">
+            <p
+              role="alert"
+              className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3"
+            >
               {error}
             </p>
           )}
@@ -131,7 +134,12 @@ export function ReportIncidentDialog({
               <Input id="ic-when" name="occurredAt" type="datetime-local" />
             </Field>
             <Field label="Location" htmlFor="ic-location">
-              <Input id="ic-location" name="location" maxLength={300} placeholder="e.g. Spintex Road, Accra" />
+              <Input
+                id="ic-location"
+                name="location"
+                maxLength={300}
+                placeholder="e.g. Spintex Road, Accra"
+              />
             </Field>
           </div>
 

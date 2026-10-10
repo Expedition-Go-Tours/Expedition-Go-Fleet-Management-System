@@ -110,7 +110,13 @@ export function CompleteWorkOrderDialog({
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="accent" size="sm" type="submit" form="complete-wo-form" isLoading={busy}>
+            <Button
+              variant="accent"
+              size="sm"
+              type="submit"
+              form="complete-wo-form"
+              isLoading={busy}
+            >
               Complete work order
             </Button>
           </>
@@ -118,13 +124,27 @@ export function CompleteWorkOrderDialog({
       >
         <form id="complete-wo-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           {error && (
-            <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error">
+            <p
+              role="alert"
+              className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3"
+            >
               {error}
             </p>
           )}
 
-          <Field label="Work performed" required htmlFor="cwo-work" hint="Becomes the service record's immutable description.">
-            <Textarea id="cwo-work" name="workPerformed" rows={4} required placeholder="e.g. Replaced brake pads front + rear, bled lines, test-driven." />
+          <Field
+            label="Work performed"
+            required
+            htmlFor="cwo-work"
+            hint="Becomes the service record's immutable description."
+          >
+            <Textarea
+              id="cwo-work"
+              name="workPerformed"
+              rows={4}
+              required
+              placeholder="e.g. Replaced brake pads front + rear, bled lines, test-driven."
+            />
           </Field>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -134,7 +154,16 @@ export function CompleteWorkOrderDialog({
               hint={`Current accepted reading: ${currentOdometerKm.toLocaleString()} km`}
               htmlFor="cwo-odo"
             >
-              <Input id="cwo-odo" name="odometerKm" type="number" min={0} inputMode="numeric" required placeholder="0" autoFocus={false} />
+              <Input
+                id="cwo-odo"
+                name="odometerKm"
+                type="number"
+                min={0}
+                inputMode="numeric"
+                required
+                placeholder="0"
+                autoFocus={false}
+              />
             </Field>
             <Field label="Completed at" hint="Defaults to now." htmlFor="cwo-date">
               <Input id="cwo-date" name="completedAt" type="datetime-local" />
@@ -152,12 +181,15 @@ export function CompleteWorkOrderDialog({
 
           {schedules.length > 0 && (
             <div>
-              <p className="font-ui text-data-xs mb-2 font-semibold uppercase tracking-[var(--tracking-ui)] text-muted">
+              <p className="font-ui text-data-xs text-muted mb-2 font-semibold tracking-[var(--tracking-ui)] uppercase">
                 Preventive maintenance this work completed
               </p>
               <div className="flex flex-col gap-1.5">
                 {schedules.map((s) => (
-                  <label key={s.id} className="hover:bg-subtle flex cursor-pointer items-center gap-2.5 rounded-md border border-hairline p-2.5">
+                  <label
+                    key={s.id}
+                    className="hover:bg-subtle border-hairline flex cursor-pointer items-center gap-2.5 rounded-md border p-2.5"
+                  >
                     <input
                       type="checkbox"
                       checked={scheduleIds.includes(s.id)}
@@ -168,18 +200,19 @@ export function CompleteWorkOrderDialog({
                   </label>
                 ))}
               </div>
-              <p className="text-data-xs mt-1.5 text-muted">
-                Only schedules actually serviced are reset — their due date moves to this completion.
+              <p className="text-data-xs text-muted mt-1.5">
+                Only schedules actually serviced are reset — their due date moves to this
+                completion.
               </p>
             </div>
           )}
 
           {issues.length > 0 && (
             <div>
-              <p className="font-ui text-data-xs mb-2 font-semibold uppercase tracking-[var(--tracking-ui)] text-muted">
+              <p className="font-ui text-data-xs text-muted mb-2 font-semibold tracking-[var(--tracking-ui)] uppercase">
                 Issues resolved by this work
               </p>
-              <label className="hover:bg-subtle mb-1.5 flex cursor-pointer items-center gap-2.5 rounded-md border border-hairline p-2.5">
+              <label className="hover:bg-subtle border-hairline mb-1.5 flex cursor-pointer items-center gap-2.5 rounded-md border p-2.5">
                 <input
                   type="checkbox"
                   checked={allResolved}
@@ -191,8 +224,17 @@ export function CompleteWorkOrderDialog({
               {!allResolved && (
                 <div className="flex flex-col gap-1.5">
                   {issues.map((issue) => (
-                    <label key={issue.id} className="hover:bg-subtle flex cursor-pointer items-center gap-2.5 rounded-md border border-hairline p-2.5">
-                      <input type="checkbox" name="resolvedIssueIds" value={issue.id} defaultChecked className="accent-orange h-4 w-4" />
+                    <label
+                      key={issue.id}
+                      className="hover:bg-subtle border-hairline flex cursor-pointer items-center gap-2.5 rounded-md border p-2.5"
+                    >
+                      <input
+                        type="checkbox"
+                        name="resolvedIssueIds"
+                        value={issue.id}
+                        defaultChecked
+                        className="accent-orange h-4 w-4"
+                      />
                       <span className="text-data text-ink">{issue.label}</span>
                     </label>
                   ))}
@@ -202,7 +244,12 @@ export function CompleteWorkOrderDialog({
           )}
 
           <Field label="Notes" htmlFor="cwo-notes">
-            <Textarea id="cwo-notes" name="notes" rows={2} placeholder="Optional context for the record" />
+            <Textarea
+              id="cwo-notes"
+              name="notes"
+              rows={2}
+              placeholder="Optional context for the record"
+            />
           </Field>
         </form>
       </Modal>

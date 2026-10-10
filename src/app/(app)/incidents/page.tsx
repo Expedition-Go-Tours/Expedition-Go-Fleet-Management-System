@@ -80,7 +80,7 @@ export default async function IncidentsPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
                           <Link href={`/incidents/${incident.id}`} className="hover:text-ink">
-                            <span className="text-body-sm font-medium text-ink">
+                            <span className="text-body-sm text-ink font-medium">
                               {incident.type.replace(/_/g, " ")}
                             </span>
                           </Link>

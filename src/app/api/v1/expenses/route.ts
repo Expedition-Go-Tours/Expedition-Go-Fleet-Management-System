@@ -5,7 +5,12 @@ import { NextRequest } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { EXPENSE_CATEGORIES, isValidAmountMinor, toPesewas, type ExpenseStatus } from "@/lib/domain/expense";
+import {
+  EXPENSE_CATEGORIES,
+  isValidAmountMinor,
+  toPesewas,
+  type ExpenseStatus,
+} from "@/lib/domain/expense";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { createExpense, listExpenses } from "@/lib/repos/expenses";
 import { getVehicleById } from "@/lib/repos/vehicles";
@@ -96,7 +101,8 @@ export async function POST(request: NextRequest) {
     const incurredRaw = typeof body.incurredOn === "string" ? body.incurredOn.trim() : "";
     if (incurredRaw) {
       const parsed = new Date(incurredRaw);
-      if (Number.isNaN(parsed.getTime())) throw ApiError.badRequest("incurredOn must be a valid date");
+      if (Number.isNaN(parsed.getTime()))
+        throw ApiError.badRequest("incurredOn must be a valid date");
       incurredOn = parsed;
     }
 

@@ -15,11 +15,7 @@ import { VEHICLE_TYPES, FUEL_TYPES } from "@/lib/domain/vehicle";
  * `mileage` field is never sent) so the baseline enters the ledger as an
  * audited setup reading. All validation is enforced server-side too.
  */
-export function AddVehicleDialog({
-  canCreate,
-}: {
-  canCreate: boolean;
-}) {
+export function AddVehicleDialog({ canCreate }: { canCreate: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,7 +27,9 @@ export function AddVehicleDialog({
     setError(null);
     const form = new FormData(event.currentTarget);
     const body: Record<string, unknown> = {
-      regNumber: String(form.get("regNumber") ?? "").trim().toUpperCase(),
+      regNumber: String(form.get("regNumber") ?? "")
+        .trim()
+        .toUpperCase(),
       make: String(form.get("make") ?? "").trim(),
       model: String(form.get("model") ?? "").trim(),
       year: Number(form.get("year")),
@@ -77,9 +75,16 @@ export function AddVehicleDialog({
           </>
         }
       >
-        <form id="add-vehicle-form" onSubmit={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <form
+          id="add-vehicle-form"
+          onSubmit={onSubmit}
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+        >
           {error && (
-            <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error sm:col-span-2">
+            <p
+              role="alert"
+              className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3 sm:col-span-2"
+            >
               {error}
             </p>
           )}
@@ -102,7 +107,15 @@ export function AddVehicleDialog({
             <Input id="av-model" name="model" required placeholder="e.g. Hiace" />
           </Field>
           <Field label="Year" required htmlFor="av-year">
-            <Input id="av-year" name="year" type="number" min={1980} max={2027} required defaultValue={new Date().getFullYear()} />
+            <Input
+              id="av-year"
+              name="year"
+              type="number"
+              min={1980}
+              max={2027}
+              required
+              defaultValue={new Date().getFullYear()}
+            />
           </Field>
           <Field label="Fuel type" htmlFor="av-fuel">
             <Select id="av-fuel" name="fuelType" defaultValue="">
@@ -114,11 +127,29 @@ export function AddVehicleDialog({
               ))}
             </Select>
           </Field>
-          <Field label="Initial odometer (km)" hint="Recorded through the odometer ledger as the setup baseline." htmlFor="av-odo">
-            <Input id="av-odo" name="odometerKm" type="number" min={0} inputMode="numeric" placeholder="0" />
+          <Field
+            label="Initial odometer (km)"
+            hint="Recorded through the odometer ledger as the setup baseline."
+            htmlFor="av-odo"
+          >
+            <Input
+              id="av-odo"
+              name="odometerKm"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              placeholder="0"
+            />
           </Field>
           <Field label="Seating capacity" htmlFor="av-seats">
-            <Input id="av-seats" name="seatingCapacity" type="number" min={1} inputMode="numeric" placeholder="e.g. 14" />
+            <Input
+              id="av-seats"
+              name="seatingCapacity"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              placeholder="e.g. 14"
+            />
           </Field>
           <Field label="VIN" htmlFor="av-vin">
             <Input id="av-vin" name="vin" placeholder="Optional" />

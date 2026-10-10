@@ -43,7 +43,10 @@ export function VehicleFilters() {
   return (
     <div className="flex flex-wrap items-center gap-2" aria-busy={isPending}>
       <div className="relative w-full sm:w-64">
-        <Search aria-hidden="true" className="text-muted absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+        <Search
+          aria-hidden="true"
+          className="text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+        />
         <Input
           aria-label="Search vehicles"
           value={q}
@@ -52,7 +55,12 @@ export function VehicleFilters() {
           className="pl-9"
         />
       </div>
-      <Select aria-label="Filter by status" value={status} onChange={(e) => update({ status: e.target.value })} className="w-full sm:w-auto">
+      <Select
+        aria-label="Filter by status"
+        value={status}
+        onChange={(e) => update({ status: e.target.value })}
+        className="w-full sm:w-auto"
+      >
         <option value="">All statuses</option>
         {VEHICLE_STATUSES.map((s) => (
           <option key={s} value={s}>
@@ -60,7 +68,12 @@ export function VehicleFilters() {
           </option>
         ))}
       </Select>
-      <Select aria-label="Filter by type" value={type} onChange={(e) => update({ type: e.target.value })} className="w-full sm:w-auto">
+      <Select
+        aria-label="Filter by type"
+        value={type}
+        onChange={(e) => update({ type: e.target.value })}
+        className="w-full sm:w-auto"
+      >
         <option value="">All types</option>
         {VEHICLE_TYPES.map((t) => (
           <option key={t} value={t}>
@@ -82,7 +95,7 @@ export function VehicleFilters() {
         <button
           type="button"
           onClick={() => router.replace("/vehicles")}
-          className="hover:bg-subtle text-body-sm inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium text-muted transition-colors"
+          className="hover:bg-subtle text-body-sm text-muted inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium transition-colors"
         >
           <X aria-hidden="true" className="h-3.5 w-3.5" />
           Clear filters

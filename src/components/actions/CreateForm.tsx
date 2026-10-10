@@ -23,6 +23,8 @@ export function CreateForm({
     type?: "text" | "number" | "textarea" | "select" | "date";
     required?: boolean;
     placeholder?: string;
+    /** `step` for number inputs; defaults to a whole number (browser default). */
+    step?: string;
     options?: { value: string; label: string }[];
     defaultValue?: string;
   }[];
@@ -93,6 +95,7 @@ export function CreateForm({
                 type={field.type ?? "text"}
                 required={field.required}
                 placeholder={field.placeholder}
+                step={field.step}
                 defaultValue={field.defaultValue}
                 className="border-hairline focus:border-ink text-body-sm rounded-md border px-3 py-2 transition-colors outline-none"
               />

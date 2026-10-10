@@ -252,14 +252,19 @@ PATCH /documents/:id               { name?, expiresAt?, notes?, status? }
 ```
 GET  /api/v1/notifications                 → unread first, pageable
 POST /api/v1/notifications/:id/read        → mark read
-POST /api/v1/cron/reminders                (CRON_SECRET bearer, Vercel Cron)
+GET  /api/v1/cron/reminders                (CRON_SECRET bearer, Vercel Cron)
+POST /api/v1/cron/reminders                (same CRON_SECRET gate; manual/internal)
 ```
 
 - Critical events (critical report, hold applied, expiry, successful
   completion, …) raise in-app notifications. Each notification carries a
   `dedupeKey`; creation is idempotent via a transaction on the key — reruns of
   the cron create nothing duplicate.
-- `vercel.json` schedules `POST /api/v1/cron/reminders` daily at 07:00 UTC.
+- `vercel.json` schedules `GET /api/v1/cron/reminders` daily at 07:00 UTC.
+  Vercel Cron invokes scheduled endpoints with HTTP GET, so the route exports
+  `GET`; a `POST` handler is kept for deliberate manual/internal invocation and
+  is guarded by the identical secret check. Secret comparison is constant-time
+  and the endpoint fails closed when `CRON_SECRET` is unset.
   The cron computes, in one pass:
   - **PM reminders** bucketed by km-band/day from `computeScheduleStatus`
     (DUE_SOON/DUE/OVERDUE → owners + operations);

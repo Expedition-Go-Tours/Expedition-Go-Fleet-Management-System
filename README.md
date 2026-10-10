@@ -51,14 +51,14 @@ renders without any environment variables.
 
 Dev tools:
 
-| Script                             | Purpose                                                    |
-| ---------------------------------- | ---------------------------------------------------------- |
-| `node scripts/verify-firebase.mjs` | Checks Admin SDK credentials against live Auth + Firestore |
-| `node scripts/e2e-auth.mjs`        | End-to-end auth flow test (needs `npm run dev`)            |
-| `node scripts/e2e-fleet.mjs`       | End-to-end fleet-domain test (needs `npm run dev`)         |
-| `node scripts/e2e-accountability.mjs` | Ledger/hold/expense accountability test (needs `npm run dev`) |
-| `node scripts/e2e-operations.mjs`  | Assignments, fuel, documents, inspections, cron (needs `npm run dev`) |
-| `node scripts/create-admin.mjs`    | Create/update an admin user (bootstrap or recovery)        |
+| Script                                | Purpose                                                               |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `node scripts/verify-firebase.mjs`    | Checks Admin SDK credentials against live Auth + Firestore            |
+| `node scripts/e2e-auth.mjs`           | End-to-end auth flow test (needs `npm run dev`)                       |
+| `node scripts/e2e-fleet.mjs`          | End-to-end fleet-domain test (needs `npm run dev`)                    |
+| `node scripts/e2e-accountability.mjs` | Ledger/hold/expense accountability test (needs `npm run dev`)         |
+| `node scripts/e2e-operations.mjs`     | Assignments, fuel, documents, inspections, cron (needs `npm run dev`) |
+| `node scripts/create-admin.mjs`       | Create/update an admin user (bootstrap or recovery)                   |
 
 The Playwright suite (`npm run test:e2e`) is hermetic by default. The
 `e2e/responsive.spec.ts` spec additionally checks the signed-in app for
@@ -109,19 +109,19 @@ docs/                  Requirements & design references (see below)
 
 ## Delivery phases
 
-| Phase | Scope                                             | Status  |
-| ----- | ------------------------------------------------- | ------- |
-| 0     | Scaffold, design tokens, tooling, CI              | Done    |
-| 1     | Auth core (invites, sessions, sign-in/out)        | Done    |
-| 2     | RBAC, permission guards, audit logging            | Done    |
-| 3     | Fleet domain (vehicles, reports, work orders)     | Done    |
-| 4     | Dashboard & app shell                             | Done    |
-| A     | Odometer ledger + preventive maintenance engine   | Done    |
-| B     | Repair workflow (pipeline + completion evidence)  | Done    |
-| C     | Issue↔work-order ecosystem (report→release)       | Done    |
-| D     | Assignments, trip distance, inspections           | Done    |
-| E–F   | Fuel, documents, notifications + Cron reminders   | Done    |
-| 5     | Scheduled maintenance reminders (Vercel Cron)     | Done    |
-| G     | Incidents (restricted reports + review)           | Done    |
-| G     | Hardened indexes, responsive pass                 | Open    |
-| 6     | Hardening (CSP, rate limiting, observability)     | Pending |
+| Phase | Scope                                            | Status  |
+| ----- | ------------------------------------------------ | ------- |
+| 0     | Scaffold, design tokens, tooling, CI             | Done    |
+| 1     | Auth core (invites, sessions, sign-in/out)       | Done    |
+| 2     | RBAC, permission guards, audit logging           | Done    |
+| 3     | Fleet domain (vehicles, reports, work orders)    | Done    |
+| 4     | Dashboard & app shell                            | Done    |
+| A     | Odometer ledger + preventive maintenance engine  | Done    |
+| B     | Repair workflow (pipeline + completion evidence) | Done    |
+| C     | Issue↔work-order ecosystem (report→release)      | Done    |
+| D     | Assignments, trip distance, inspections          | Done    |
+| E–F   | Fuel, documents, notifications + Cron reminders  | Done    |
+| 5     | Scheduled maintenance reminders (Vercel Cron)    | Done    |
+| G     | Incidents (restricted reports + review)          | Done    |
+| G     | Hardened indexes, responsive pass                | Open    |
+| 6     | Hardening (CSP, rate limiting, observability)    | Pending |

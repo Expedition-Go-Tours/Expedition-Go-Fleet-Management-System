@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { cn } from "@/lib/cn";
@@ -38,14 +38,16 @@ export function DataTable({
   footer?: ReactNode;
   caption?: string;
 }) {
+  // `empty` is a JSX element, so it is always truthy — we must decide from the
+  // actual row count whether to render the body or the empty state. Relying on
+  // `!empty` previously hid every row on pages that always pass an `empty` node.
+  const hasRows = Children.count(children) > 0;
   return (
     <div className={cn("w-full overflow-x-auto", className)}>
       <table className="w-full border-collapse text-left">
-        {caption && (
-          <caption className="sr-only">{caption}</caption>
-        )}
+        {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
-          <tr className="border-b border-hairline">
+          <tr className="border-hairline border-b">
             {columns.map((column) => {
               const sortable = Boolean(column.onSort && column.sortKey);
               return (
@@ -53,7 +55,7 @@ export function DataTable({
                   key={column.key}
                   scope="col"
                   className={cn(
-                    "font-ui bg-subtle whitespace-nowrap px-4 py-2.5 text-[length:var(--fs-data-xs)] font-semibold uppercase tracking-[var(--tracking-ui)] text-muted",
+                    "font-ui bg-subtle text-muted px-4 py-2.5 text-[length:var(--fs-data-xs)] font-semibold tracking-[var(--tracking-ui)] whitespace-nowrap uppercase",
                     column.className,
                   )}
                 >
@@ -69,7 +71,7 @@ export function DataTable({
                       ) : column.sortDir === "desc" ? (
                         <ArrowDown aria-hidden="true" className="h-3 w-3" />
                       ) : (
-                        <ArrowUpDown aria-hidden="true" className="h-3 w-3 text-faint" />
+                        <ArrowUpDown aria-hidden="true" className="text-faint h-3 w-3" />
                       )}
                     </button>
                   ) : (
@@ -80,12 +82,10 @@ export function DataTable({
             })}
           </tr>
         </thead>
-        {!empty && <tbody className="divide-y divide-hairline">{children}</tbody>}
+        {hasRows && <tbody className="divide-hairline divide-y">{children}</tbody>}
       </table>
-      {empty && <div className="border-t-0">{empty}</div>}
-      {footer && (
-        <div className="border-t border-hairline bg-subtle px-4 py-2.5">{footer}</div>
-      )}
+      {!hasRows && empty && <div className="border-t-0">{empty}</div>}
+      {footer && <div className="border-hairline bg-subtle border-t px-4 py-2.5">{footer}</div>}
     </div>
   );
 }
@@ -118,19 +118,13 @@ export function CellPrimary({
   title?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 max-w-[16rem] items-center gap-2", className)} title={title}>
-      <span className="text-data truncate font-medium text-ink">{children}</span>
+    <div className={cn("flex max-w-[16rem] min-w-0 items-center gap-2", className)} title={title}>
+      <span className="text-data text-ink truncate font-medium">{children}</span>
     </div>
   );
 }
 
 /** Secondary/meta cell content (muted text). */
-export function CellMeta({
-  children,
-  className,
-}: {
-  children?: ReactNode;
-  className?: string;
-}) {
+export function CellMeta({ children, className }: { children?: ReactNode; className?: string }) {
   return <span className={cn("text-data-xs text-muted", className)}>{children}</span>;
 }

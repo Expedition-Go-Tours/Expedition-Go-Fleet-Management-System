@@ -9,13 +9,7 @@ import type { ActionMap } from "@/lib/domain/lifecycle";
  * reports are readable by the reporter; incident:read:all reads everything.
  */
 
-export const INCIDENT_TYPES = [
-  "BREAKDOWN",
-  "ACCIDENT",
-  "PASSENGER",
-  "SECURITY",
-  "OTHER",
-] as const;
+export const INCIDENT_TYPES = ["BREAKDOWN", "ACCIDENT", "PASSENGER", "SECURITY", "OTHER"] as const;
 export type IncidentType = (typeof INCIDENT_TYPES)[number];
 
 export const INCIDENT_STATUSES = ["OPEN", "UNDER_REVIEW", "RESOLVED"] as const;

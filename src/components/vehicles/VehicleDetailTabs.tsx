@@ -140,10 +140,10 @@ function Empty({ label }: { label: string }) {
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 px-5 py-2.5">
-      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
         {label}
       </span>
-      <span className="text-data text-right text-ink">{value}</span>
+      <span className="text-data text-ink text-right">{value}</span>
     </div>
   );
 }
@@ -160,7 +160,7 @@ function KeyValueList({ items }: { items: [string, React.ReactNode][] }) {
 
 function PanelHeader({ children }: { children: React.ReactNode }) {
   return (
-    <p className="border-hairline bg-subtle font-ui border-b px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[var(--tracking-ui)] text-muted">
+    <p className="border-hairline bg-subtle font-ui text-muted border-b px-5 py-2.5 text-[10px] font-semibold tracking-[var(--tracking-ui)] uppercase">
       {children}
     </p>
   );
@@ -178,13 +178,19 @@ export function VehicleDetailTabs({ data }: { data: VehicleDetailTabData }) {
       label: "Odometer",
       panel: <OdometerPanel readings={data.readings} total={data.counts.readings} />,
     },
-    { id: "maintenance", label: "Maintenance", panel: <MaintenancePanel schedules={data.schedules} /> },
+    {
+      id: "maintenance",
+      label: "Maintenance",
+      panel: <MaintenancePanel schedules={data.schedules} />,
+    },
     { id: "service", label: "Service", panel: <ServicePanel records={data.serviceRecords} /> },
     {
       id: "issues",
       label: "Issues",
       badge: <CountBadge count={data.counts.issues} />,
-      panel: <IssuesPanel issues={data.issues} total={data.counts.issues} vehicleId={data.vehicleId} />,
+      panel: (
+        <IssuesPanel issues={data.issues} total={data.counts.issues} vehicleId={data.vehicleId} />
+      ),
     },
     {
       id: "work-orders",
@@ -203,7 +209,17 @@ export function VehicleDetailTabs({ data }: { data: VehicleDetailTabData }) {
       label: "Assignments",
       panel: <AssignmentsPanel assignments={data.assignments} total={data.counts.assignments} />,
     },
-    { id: "fuel", label: "Fuel", panel: <FuelPanel entries={data.fuelEntries} total={data.counts.fuelEntries} vehicleId={data.vehicleId} /> },
+    {
+      id: "fuel",
+      label: "Fuel",
+      panel: (
+        <FuelPanel
+          entries={data.fuelEntries}
+          total={data.counts.fuelEntries}
+          vehicleId={data.vehicleId}
+        />
+      ),
+    },
     {
       id: "documents",
       label: "Documents",
@@ -233,12 +249,12 @@ function CappedNote({
 }) {
   if (total <= shown) return null;
   return (
-    <p className="border-hairline text-data-xs border-t px-5 py-2.5 text-muted">
+    <p className="border-hairline text-data-xs text-muted border-t px-5 py-2.5">
       Showing the {shown} most recent of {total.toLocaleString()} record(s)
       {href && label ? (
         <>
           {" — "}
-          <Link href={href} className="font-medium text-link hover:underline">
+          <Link href={href} className="text-link font-medium hover:underline">
             {label}
           </Link>
           .
@@ -253,7 +269,7 @@ function CappedNote({
 function CountBadge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="bg-subtle border-hairline text-data-xs rounded-full border px-1.5 text-muted">
+    <span className="bg-subtle border-hairline text-data-xs text-muted rounded-full border px-1.5">
       {count}
     </span>
   );
@@ -277,26 +293,26 @@ function OverviewPanel({ data }: { data: VehicleDetailTabData }) {
       <div className="flex flex-col gap-3">
         {data.overview.safetyHoldReason ? (
           <div className="border-error/25 bg-error/10 rounded-md border p-4">
-            <p className="font-ui text-error text-[10px] uppercase tracking-[var(--tracking-ui)]">
+            <p className="font-ui text-error text-[10px] tracking-[var(--tracking-ui)] uppercase">
               Safety hold reason
             </p>
-            <p className="text-body-sm mt-1 text-ink">{data.overview.safetyHoldReason}</p>
+            <p className="text-body-sm text-ink mt-1">{data.overview.safetyHoldReason}</p>
           </div>
         ) : (
           <div className="border-hairline rounded-md border p-4">
-            <p className="font-ui text-data-xs text-muted uppercase tracking-[var(--tracking-ui)]">
+            <p className="font-ui text-data-xs text-muted tracking-[var(--tracking-ui)] uppercase">
               No safety hold
             </p>
             <p className="text-body-xs text-muted mt-1">Vehicle is not restricted.</p>
           </div>
         )}
         {data.overview.odometerAt === "—" && (
-          <p className="border-warning/25 bg-warning/10 text-body-xs rounded-md border p-3 text-warning">
+          <p className="border-warning/25 bg-warning/10 text-body-xs text-warning rounded-md border p-3">
             No odometer reading recorded yet — record a baseline on the Odometer tab.
           </p>
         )}
         {/* Record counts — quick profile at a glance (accurate totals, not page slices). */}
-        <div className="border-hairline grid grid-cols-3 divide-x divide-hairline rounded-md border">
+        <div className="border-hairline divide-hairline grid grid-cols-3 divide-x rounded-md border">
           <ProfileStat
             label="Open issues"
             value={data.counts.openIssues}
@@ -320,9 +336,16 @@ function OverviewPanel({ data }: { data: VehicleDetailTabData }) {
 
 function ProfileStat({ label, value, href }: { label: string; value: number; href: string }) {
   return (
-    <Link href={href} className="hover:bg-subtle flex flex-col items-center gap-0.5 px-2 py-3 transition-colors">
-      <span className="font-heading text-heading-md font-semibold tabular-nums text-ink">{value}</span>
-      <span className="font-ui text-[10px] uppercase tracking-[var(--tracking-ui)] text-muted">{label}</span>
+    <Link
+      href={href}
+      className="hover:bg-subtle flex flex-col items-center gap-0.5 px-2 py-3 transition-colors"
+    >
+      <span className="font-heading text-heading-md text-ink font-semibold tabular-nums">
+        {value}
+      </span>
+      <span className="font-ui text-muted text-[10px] tracking-[var(--tracking-ui)] uppercase">
+        {label}
+      </span>
     </Link>
   );
 }
@@ -337,16 +360,16 @@ function OdometerPanel({ readings, total }: { readings: TabReadingData[]; total:
           {readings.map((r) => (
             <li key={r.id} className="px-5 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-data font-medium text-ink">{r.km.toLocaleString()} km</span>
+                <span className="text-data text-ink font-medium">{r.km.toLocaleString()} km</span>
                 {r.deltaKm !== null && (
                   <span className="text-data-xs text-muted">+{r.deltaKm.toLocaleString()} km</span>
                 )}
                 <StatusBadge status={r.status} />
-                <span className="font-ui text-data-xs ml-auto uppercase tracking-[var(--tracking-ui)] text-muted">
+                <span className="font-ui text-data-xs text-muted ml-auto tracking-[var(--tracking-ui)] uppercase">
                   {r.source.replace(/_/g, " ")}
                 </span>
               </div>
-              <div className="text-data-xs mt-1 text-muted">
+              <div className="text-data-xs text-muted mt-1">
                 {r.effectiveAt}
                 {r.note ? ` — ${r.note}` : ""}
               </div>
@@ -369,29 +392,35 @@ function MaintenancePanel({ schedules }: { schedules: TabScheduleData[] }) {
           {schedules.map((s) => (
             <li key={s.id} className="px-5 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-data font-medium text-ink">{s.taskName}</span>
+                <span className="text-data text-ink font-medium">{s.taskName}</span>
                 <StatusBadge status={s.status} />
-                {!s.enabled && (
-                  <span className="text-data-xs text-muted">· disabled</span>
-                )}
+                {!s.enabled && <span className="text-data-xs text-muted">· disabled</span>}
               </div>
-              <div className="text-data-xs mt-1 text-muted">
+              <div className="text-data-xs text-muted mt-1">
                 {intervalLabel(s.intervalKm, s.intervalDays)} · last service{" "}
                 {s.lastServiceKm !== null ? `${s.lastServiceKm.toLocaleString()} km` : "—"}
                 {s.lastServiceDate !== "—" ? ` on ${s.lastServiceDate}` : ""}
               </div>
-              <div className="text-data-xs mt-0.5 text-ink">
+              <div className="text-data-xs text-ink mt-0.5">
                 {s.status === "NOT_CONFIGURED" ? (
-                  <span className="text-muted">Not due yet — needs a service baseline to evaluate.</span>
+                  <span className="text-muted">
+                    Not due yet — needs a service baseline to evaluate.
+                  </span>
                 ) : (
                   <>
                     Next due {s.nextDueKm !== "—" ? `${s.nextDueKm}` : ""}
                     {s.nextDueDate !== "—" ? ` or ${s.nextDueDate}` : ""}
                     {s.remainingKm !== null && (
-                      <span className={remainingTone(s.status)}> · {s.remainingKm.toLocaleString()} km remaining</span>
+                      <span className={remainingTone(s.status)}>
+                        {" "}
+                        · {s.remainingKm.toLocaleString()} km remaining
+                      </span>
                     )}
                     {s.remainingDays !== null && (
-                      <span className={remainingTone(s.status)}> · {s.remainingDays} day{s.remainingDays === 1 ? "" : "s"} remaining</span>
+                      <span className={remainingTone(s.status)}>
+                        {" "}
+                        · {s.remainingDays} day{s.remainingDays === 1 ? "" : "s"} remaining
+                      </span>
                     )}
                   </>
                 )}
@@ -429,15 +458,17 @@ function ServicePanel({ records }: { records: TabServiceRecordData[] }) {
             const inner = (
               <>
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-data font-medium text-ink">{s.taskName}</span>
-                  <span className="text-data-xs ml-auto text-muted">
+                  <span className="text-data text-ink font-medium">{s.taskName}</span>
+                  <span className="text-data-xs text-muted ml-auto">
                     {s.completedAt}
                     {s.odometerKm !== null ? ` · ${s.odometerKm.toLocaleString()} km` : ""}
                   </span>
                 </div>
-                {s.workPerformed && <p className="text-data-xs mt-1 text-muted">{s.workPerformed}</p>}
+                {s.workPerformed && (
+                  <p className="text-data-xs text-muted mt-1">{s.workPerformed}</p>
+                )}
                 {s.workOrderId && (
-                  <p className="text-data-xs mt-1 font-medium text-link">
+                  <p className="text-data-xs text-link mt-1 font-medium">
                     <Link href={`/work-orders/${s.workOrderId}`} className="hover:underline">
                       View linked work order →
                     </Link>
@@ -475,13 +506,16 @@ function IssuesPanel({
         <ul className="divide-hairline divide-y">
           {issues.map((issue) => (
             <li key={issue.id}>
-              <Link href={`/reports/${issue.id}`} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-subtle">
+              <Link
+                href={`/reports/${issue.id}`}
+                className="hover:bg-subtle flex items-center justify-between gap-3 px-5 py-3 transition-colors"
+              >
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-data flex items-center gap-2 font-medium text-ink">
-                    <FileWarning aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-faint" />
+                  <span className="text-data text-ink flex items-center gap-2 font-medium">
+                    <FileWarning aria-hidden="true" className="text-faint h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{issue.title}</span>
                   </span>
-                  <span className="text-data-xs mt-0.5 pl-5.5 text-muted">
+                  <span className="text-data-xs text-muted mt-0.5 pl-5.5">
                     {issue.number ? `${issue.number} · ` : ""}
                     {formatStatusLabel(issue.severity)} · {issue.createdAt}
                   </span>
@@ -520,13 +554,16 @@ function WorkOrdersPanel({
         <ul className="divide-hairline divide-y">
           {workOrders.map((wo) => (
             <li key={wo.id}>
-              <Link href={`/work-orders/${wo.id}`} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-subtle">
+              <Link
+                href={`/work-orders/${wo.id}`}
+                className="hover:bg-subtle flex items-center justify-between gap-3 px-5 py-3 transition-colors"
+              >
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-data flex items-center gap-2 font-medium text-ink">
-                    <Wrench aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-faint" />
+                  <span className="text-data text-ink flex items-center gap-2 font-medium">
+                    <Wrench aria-hidden="true" className="text-faint h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{wo.title}</span>
                   </span>
-                  <span className="text-data-xs mt-0.5 pl-5.5 text-muted">
+                  <span className="text-data-xs text-muted mt-0.5 pl-5.5">
                     {wo.number ? `${wo.number} · ` : ""}
                     {formatStatusLabel(wo.priority)} · {wo.createdAt}
                   </span>
@@ -563,13 +600,13 @@ function AssignmentsPanel({
           {assignments.map((a) => (
             <li key={a.id} className="px-5 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-data font-medium text-ink">{a.driverName}</span>
+                <span className="text-data text-ink font-medium">{a.driverName}</span>
                 <StatusBadge status={a.status} />
-                <span className="font-ui text-data-xs ml-auto uppercase tracking-[var(--tracking-ui)] text-muted">
+                <span className="font-ui text-data-xs text-muted ml-auto tracking-[var(--tracking-ui)] uppercase">
                   {a.purpose.replace(/_/g, " ")}
                 </span>
               </div>
-              <div className="text-data-xs mt-1 text-muted">
+              <div className="text-data-xs text-muted mt-1">
                 start {a.startKm !== null ? `${a.startKm.toLocaleString()} km` : "—"}
                 {" · "}end {a.endKm !== null ? `${a.endKm.toLocaleString()} km` : "—"}
                 {a.distanceKm !== null ? ` · trip ${a.distanceKm.toLocaleString()} km` : ""}
@@ -603,15 +640,19 @@ function FuelPanel({
           {entries.map((f) => (
             <li key={f.id} className="flex items-center justify-between gap-3 px-5 py-3">
               <div className="flex min-w-0 flex-col">
-                <span className="text-data font-medium text-ink">
+                <span className="text-data text-ink font-medium">
                   {f.litres.toLocaleString()} L
-                  {f.fullTank ? <span className="text-data-xs ml-1.5 text-muted">(full tank)</span> : null}
+                  {f.fullTank ? (
+                    <span className="text-data-xs text-muted ml-1.5">(full tank)</span>
+                  ) : null}
                 </span>
                 <span className="text-data-xs text-muted">
                   {f.transactedOn} · {f.odometerKm.toLocaleString()} km
                 </span>
               </div>
-              <span className="text-data tabular-nums text-ink">{formatMoney(f.amountMinor, f.currency)}</span>
+              <span className="text-data text-ink tabular-nums">
+                {formatMoney(f.amountMinor, f.currency)}
+              </span>
             </li>
           ))}
         </ul>
@@ -635,19 +676,25 @@ function DocumentsPanel({ documents }: { documents: TabDocumentData[] }) {
         <ul className="divide-hairline divide-y">
           {documents.map((d) => {
             const label =
-              d.state === "MISSING" && d.hasFile ? "Awaiting replacement" : formatStatusLabel(d.state);
+              d.state === "MISSING" && d.hasFile
+                ? "Awaiting replacement"
+                : formatStatusLabel(d.state);
             return (
               <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3">
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-data flex items-center gap-2 font-medium capitalize text-ink">
+                  <span className="text-data text-ink flex items-center gap-2 font-medium capitalize">
                     {d.category.toLowerCase()}
                     {d.mandatory ? (
                       <span className="font-ui text-data-xs text-muted uppercase"> · required</span>
                     ) : null}
                   </span>
-                  <span className="text-data-xs mt-0.5 text-muted">
+                  <span className="text-data-xs text-muted mt-0.5">
                     {d.expiryDate !== "—" ? `expires ${d.expiryDate}` : "no expiry"}
-                    {d.hasFile ? "" : d.expiryDate !== "—" ? " · no file uploaded" : " · no file uploaded"}
+                    {d.hasFile
+                      ? ""
+                      : d.expiryDate !== "—"
+                        ? " · no file uploaded"
+                        : " · no file uploaded"}
                     {d.notes ? ` · ${d.notes}` : ""}
                   </span>
                 </div>

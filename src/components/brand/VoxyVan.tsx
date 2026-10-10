@@ -73,11 +73,25 @@ export function VoxyVan({ className }: { className?: string }) {
           <stop offset="0.5" stopColor="#454a52" />
           <stop offset="1" stopColor="#2c3138" />
         </linearGradient>
-        <linearGradient id={glassId} x1="150" y1="58" x2="360" y2="112" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id={glassId}
+          x1="150"
+          y1="58"
+          x2="360"
+          y2="112"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop stopColor="#6f7b8a" />
           <stop offset="1" stopColor="#98a4b3" />
         </linearGradient>
-        <linearGradient id={underlineId} x1="130" y1="0" x2="390" y2="0" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id={underlineId}
+          x1="130"
+          y1="0"
+          x2="390"
+          y2="0"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop stopColor="#f15a24" stopOpacity="0" />
           <stop offset="0.5" stopColor="#f15a24" stopOpacity="0.85" />
           <stop offset="1" stopColor="#f15a24" stopOpacity="0" />
@@ -99,7 +113,13 @@ export function VoxyVan({ className }: { className?: string }) {
       </g>
 
       {/* body with wheel-arch cut-outs */}
-      <path d={BODY_PATH} fill={`url(#${bodyId})`} stroke="#565c64" strokeWidth="2" strokeLinejoin="round" />
+      <path
+        d={BODY_PATH}
+        fill={`url(#${bodyId})`}
+        stroke="#565c64"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
 
       {/* glasshouse */}
       <path d={GLASS_PATH} fill={`url(#${glassId})`} />
@@ -112,7 +132,13 @@ export function VoxyVan({ className }: { className?: string }) {
       </g>
 
       {/* roof rail, kept inside the roof line */}
-      <path d="M118 57 L298 53" stroke="#6a7078" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+      <path
+        d="M118 57 L298 53"
+        stroke="#6a7078"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
 
       {/* door seams + sliding rail */}
       <g stroke="#0b0e12" strokeWidth="2" opacity="0.45">
@@ -133,7 +159,12 @@ export function VoxyVan({ className }: { className?: string }) {
       <path d="M85 100 L91 99 L91 144 L85 145 Z" fill="#f15a24" />
 
       {/* brand underline, centred under the van */}
-      <path d="M130 206 L390 206" stroke={`url(#${underlineId})`} strokeWidth="3" strokeLinecap="round" />
+      <path
+        d="M130 206 L390 206"
+        stroke={`url(#${underlineId})`}
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

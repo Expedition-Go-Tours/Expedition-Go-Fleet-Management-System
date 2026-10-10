@@ -70,11 +70,11 @@ export function NotificationBell({
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="hover:bg-subtle relative flex h-9 w-9 items-center justify-center rounded-md text-ink transition-colors"
+        className="hover:bg-subtle text-ink relative flex h-9 w-9 items-center justify-center rounded-md transition-colors"
       >
         <Bell aria-hidden="true" className="h-[18px] w-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+          <span className="bg-accent absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -84,17 +84,21 @@ export function NotificationBell({
         <div
           role="menu"
           aria-label="Notifications"
-          className="border-hairline bg-surface absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-lg border shadow-[var(--shadow-lg)]"
+          className="border-hairline bg-surface absolute top-11 right-0 z-40 w-80 overflow-hidden rounded-lg border shadow-[var(--shadow-lg)]"
         >
-          <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
-            <p className="font-heading text-card-title font-semibold text-ink">Notifications</p>
-            <Link href="/notifications" onClick={() => setOpen(false)} className="text-body-xs font-medium text-link hover:underline">
+          <div className="border-hairline flex items-center justify-between border-b px-4 py-2.5">
+            <p className="font-heading text-card-title text-ink font-semibold">Notifications</p>
+            <Link
+              href="/notifications"
+              onClick={() => setOpen(false)}
+              className="text-body-xs text-link font-medium hover:underline"
+            >
               View all
             </Link>
           </div>
           <div className="max-h-96 overflow-y-auto">
             {notifications.length === 0 && (
-              <p className="px-4 py-6 text-center text-[var(--fs-body-xs)] text-muted">
+              <p className="text-muted px-4 py-6 text-center text-[var(--fs-body-xs)]">
                 You&apos;re all caught up.
               </p>
             )}
@@ -102,7 +106,7 @@ export function NotificationBell({
               <div
                 key={notification.id}
                 className={cn(
-                  "flex items-start gap-3 border-b border-hairline px-4 py-3 last:border-b-0",
+                  "border-hairline flex items-start gap-3 border-b px-4 py-3 last:border-b-0",
                   !notification.read && "bg-accent/5",
                 )}
               >
@@ -111,16 +115,18 @@ export function NotificationBell({
                     href={notification.linkUrl || "/notifications"}
                     onClick={() => setOpen(false)}
                     className={cn(
-                      "text-data block truncate hover:text-ink",
-                      notification.read ? "font-medium text-ink" : "font-semibold text-ink",
+                      "text-data hover:text-ink block truncate",
+                      notification.read ? "text-ink font-medium" : "text-ink font-semibold",
                     )}
                   >
                     {notification.title}
                   </Link>
                   {notification.body && (
-                    <p className="text-data-xs mt-0.5 line-clamp-2 text-muted">{notification.body}</p>
+                    <p className="text-data-xs text-muted mt-0.5 line-clamp-2">
+                      {notification.body}
+                    </p>
                   )}
-                  <p className="font-ui text-data-xs mt-1 uppercase tracking-[var(--tracking-ui)] text-faint">
+                  <p className="font-ui text-data-xs text-faint mt-1 tracking-[var(--tracking-ui)] uppercase">
                     {notification.type.replace(/_/g, " ")} · {notification.createdAt}
                   </p>
                 </div>
@@ -130,7 +136,7 @@ export function NotificationBell({
                     aria-label={`Mark "${notification.title}" as read`}
                     disabled={busyId === notification.id}
                     onClick={() => markRead(notification.id)}
-                    className="hover:bg-subtle mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-hairline text-faint transition-colors hover:text-ink"
+                    className="hover:bg-subtle border-hairline text-faint hover:text-ink mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors"
                   >
                     <Check aria-hidden="true" className="h-3.5 w-3.5" />
                   </button>

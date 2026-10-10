@@ -11,10 +11,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
-import {
-  parseAvailabilityFilter,
-  vehicleMatchesAvailability,
-} from "@/lib/dashboard/fleet-summary";
+import { parseAvailabilityFilter, vehicleMatchesAvailability } from "@/lib/dashboard/fleet-summary";
 import type { Vehicle } from "@/lib/domain/vehicle";
 import { VEHICLE_STATUSES, VEHICLE_TYPES } from "@/lib/domain/vehicle";
 import { formatKm } from "@/lib/format";
@@ -27,8 +24,8 @@ export const metadata = { title: "Vehicles" };
 const PAGE_SIZE = 20;
 const BASE_PATH = "/vehicles";
 
-type SortKey = "createdAt" | "regNumber" | "odometerKm" | "year";
-const SORT_KEYS: SortKey[] = ["createdAt", "regNumber", "odometerKm", "year"];
+type SortKey = "createdAt" | "regNumber" | "odometerKm" | "year" | "status";
+const SORT_KEYS: SortKey[] = ["createdAt", "regNumber", "odometerKm", "year", "status"];
 
 interface Params {
   q?: string;
@@ -50,7 +47,9 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
   const status = (params.status ?? "").toUpperCase();
   const type = (params.type ?? "").toUpperCase();
   const availability = parseAvailabilityFilter(params.availability);
-  const sort: SortKey = SORT_KEYS.includes(params.sort as SortKey) ? (params.sort as SortKey) : "createdAt";
+  const sort: SortKey = SORT_KEYS.includes(params.sort as SortKey)
+    ? (params.sort as SortKey)
+    : "createdAt";
   const dir = params.dir === "asc" ? "asc" : "desc";
   const pageRaw = Number(params.page);
   const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
@@ -62,8 +61,12 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
   const [vehicles, assignments, criticalOpen, criticalTriaged] = await Promise.all([
     listVehicles(),
     canSeeAssignments ? listAssignments({ status: "ACTIVE", limit: 500 }) : Promise.resolve([]),
-    canSeeAllIssues ? listIssues({ safetyCritical: true, status: "OPEN", limit: 500 }) : Promise.resolve([]),
-    canSeeAllIssues ? listIssues({ safetyCritical: true, status: "TRIAGED", limit: 500 }) : Promise.resolve([]),
+    canSeeAllIssues
+      ? listIssues({ safetyCritical: true, status: "OPEN", limit: 500 })
+      : Promise.resolve([]),
+    canSeeAllIssues
+      ? listIssues({ safetyCritical: true, status: "TRIAGED", limit: 500 })
+      : Promise.resolve([]),
   ]);
   const activeAssignmentVehicleIds = new Set(assignments.map((a) => a.vehicleId));
   const criticalIssueVehicleIds = new Set(
@@ -71,11 +74,18 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
   );
 
   const filtered = vehicles
-    .filter((v) => (status && VEHICLE_STATUSES.includes(status as never) ? v.status === status : true))
+    .filter((v) =>
+      status && VEHICLE_STATUSES.includes(status as never) ? v.status === status : true,
+    )
     .filter((v) => (type && VEHICLE_TYPES.includes(type as never) ? v.type === type : true))
     .filter((v) =>
       availability
-        ? vehicleMatchesAvailability(v, availability, activeAssignmentVehicleIds, criticalIssueVehicleIds)
+        ? vehicleMatchesAvailability(
+            v,
+            availability,
+            activeAssignmentVehicleIds,
+            criticalIssueVehicleIds,
+          )
         : true,
     )
     .filter((v) =>
@@ -106,8 +116,11 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
     { key: "vehicle", header: "Vehicle" },
     { key: "type", header: "Type" },
     { key: "year", header: <TableSort label="Year" sortKey="year" basePath={BASE_PATH} /> },
-    { key: "odometer", header: <TableSort label="Odometer" sortKey="odometerKm" basePath={BASE_PATH} /> },
-    { key: "status", header: <TableSort label="Status" sortKey="regNumber" basePath={BASE_PATH} /> },
+    {
+      key: "odometer",
+      header: <TableSort label="Odometer" sortKey="odometerKm" basePath={BASE_PATH} />,
+    },
+    { key: "status", header: <TableSort label="Status" sortKey="status" basePath={BASE_PATH} /> },
     { key: "chevron", header: "", className: "w-10" },
   ];
 
@@ -144,11 +157,21 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                   Showing {pageStart + 1}–{pageStart + rows.length} of {filtered.length}
                 </p>
                 <div className="flex items-center gap-1">
-                  <PagerLink href={pageHref(safePage - 1)} disabled={safePage <= 1} label="Previous page" icon={<ChevronLeft aria-hidden="true" className="h-4 w-4" />} />
-                  <span className="text-data-xs px-2 text-muted">
+                  <PagerLink
+                    href={pageHref(safePage - 1)}
+                    disabled={safePage <= 1}
+                    label="Previous page"
+                    icon={<ChevronLeft aria-hidden="true" className="h-4 w-4" />}
+                  />
+                  <span className="text-data-xs text-muted px-2">
                     Page {safePage} of {totalPages}
                   </span>
-                  <PagerLink href={pageHref(safePage + 1)} disabled={safePage >= totalPages} label="Next page" icon={<ChevronRight aria-hidden="true" className="h-4 w-4" />} />
+                  <PagerLink
+                    href={pageHref(safePage + 1)}
+                    disabled={safePage >= totalPages}
+                    label="Next page"
+                    icon={<ChevronRight aria-hidden="true" className="h-4 w-4" />}
+                  />
                 </div>
               </div>
             }
@@ -158,7 +181,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                 <Td>
                   <Link href={`/vehicles/${vehicle.id}`} className="block outline-none">
                     <span className="flex flex-col">
-                      <span className="text-data font-semibold text-ink">{vehicle.regNumber}</span>
+                      <span className="text-data text-ink font-semibold">{vehicle.regNumber}</span>
                       <span className="text-data-xs text-muted">
                         {vehicle.make} {vehicle.model}
                       </span>
@@ -172,7 +195,9 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                   <CellMeta>{vehicle.year}</CellMeta>
                 </Td>
                 <Td>
-                  <span className="text-data tabular-nums text-ink">{formatKm(vehicle.odometerKm)}</span>
+                  <span className="text-data text-ink tabular-nums">
+                    {formatKm(vehicle.odometerKm)}
+                  </span>
                   {vehicle.odometerSource && (
                     <CellMeta className="block">
                       via {vehicle.odometerSource.replace(/_/g, " ").toLowerCase()}
@@ -214,6 +239,13 @@ function compareVehicles(a: Vehicle, b: Vehicle, sort: SortKey, dir: "asc" | "de
       return (a.odometerKm - b.odometerKm) * factor;
     case "year":
       return (a.year - b.year) * factor;
+    case "status": {
+      // Sort by the domain's lifecycle order (ACTIVE → IN_SERVICE → SAFETY_HOLD
+      // → ARCHIVED) rather than alphabetically, so the indicator matches the
+      // badge the user sees.
+      const rank = (s: Vehicle["status"]) => VEHICLE_STATUSES.indexOf(s);
+      return (rank(a.status) - rank(b.status)) * factor;
+    }
     default:
       return (a.createdAt.getTime() - b.createdAt.getTime()) * factor;
   }
@@ -232,7 +264,10 @@ function PagerLink({
 }) {
   if (disabled) {
     return (
-      <span className="text-faint flex h-8 w-8 items-center justify-center rounded-md" aria-disabled="true">
+      <span
+        className="text-faint flex h-8 w-8 items-center justify-center rounded-md"
+        aria-disabled="true"
+      >
         {icon}
       </span>
     );
@@ -241,7 +276,7 @@ function PagerLink({
     <Link
       href={href}
       aria-label={label}
-      className="hover:bg-subtle hover:text-ink text-muted flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-surface transition-colors"
+      className="hover:bg-subtle hover:text-ink text-muted border-hairline bg-surface flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
     >
       {icon}
     </Link>
@@ -252,7 +287,7 @@ function ClearFiltersLink() {
   return (
     <Link
       href="/vehicles"
-      className="hover:bg-subtle inline-flex h-9 items-center rounded-md border border-hairline bg-surface px-3 text-sm font-medium text-ink"
+      className="hover:bg-subtle border-hairline bg-surface text-ink inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium"
     >
       Clear filters
     </Link>

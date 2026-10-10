@@ -25,9 +25,7 @@ function toIncident(id: string, data: DocumentData): IncidentReport {
     description: String(data.description ?? ""),
     severity: String(data.severity ?? "MEDIUM"),
     reportedByUserId: String(data.reportedByUserId ?? ""),
-    status: KNOWN_STATUSES.includes(String(data.status))
-      ? (data.status as IncidentStatus)
-      : "OPEN",
+    status: KNOWN_STATUSES.includes(String(data.status)) ? (data.status as IncidentStatus) : "OPEN",
     resolution: data.resolution ? String(data.resolution) : undefined,
     resolvedByUserId: data.resolvedByUserId ? String(data.resolvedByUserId) : undefined,
     resolvedAt: toDate(data.resolvedAt),

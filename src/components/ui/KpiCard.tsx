@@ -38,12 +38,13 @@ export function KpiCard({
     <div
       className={cn(
         "card-surface flex flex-col gap-2 p-4 transition-shadow hover:shadow-[0_4px_12px_-2px_rgba(16,24,40,0.1)]",
-        href && "group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+        href &&
+          "group focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2",
         className,
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-body-xs font-medium text-muted">{label}</p>
+        <p className="text-body-xs text-muted font-medium">{label}</p>
         {icon && <span className="text-muted">{icon}</span>}
       </div>
       <p className={cn("font-heading text-heading-lg font-semibold tabular-nums", valueTone)}>
@@ -51,7 +52,7 @@ export function KpiCard({
       </p>
       {context && <p className="text-body-xs text-muted">{context}</p>}
       {href && (
-        <span className="text-body-xs mt-auto inline-flex items-center gap-1 font-medium text-link">
+        <span className="text-body-xs text-link mt-auto inline-flex items-center gap-1 font-medium">
           Open list
           <ArrowUpRight
             aria-hidden="true"

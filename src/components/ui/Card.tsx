@@ -30,18 +30,13 @@ export function Card({
   bodyClassName?: string;
 }) {
   return (
-    <section
-      className={cn(
-        "card-surface overflow-hidden",
-        className,
-      )}
-    >
+    <section className={cn("card-surface overflow-hidden", className)}>
       {(title || description || action) && (
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3.5">
+        <header className="border-hairline flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
           <div className="flex min-w-0 flex-col gap-0.5">
             {title && (
-              <h2 className="text-card-title font-heading flex items-center gap-2 font-semibold text-ink [text-wrap:balance]">
-                {Icon && <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-faint" />}
+              <h2 className="text-card-title font-heading text-ink flex items-center gap-2 font-semibold [text-wrap:balance]">
+                {Icon && <Icon aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />}
                 <span className="truncate">{title}</span>
               </h2>
             )}

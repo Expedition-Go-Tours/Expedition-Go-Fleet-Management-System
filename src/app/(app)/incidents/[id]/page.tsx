@@ -16,11 +16,7 @@ import { getVehicleById } from "@/lib/repos/vehicles";
 
 export const metadata = { title: "Incident" };
 
-export default async function IncidentDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const context = await requirePagePermission([
     PERMISSIONS.INCIDENT_READ_OWN,
     PERMISSIONS.INCIDENT_READ_ALL,
@@ -71,15 +67,16 @@ export default async function IncidentDetailPage({
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
           <Card title="What happened" icon={ShieldAlert}>
-            <p className="text-body-sm whitespace-pre-wrap text-ink">{incident.description}</p>
+            <p className="text-body-sm text-ink whitespace-pre-wrap">{incident.description}</p>
           </Card>
 
           {incident.resolution && (
             <Card title="Resolution" icon={CheckCircle2}>
-              <p className="text-body-sm whitespace-pre-wrap text-ink">{incident.resolution}</p>
+              <p className="text-body-sm text-ink whitespace-pre-wrap">{incident.resolution}</p>
               {incident.resolvedByUserId && (
-                <p className="text-data-xs mt-3 text-muted">
-                  Resolved by {userNames.get(incident.resolvedByUserId) ?? incident.resolvedByUserId} ·{" "}
+                <p className="text-data-xs text-muted mt-3">
+                  Resolved by{" "}
+                  {userNames.get(incident.resolvedByUserId) ?? incident.resolvedByUserId} ·{" "}
                   {formatDate(incident.resolvedAt)}
                 </p>
               )}
@@ -96,7 +93,10 @@ export default async function IncidentDetailPage({
           <Card title="Details" icon={Info} flush>
             <DetailRow label="Vehicle">
               {vehicle ? (
-                <Link href={`/vehicles/${vehicle.id}`} className="font-medium text-link hover:underline">
+                <Link
+                  href={`/vehicles/${vehicle.id}`}
+                  className="text-link font-medium hover:underline"
+                >
                   {vehicle.regNumber}
                 </Link>
               ) : (
@@ -139,10 +139,10 @@ export default async function IncidentDetailPage({
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 px-5 py-2.5">
-      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
         {label}
       </span>
-      <span className="text-data text-right text-ink">{children}</span>
+      <span className="text-data text-ink text-right">{children}</span>
     </div>
   );
 }

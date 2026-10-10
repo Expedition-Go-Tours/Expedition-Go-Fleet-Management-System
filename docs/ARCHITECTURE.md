@@ -125,8 +125,11 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
     own-only; review lifecycle `OPEN → UNDER_REVIEW → RESOLVED` is
     `incident:manage`-only and resolving requires a resolution note.
   - Notifications are idempotent per `dedupeKey`; the Vercel Cron
-    (`vercel.json` → `POST /api/v1/cron/reminders`, `CRON_SECRET` bearer,
-    daily 07:00 UTC) generates PM / document-expiry / assignment reminders.
+    (`vercel.json` → `GET /api/v1/cron/reminders`, `CRON_SECRET` bearer,
+    daily 07:00 UTC) generates PM / document-expiry reminders. The route
+    exports **GET** (Vercel Cron invokes scheduled paths with GET) and, for
+    deliberate internal/manual invocation, **POST** — both gated by the same
+    constant-time `CRON_SECRET` check.
 - **Money is integer minor units** (`amountMinor`, GHS exponent 2). Creation
   accepts a decimal major-unit value and converts with string arithmetic via
   `toPesewas` — no floats ever reach the ledger.

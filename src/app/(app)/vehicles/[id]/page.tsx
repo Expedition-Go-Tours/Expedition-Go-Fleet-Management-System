@@ -61,28 +61,38 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   const permissions = [...permissionsForRoles(context.user.roles)];
   const actions = visibleActions(vehicle.status, permissions);
 
-  const [readings, schedules, serviceRecords, issues, workOrders, assignments, fuelEntries, documents, users] =
-    await Promise.all([
-      listReadings(vehicle.id, { limit: 12 }),
-      listSchedules(vehicle.id),
-      listServiceRecords(vehicle.id),
-      listIssues({ vehicleId: vehicle.id, limit: 10 }),
-      listWorkOrders({ vehicleId: vehicle.id, limit: 10 }),
-      listAssignments({ vehicleId: vehicle.id, limit: 10 }),
-      listFuelEntries({ vehicleId: vehicle.id, limit: 10 }),
-      listDocuments(vehicle.id),
-      listUsers(),
-    ]);
+  const [
+    readings,
+    schedules,
+    serviceRecords,
+    issues,
+    workOrders,
+    assignments,
+    fuelEntries,
+    documents,
+    users,
+  ] = await Promise.all([
+    listReadings(vehicle.id, { limit: 12 }),
+    listSchedules(vehicle.id),
+    listServiceRecords(vehicle.id),
+    listIssues({ vehicleId: vehicle.id, limit: 10 }),
+    listWorkOrders({ vehicleId: vehicle.id, limit: 10 }),
+    listAssignments({ vehicleId: vehicle.id, limit: 10 }),
+    listFuelEntries({ vehicleId: vehicle.id, limit: 10 }),
+    listDocuments(vehicle.id),
+    listUsers(),
+  ]);
 
   // Accurate totals via Firestore aggregation — independent of the capped
   // "recent slice" lists above, so counts can never be silently truncated.
-  const [issueTotals, workOrderTotals, readingCount, assignmentCount, fuelCount] = await Promise.all([
-    countIssueTotals({ vehicleId: vehicle.id }),
-    countWorkOrderTotals({ vehicleId: vehicle.id }),
-    countReadings(vehicle.id),
-    countAssignments({ vehicleId: vehicle.id }),
-    countFuelEntries(vehicle.id),
-  ]);
+  const [issueTotals, workOrderTotals, readingCount, assignmentCount, fuelCount] =
+    await Promise.all([
+      countIssueTotals({ vehicleId: vehicle.id }),
+      countWorkOrderTotals({ vehicleId: vehicle.id }),
+      countReadings(vehicle.id),
+      countAssignments({ vehicleId: vehicle.id }),
+      countFuelEntries(vehicle.id),
+    ]);
 
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const now = new Date();
@@ -138,9 +148,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       effectiveAt: formatDate(r.effectiveAt),
       note: r.notes ?? "",
     })),
-    schedules: evaluatedSchedules.map(({ schedule: s, result }) =>
-      scheduleToTab(s, result),
-    ),
+    schedules: evaluatedSchedules.map(({ schedule: s, result }) => scheduleToTab(s, result)),
     serviceRecords: serviceRecords.slice(0, 20).map((r) => ({
       id: r.id,
       taskName: r.taskName,
@@ -201,7 +209,11 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <VehicleHero
         title={vehicle.regNumber}
         description={`${vehicle.make} ${vehicle.model} · ${vehicle.year} · ${vehicle.type.replace(/_/g, " ").toLowerCase()}`}
-        crumbs={[{ label: "Fleet" }, { label: "Vehicles", href: "/vehicles" }, { label: vehicle.regNumber }]}
+        crumbs={[
+          { label: "Fleet" },
+          { label: "Vehicles", href: "/vehicles" },
+          { label: vehicle.regNumber },
+        ]}
         actions={
           <>
             <StatusBadge status={vehicle.status} />
@@ -212,7 +224,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                 confirm={{
                   archive:
                     "Archive this vehicle? It will be hidden from lists and cannot be resurrected.",
-                  safety_hold: "Place this vehicle on safety hold? It will be barred from service until released.",
+                  safety_hold:
+                    "Place this vehicle on safety hold? It will be barred from service until released.",
                 }}
                 reason={{
                   safety_hold: {
@@ -229,7 +242,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
       {/* Summary strip */}
       <Card flush>
-        <div className="grid grid-cols-2 divide-x divide-hairline md:grid-cols-4">
+        <div className="divide-hairline grid grid-cols-2 divide-x md:grid-cols-4">
           <SummaryCell label="Current odometer" value={formatKm(vehicle.odometerKm)} icon={Gauge} />
           <SummaryCell
             label="Next service"
@@ -256,10 +269,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <VehicleDetailTabs data={tabData} />
 
       <p className="text-body-xs text-muted">
-        Odometer and maintenance figures follow the accepted readings ledger and the
-        documented schedule engine. Tabs show the most recent records; a capped list states
-        the true total and links to the full register where one exists — counts are never
-        silently truncated.
+        Odometer and maintenance figures follow the accepted readings ledger and the documented
+        schedule engine. Tabs show the most recent records; a capped list states the true total and
+        links to the full register where one exists — counts are never silently truncated.
       </p>
     </div>
   );
@@ -343,14 +355,14 @@ function SummaryCell({
   }[tone];
   return (
     <div className="flex flex-col gap-0.5 px-5 py-4">
-      <span className="font-ui text-data-xs flex items-center gap-1.5 font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
-        {Icon && <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-faint" />}
+      <span className="font-ui text-data-xs text-muted flex items-center gap-1.5 font-medium tracking-[var(--tracking-ui)] uppercase">
+        {Icon && <Icon aria-hidden="true" className="text-faint h-3.5 w-3.5 shrink-0" />}
         {label}
       </span>
       <span className={`font-heading text-heading-md font-semibold tabular-nums ${toneClasses}`}>
         {value}
       </span>
-      {hint && <span className="text-data-xs mt-0.5 text-muted">{hint}</span>}
+      {hint && <span className="text-data-xs text-muted mt-0.5">{hint}</span>}
     </div>
   );
 }
@@ -368,14 +380,14 @@ function LinkCell({
 }) {
   return (
     <Link href={href} className="hover:bg-subtle flex flex-col gap-0.5 px-5 py-4 transition-colors">
-      <span className="font-ui text-data-xs flex items-center gap-1.5 font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
-        {Icon && <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-faint" />}
+      <span className="font-ui text-data-xs text-muted flex items-center gap-1.5 font-medium tracking-[var(--tracking-ui)] uppercase">
+        {Icon && <Icon aria-hidden="true" className="text-faint h-3.5 w-3.5 shrink-0" />}
         {label}
       </span>
-      <span className="font-heading text-heading-md font-semibold tabular-nums text-ink">
+      <span className="font-heading text-heading-md text-ink font-semibold tabular-nums">
         {value}
       </span>
-      <span className="text-data-xs mt-0.5 text-link">View records</span>
+      <span className="text-data-xs text-link mt-0.5">View records</span>
     </Link>
   );
 }

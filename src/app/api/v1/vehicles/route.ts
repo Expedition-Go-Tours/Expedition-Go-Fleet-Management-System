@@ -6,9 +6,12 @@ import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { FUEL_TYPES, VEHICLE_TYPES } from "@/lib/domain/vehicle";
-import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
-import { createVehicle, getVehicleByRegNumber, listVehicles } from "@/lib/repos/vehicles";
-import { recordReading } from "@/lib/repos/odometers";
+import {
+  createVehicleAtomic,
+  getVehicleByRegNumber,
+  listVehicles,
+  VehicleCreationError,
+} from "@/lib/repos/vehicles";
 
 export const runtime = "nodejs";
 
@@ -89,7 +92,10 @@ export async function POST(request: NextRequest) {
       throw ApiError.conflict(`A vehicle with registration "${plate}" already exists`);
     }
 
-    const vehicle = await createVehicle({
+    // Vehicle + initial odometer ledger entry + projection + audit event commit
+    // in one transaction; the registration lock makes duplicate plates
+    // impossible even under concurrent requests.
+    const vehicle = await createVehicleAtomic({
       regNumber: plate,
       make,
       model,
@@ -102,33 +108,10 @@ export async function POST(request: NextRequest) {
       inServiceOn: typeof b.inServiceOn === "string" ? b.inServiceOn : undefined,
       odometerKm,
       createdBy: context.user.id,
-    });
-
-    // Record the initial odometer through the ledger when a baseline is given.
-    if (odometerKm > 0) {
-      await recordReading({
-        vehicleId: vehicle.id,
-        km: odometerKm,
-        source: "MANUAL_ENTRY",
-        recordedByUserId: context.user.id,
-        notes: "Initial odometer baseline at vehicle registration",
-        clientToken: `setup-${vehicle.id}`,
-        allowDecrease: true,
-      });
-    }
-
-    await writeAuditEvent({
-      eventType: AUDIT_EVENTS.VEHICLE_CREATED,
-      actorId: context.user.id,
-      entityType: "vehicle",
-      entityId: vehicle.id,
-      after: {
-        regNumber: vehicle.regNumber,
-        make: vehicle.make,
-        model: vehicle.model,
-        odometerKm,
-      },
       requestId,
+    }).catch((error: unknown) => {
+      if (error instanceof VehicleCreationError) throw ApiError.conflict(error.message);
+      throw error;
     });
 
     return jsonOk({ vehicle }, { status: 201 });

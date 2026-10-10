@@ -93,13 +93,13 @@ export function Modal({
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cn(
-          "relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-[var(--shadow-lg)] outline-none sm:rounded-lg",
+          "bg-surface relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-xl shadow-[var(--shadow-lg)] outline-none sm:rounded-lg",
           sizes[size],
         )}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-hairline px-5 py-4">
+        <header className="border-hairline flex items-start justify-between gap-4 border-b px-5 py-4">
           <div className="flex flex-col gap-1">
-            <h2 id={titleId} className="font-heading text-card-title font-semibold text-ink">
+            <h2 id={titleId} className="font-heading text-card-title text-ink font-semibold">
               {title}
             </h2>
             {description && <p className="text-body-xs text-muted">{description}</p>}
@@ -110,7 +110,7 @@ export function Modal({
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <footer className="bg-subtle flex items-center justify-end gap-2 border-t border-hairline px-5 py-3">
+          <footer className="bg-subtle border-hairline flex items-center justify-end gap-2 border-t px-5 py-3">
             {footer}
           </footer>
         )}

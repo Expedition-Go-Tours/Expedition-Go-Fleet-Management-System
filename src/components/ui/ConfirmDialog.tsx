@@ -80,7 +80,10 @@ export function ConfirmActionButton({
         }
       >
         {error && (
-          <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error">
+          <p
+            role="alert"
+            className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3"
+          >
             {error}
           </p>
         )}

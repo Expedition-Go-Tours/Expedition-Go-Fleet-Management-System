@@ -8,6 +8,38 @@ import { Button } from "@/components/ui/Button";
 import { getFirebaseClientAuth } from "@/lib/firebase/client";
 
 /**
+ * Map a Firebase Auth failure onto a message that tells the user what actually
+ * happened. Browser SDK errors carry a `code` (e.g. auth/invalid-credential);
+ * without this, every rejection — wrong password included — was reported as
+ * "could not reach the service", which is misleading and sends users to the
+ * wrong fix.
+ */
+function signInErrorMessage(error: unknown): string {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : "";
+  switch (code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+    case "auth/invalid-login-credentials":
+      return "Incorrect email or password.";
+    case "auth/invalid-email":
+      return "Enter a valid email address.";
+    case "auth/user-disabled":
+      return "This account has been disabled. Contact your administrator.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Wait a moment and try again.";
+    case "auth/network-request-failed":
+    case "auth/timeout":
+      return "Could not reach the authentication service. Check your connection and try again.";
+    default:
+      return "Sign-in failed. Contact your administrator.";
+  }
+}
+
+/**
  * Sign-in form.
  *
  * The Firebase client SDK is used **only** to authenticate — the resulting ID
@@ -50,8 +82,8 @@ export function SignInForm() {
         router.replace("/");
       }
       router.refresh();
-    } catch {
-      setError("Could not reach the authentication service. Try again.");
+    } catch (error) {
+      setError(signInErrorMessage(error));
     } finally {
       setBusy(false);
     }

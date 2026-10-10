@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
-import { requireAuthContext, requirePermission } from "@/lib/auth/guards";
+import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { INCIDENT_SEVERITIES, INCIDENT_TYPES, type IncidentType } from "@/lib/domain/incident";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
@@ -14,12 +14,17 @@ export const runtime = "nodejs";
 /**
  * GET /api/v1/incidents
  * Incident reports. incident:read:all sees everything; others see their own.
- * Query: ?vehicleId=&limit=
+ * Requires at least one incident read permission — authentication alone is not
+ * authorization. Query: ?vehicleId=&limit=
  */
 export async function GET(request: NextRequest) {
   try {
     const context = await requireAuthContext();
-    const canReadAll = permissionsForRoles(context.user.roles).has(PERMISSIONS.INCIDENT_READ_ALL);
+    const perms = permissionsForRoles(context.user.roles);
+    const canReadAll = perms.has(PERMISSIONS.INCIDENT_READ_ALL);
+    if (!canReadAll && !perms.has(PERMISSIONS.INCIDENT_READ_OWN)) {
+      throw ApiError.forbidden(`Missing permission: ${PERMISSIONS.INCIDENT_READ_OWN}`);
+    }
     const vehicleId = request.nextUrl.searchParams.get("vehicleId") ?? undefined;
     const limitRaw = Number(request.nextUrl.searchParams.get("limit"));
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 && limitRaw <= 200 ? limitRaw : 100;
@@ -41,6 +46,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
   try {
+    await assertCsrfAndOrigin();
     const context = await requireAuthContext();
     requirePermission(context, PERMISSIONS.INCIDENT_CREATE);
 
@@ -66,7 +72,8 @@ export async function POST(request: NextRequest) {
     let occurredAt = new Date();
     if (body.occurredAt !== undefined) {
       const parsed = new Date(String(body.occurredAt));
-      if (Number.isNaN(parsed.getTime())) throw ApiError.badRequest("occurredAt must be a valid date");
+      if (Number.isNaN(parsed.getTime()))
+        throw ApiError.badRequest("occurredAt must be a valid date");
       if (parsed.getTime() > Date.now() + 60_000) {
         throw ApiError.badRequest("occurredAt cannot be in the future");
       }

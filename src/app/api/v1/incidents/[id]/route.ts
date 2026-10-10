@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
-import { jsonOk, toErrorResponse } from "@/lib/api/errors";
-import { requireAuthContext, requirePermission } from "@/lib/auth/guards";
+import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
+import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { getIncidentById } from "@/lib/repos/incidents";
 
@@ -9,17 +9,22 @@ export const runtime = "nodejs";
 
 /**
  * GET /api/v1/incidents/[id]
- * Single incident — the reporter or anyone with incident:read:all.
+ * Single incident — the reporter or anyone with incident:read:all. Requires an
+ * incident read permission before the row is even loaded.
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await requireAuthContext();
+    const perms = permissionsForRoles(context.user.roles);
+    const canReadAll = perms.has(PERMISSIONS.INCIDENT_READ_ALL);
+    if (!canReadAll && !perms.has(PERMISSIONS.INCIDENT_READ_OWN)) {
+      throw ApiError.forbidden(`Missing permission: ${PERMISSIONS.INCIDENT_READ_OWN}`);
+    }
     const { id } = await params;
     const incident = await getIncidentById(id);
     if (!incident) {
       return jsonOk({ incident: null });
     }
-    const canReadAll = permissionsForRoles(context.user.roles).has(PERMISSIONS.INCIDENT_READ_ALL);
     if (!canReadAll && incident.reportedByUserId !== context.user.id) {
       return jsonOk({ incident: null });
     }
@@ -31,6 +36,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    await assertCsrfAndOrigin();
     const context = await requireAuthContext();
     requirePermission(context, PERMISSIONS.INCIDENT_MANAGE);
     // Manage endpoint — only safe editable fields, everything else via status actions.

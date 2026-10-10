@@ -442,9 +442,14 @@ try {
       JSON.stringify(opsClose.body),
     );
 
-    const noResolution = await send("POST", `/api/v1/reports/${reportA.id}/status`, sMaint.cookies, {
-      action: "close",
-    });
+    const noResolution = await send(
+      "POST",
+      `/api/v1/reports/${reportA.id}/status`,
+      sMaint.cookies,
+      {
+        action: "close",
+      },
+    );
     check(
       "closing without resolution/duplicate is 400 (accountability)",
       noResolution.status === 400 && /resolution/i.test(noResolution.body?.error?.message ?? ""),
@@ -804,7 +809,8 @@ try {
     );
     check(
       "DRIVER cannot resolve incidents (403 incident:manage)",
-      driverResolve.status === 403 && /incident:manage/.test(driverResolve.body?.error?.message ?? ""),
+      driverResolve.status === 403 &&
+        /incident:manage/.test(driverResolve.body?.error?.message ?? ""),
       JSON.stringify(driverResolve.body),
     );
 
@@ -831,12 +837,10 @@ try {
       JSON.stringify(noResolution.body),
     );
 
-    const resolve = await send(
-      "POST",
-      `/api/v1/incidents/${incidentId}/status`,
-      sOps.cookies,
-      { action: "resolve", resolution: "Towed to garage; alternator replaced." },
-    );
+    const resolve = await send("POST", `/api/v1/incidents/${incidentId}/status`, sOps.cookies, {
+      action: "resolve",
+      resolution: "Towed to garage; alternator replaced.",
+    });
     check(
       "OPERATIONS resolves with resolution (200 → RESOLVED)",
       resolve.status === 200 &&

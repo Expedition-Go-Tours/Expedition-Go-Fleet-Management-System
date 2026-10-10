@@ -38,7 +38,7 @@ export function FuelFilters({ vehicles }: { vehicles: { id: string; label: strin
         <button
           type="button"
           onClick={() => router.replace("/fuel")}
-          className="hover:bg-subtle text-body-sm inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium text-muted transition-colors"
+          className="hover:bg-subtle text-body-sm text-muted inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium transition-colors"
         >
           <X aria-hidden="true" className="h-3.5 w-3.5" />
           Clear filter

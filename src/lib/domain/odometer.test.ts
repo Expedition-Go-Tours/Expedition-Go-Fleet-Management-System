@@ -54,7 +54,12 @@ describe("odometer ledger — mandated mileage guarantees", () => {
   });
 
   it("projection is the max accepted reading — superseded/flagged never count", () => {
-    const ledger = [reading(80000, "ACCEPTED"), reading(79000, "ACCEPTED"), reading(82000, "SUPERSEDED"), reading(81000, "FLAGGED")];
+    const ledger = [
+      reading(80000, "ACCEPTED"),
+      reading(79000, "ACCEPTED"),
+      reading(82000, "SUPERSEDED"),
+      reading(81000, "FLAGGED"),
+    ];
     expect(projectionFromLedger(ledger)).toBe(80000);
   });
 

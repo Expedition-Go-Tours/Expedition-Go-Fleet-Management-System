@@ -116,6 +116,6 @@
   }
 
   .card-surface {
-    @apply border-hairline bg-surface shadow-[0_1px_2px_rgba(16,24,40,0.06)] rounded-lg;
+    @apply border-hairline bg-surface rounded-lg shadow-[0_1px_2px_rgba(16,24,40,0.06)];
   }
 }

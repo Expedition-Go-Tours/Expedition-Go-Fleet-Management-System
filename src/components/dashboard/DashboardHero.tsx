@@ -24,13 +24,13 @@ export function DashboardHero({
     >
       <div className="flex flex-col gap-6 px-4 py-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-4 lg:py-8">
         <div className="flex min-w-0 flex-col gap-3">
-          <p className="font-ui text-ui-xs uppercase tracking-[var(--tracking-ui)] text-on-dark-muted">
+          <p className="font-ui text-ui-xs text-on-dark-muted tracking-[var(--tracking-ui)] uppercase">
             Expedition Go Tours · Fleet operations
           </p>
           <h1 className="font-heading text-page-title font-semibold tracking-[var(--tracking-heading)] text-white">
             Fleet control centre
           </h1>
-          <p className="text-body-sm max-w-xl text-on-dark-muted">
+          <p className="text-body-sm text-on-dark-muted max-w-xl">
             Operational status across the fleet, derived live from current records.
           </p>
           <div className="flex flex-wrap items-center gap-2.5 pt-1">
@@ -42,7 +42,7 @@ export function DashboardHero({
                 Browse fleet <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>
             )}
-            <span className="border-on-dark-line text-on-dark-muted inline-flex h-10 items-center gap-1.5 rounded-md border px-3 font-ui text-ui-xs uppercase tracking-[var(--tracking-ui)]">
+            <span className="border-on-dark-line text-on-dark-muted font-ui text-ui-xs inline-flex h-10 items-center gap-1.5 rounded-md border px-3 tracking-[var(--tracking-ui)] uppercase">
               <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
               Updated {updatedLabel}
             </span>

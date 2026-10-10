@@ -48,7 +48,7 @@ export function TableSort({
       ) : active && dir === "desc" ? (
         <ArrowDown aria-hidden="true" className="h-3 w-3" />
       ) : (
-        <ArrowUpDown aria-hidden="true" className="h-3 w-3 text-faint" />
+        <ArrowUpDown aria-hidden="true" className="text-faint h-3 w-3" />
       )}
     </Link>
   );

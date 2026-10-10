@@ -55,11 +55,15 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const reporterName = userNames.get(issue.reportedBy) ?? issue.reportedBy;
-  const triagedBy = issue.triagedBy ? userNames.get(issue.triagedBy) ?? issue.triagedBy : null;
-  const closedBy = issue.closedBy ? userNames.get(issue.closedBy) ?? issue.closedBy : null;
-  const activeWorkOrders = linkedWorkOrders.filter((wo): wo is NonNullable<typeof wo> => wo !== null);
+  const triagedBy = issue.triagedBy ? (userNames.get(issue.triagedBy) ?? issue.triagedBy) : null;
+  const closedBy = issue.closedBy ? (userNames.get(issue.closedBy) ?? issue.closedBy) : null;
+  const activeWorkOrders = linkedWorkOrders.filter(
+    (wo): wo is NonNullable<typeof wo> => wo !== null,
+  );
   const canCloseIssue =
-    canClose && (issue.status === "OPEN" || issue.status === "TRIAGED") && !issue.resolvedByWorkOrderId;
+    canClose &&
+    (issue.status === "OPEN" || issue.status === "TRIAGED") &&
+    !issue.resolvedByWorkOrderId;
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,10 +72,15 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         description={
           <>
             {issue.number ? `${issue.number} · ` : "Issue "}
-            {issue.category?.replace(/_/g, " ").toLowerCase()} · reported {formatDate(issue.createdAt)}
+            {issue.category?.replace(/_/g, " ").toLowerCase()} · reported{" "}
+            {formatDate(issue.createdAt)}
           </>
         }
-        crumbs={[{ label: "Fleet" }, { label: "Issues", href: "/reports" }, { label: issue.number ?? issue.title }]}
+        crumbs={[
+          { label: "Fleet" },
+          { label: "Issues", href: "/reports" },
+          { label: issue.number ?? issue.title },
+        ]}
         actions={
           <>
             {issue.safetyCritical && <StatusBadge status="SAFETY" tone="danger" />}
@@ -84,7 +93,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="flex flex-col gap-6 xl:col-span-2">
           <Card title="Description" icon={FileText} flush={false}>
-            <p className="text-body-sm whitespace-pre-wrap text-ink">{issue.description}</p>
+            <p className="text-body-sm text-ink whitespace-pre-wrap">{issue.description}</p>
             {issue.affectsSafeOperation || issue.immobilized ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 {issue.affectsSafeOperation && (
@@ -113,9 +122,11 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                       className="hover:bg-subtle flex items-center justify-between gap-3 px-5 py-3.5 transition-colors"
                     >
                       <span className="flex min-w-0 items-center gap-3">
-                        <Wrench aria-hidden="true" className="h-4 w-4 shrink-0 text-faint" />
+                        <Wrench aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />
                         <span className="flex min-w-0 flex-col">
-                          <span className="text-data truncate font-medium text-ink">{wo.title}</span>
+                          <span className="text-data text-ink truncate font-medium">
+                            {wo.title}
+                          </span>
                           <span className="text-data-xs text-muted">
                             {wo.number} · {wo.priority.toLowerCase()}
                           </span>
@@ -123,7 +134,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                       </span>
                       <span className="flex items-center gap-2">
                         <StatusBadge status={wo.status} />
-                        <ArrowRight aria-hidden="true" className="h-4 w-4 text-faint" />
+                        <ArrowRight aria-hidden="true" className="text-faint h-4 w-4" />
                       </span>
                     </Link>
                   </li>
@@ -151,12 +162,12 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             <Card title={`Evidence (${issue.evidenceKeys.length})`} icon={Paperclip}>
               <ul className="flex flex-col gap-1.5">
                 {issue.evidenceKeys.map((key) => (
-                  <li key={key} className="text-data-xs font-mono text-muted">
+                  <li key={key} className="text-data-xs text-muted font-mono">
                     {key}
                   </li>
                 ))}
               </ul>
-              <p className="text-body-xs mt-3 text-muted">
+              <p className="text-body-xs text-muted mt-3">
                 Evidence files are stored privately in object storage — keys shown are the audit
                 references, not public URLs.
               </p>
@@ -168,7 +179,10 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           <Card title="Details" icon={Info} flush>
             <DetailRow label="Vehicle">
               {vehicle ? (
-                <Link href={`/vehicles/${vehicle.id}`} className="font-medium text-link hover:underline">
+                <Link
+                  href={`/vehicles/${vehicle.id}`}
+                  className="text-link font-medium hover:underline"
+                >
                   {vehicle.regNumber}
                 </Link>
               ) : (
@@ -181,13 +195,17 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             </DetailRow>
             <DetailRow label="Category">{issue.category?.replace(/_/g, " ") ?? "—"}</DetailRow>
             <DetailRow label="Odometer at report">
-              {typeof issue.odometerKm === "number" ? `${issue.odometerKm.toLocaleString()} km` : "—"}
+              {typeof issue.odometerKm === "number"
+                ? `${issue.odometerKm.toLocaleString()} km`
+                : "—"}
             </DetailRow>
             <DetailRow label="Location">{issue.location ?? "—"}</DetailRow>
             <DetailRow label="Reported at">{formatDate(issue.createdAt)}</DetailRow>
             {triagedBy && <DetailRow label="Triaged by">{triagedBy}</DetailRow>}
             {closedBy && <DetailRow label="Closed by">{closedBy}</DetailRow>}
-            {issue.resolvedAt && <DetailRow label="Resolved at">{formatDate(issue.resolvedAt)}</DetailRow>}
+            {issue.resolvedAt && (
+              <DetailRow label="Resolved at">{formatDate(issue.resolvedAt)}</DetailRow>
+            )}
           </Card>
 
           {(canTriage || canCloseIssue) && issue.status !== "CLOSED" && (
@@ -209,9 +227,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
           {issue.resolution && (
             <Card title="Resolution" icon={CheckCircle2}>
-              <p className="text-body-sm whitespace-pre-wrap text-ink">{issue.resolution}</p>
+              <p className="text-body-sm text-ink whitespace-pre-wrap">{issue.resolution}</p>
               {issue.duplicateOfIssueId && (
-                <p className="text-data-xs mt-2 text-muted">
+                <p className="text-data-xs text-muted mt-2">
                   Duplicates: <span className="font-mono">{issue.duplicateOfIssueId}</span>
                 </p>
               )}
@@ -231,10 +249,10 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 px-5 py-2.5">
-      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
         {label}
       </span>
-      <span className="text-data text-right text-ink">{children}</span>
+      <span className="text-data text-ink text-right">{children}</span>
     </div>
   );
 }

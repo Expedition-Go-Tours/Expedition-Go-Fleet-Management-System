@@ -23,7 +23,9 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: "npm run dev",
+        // CI builds first (`npm run build`) and serves the production bundle;
+        // locally we keep the fast dev server.
+        command: process.env.CI ? "npm run start" : "npm run dev",
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

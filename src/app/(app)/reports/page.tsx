@@ -75,17 +75,20 @@ export default async function IssuesPage({
       </div>
 
       {(filteredVehicle || openOnly) && (
-        <div className="text-body-xs flex flex-wrap items-center gap-3 text-muted">
+        <div className="text-body-xs text-muted flex flex-wrap items-center gap-3">
           {filteredVehicle && (
             <span>
               Filtered to{" "}
-              <Link href={`/vehicles/${filteredVehicle.id}`} className="font-medium text-link hover:underline">
+              <Link
+                href={`/vehicles/${filteredVehicle.id}`}
+                className="text-link font-medium hover:underline"
+              >
                 {filteredVehicle.regNumber}
               </Link>
             </span>
           )}
           {openOnly && <span>· Open issues only</span>}
-          <Link href="/reports" className="font-medium text-link hover:underline">
+          <Link href="/reports" className="text-link font-medium hover:underline">
             Clear filters
           </Link>
         </div>
@@ -113,7 +116,7 @@ export default async function IssuesPage({
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
                           <Link href={`/reports/${issue.id}`} className="hover:text-ink">
-                            <span className="text-body-sm font-medium text-ink">
+                            <span className="text-body-sm text-ink font-medium">
                               {issue.number ? `${issue.number} — ` : ""}
                               {issue.title}
                             </span>

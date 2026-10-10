@@ -192,7 +192,10 @@ export function StatusActions({
           </label>
         )}
         {error && (
-          <p role="alert" className="bg-error/10 text-body-xs mt-3 rounded-md border border-error/25 p-3 text-error">
+          <p
+            role="alert"
+            className="bg-error/10 text-body-xs border-error/25 text-error mt-3 rounded-md border p-3"
+          >
             {error}
           </p>
         )}

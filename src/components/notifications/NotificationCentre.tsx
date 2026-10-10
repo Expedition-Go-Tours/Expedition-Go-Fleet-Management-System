@@ -90,11 +90,11 @@ export function NotificationCentre({ notifications }: { notifications: CentreNot
             className={`flex items-start justify-between gap-3 px-4 py-3 ${n.read ? "" : "hover:bg-subtle bg-subtle/40"}`}
           >
             <div className="min-w-0">
-              <p className={`text-body-sm ${n.read ? "text-muted" : "font-medium text-ink"}`}>
+              <p className={`text-body-sm ${n.read ? "text-muted" : "text-ink font-medium"}`}>
                 {n.title}
               </p>
-              {n.body && <p className="text-body-xs mt-0.5 text-muted">{n.body}</p>}
-              <p className="font-ui text-muted mt-1 flex items-center gap-2 text-[length:var(--fs-data-xs)] uppercase tracking-[var(--tracking-ui)]">
+              {n.body && <p className="text-body-xs text-muted mt-0.5">{n.body}</p>}
+              <p className="font-ui text-muted mt-1 flex items-center gap-2 text-[length:var(--fs-data-xs)] tracking-[var(--tracking-ui)] uppercase">
                 {n.type.replace(/_/g, " ").toLowerCase()}
                 <span aria-hidden="true">·</span>
                 {n.createdAt}
@@ -102,7 +102,7 @@ export function NotificationCentre({ notifications }: { notifications: CentreNot
               {n.linkUrl && n.linkUrl !== "/" && (
                 <Link
                   href={n.linkUrl}
-                  className="text-body-xs mt-1 inline-flex items-center gap-1 font-medium text-link hover:underline"
+                  className="text-body-xs text-link mt-1 inline-flex items-center gap-1 font-medium hover:underline"
                 >
                   <BellRing aria-hidden="true" className="h-3 w-3" />
                   View record
@@ -110,7 +110,12 @@ export function NotificationCentre({ notifications }: { notifications: CentreNot
               )}
             </div>
             {!n.read && (
-              <Button size="sm" variant="outline" disabled={busy === n.id} onClick={() => markRead(n.id)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy === n.id}
+                onClick={() => markRead(n.id)}
+              >
                 {busy === n.id ? "…" : "Mark read"}
               </Button>
             )}

@@ -60,7 +60,13 @@ export function ResolveIncidentButton({ incidentId }: { incidentId: string }) {
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" type="submit" form="resolve-incident-form" isLoading={busy}>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              form="resolve-incident-form"
+              isLoading={busy}
+            >
               Mark resolved
             </Button>
           </>
@@ -68,7 +74,10 @@ export function ResolveIncidentButton({ incidentId }: { incidentId: string }) {
       >
         <form id="resolve-incident-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           {error && (
-            <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error">
+            <p
+              role="alert"
+              className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3"
+            >
               {error}
             </p>
           )}

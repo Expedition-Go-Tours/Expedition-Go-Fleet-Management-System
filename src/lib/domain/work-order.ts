@@ -99,3 +99,16 @@ export const WORK_ORDER_ACTIONS = {
 
 /** Statuses the completion endpoint accepts work from. */
 export const COMPLETABLE_STATUSES: readonly WorkOrderStatus[] = ["OPEN", "IN_PROGRESS", "WAITING"];
+
+/**
+ * Canonical, human-readable action labels. Both the board and the detail page
+ * render these so casing/wording never drifts between the two surfaces.
+ */
+export const WORK_ORDER_ACTION_LABELS: Record<keyof typeof WORK_ORDER_ACTIONS, string> = {
+  start: "Start work",
+  wait: "Wait (parts/provider)",
+  resume: "Resume",
+  verify: "Verify work",
+  close: "Close",
+  reopen: "Reopen",
+};

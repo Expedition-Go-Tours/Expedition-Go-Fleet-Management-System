@@ -6,7 +6,11 @@ import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
-import { completeAssignment, getAssignmentById } from "@/lib/repos/assignments";
+import {
+  completeAssignment,
+  getAssignmentById,
+  AssignmentConflictError,
+} from "@/lib/repos/assignments";
 import { recordReading, OdometerError } from "@/lib/repos/odometers";
 import { NextResponse } from "next/server";
 
@@ -70,6 +74,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return jsonOk({ assignment: completed });
   } catch (error) {
+    if (error instanceof AssignmentConflictError) {
+      return NextResponse.json(
+        { error: { code: error.code, message: error.message } },
+        { status: 409 },
+      );
+    }
     if (error instanceof OdometerError) {
       // A lower end reading than the ledger projection is a conflict, not a
       // fabricated (negative) distance.

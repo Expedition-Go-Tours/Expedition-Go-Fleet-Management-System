@@ -24,7 +24,11 @@ import {
 } from "@/components/work-orders/CompleteWorkOrderDialog";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
-import { COMPLETABLE_STATUSES, WORK_ORDER_ACTIONS } from "@/lib/domain/work-order";
+import {
+  COMPLETABLE_STATUSES,
+  WORK_ORDER_ACTIONS,
+  WORK_ORDER_ACTION_LABELS,
+} from "@/lib/domain/work-order";
 import { formatDate, formatMoney } from "@/lib/format";
 import { listExpenses } from "@/lib/repos/expenses";
 import { getScheduleById, getServiceRecordById } from "@/lib/repos/maintenance";
@@ -35,20 +39,7 @@ import { getWorkOrderById } from "@/lib/repos/work-orders";
 
 export const metadata = { title: "Work order" };
 
-const LABELS: Record<string, string> = {
-  start: "Start work",
-  wait: "Wait (parts/provider)",
-  resume: "Resume",
-  verify: "Verify work",
-  close: "Close",
-  reopen: "Reopen",
-};
-
-export default async function WorkOrderDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const context = await requirePagePermission(PERMISSIONS.WORK_ORDER_READ);
   const { id } = await params;
   const workOrder = await getWorkOrderById(id);
@@ -62,7 +53,9 @@ export default async function WorkOrderDetailPage({
     listUsers(),
     Promise.all(workOrder.issueIds.slice(0, 10).map((iid) => getIssueById(iid))),
     Promise.all(workOrder.scheduleIds.slice(0, 10).map((sid) => getScheduleById(sid))),
-    workOrder.serviceRecordId ? getServiceRecordById(workOrder.serviceRecordId) : Promise.resolve(null),
+    workOrder.serviceRecordId
+      ? getServiceRecordById(workOrder.serviceRecordId)
+      : Promise.resolve(null),
     listExpenses({ workOrderId: workOrder.id, limit: 20 }),
   ]);
 
@@ -76,7 +69,10 @@ export default async function WorkOrderDetailPage({
         (def.from as readonly string[]).includes(workOrder.status) &&
         permissions.includes(def.permission),
     )
-    .map(([action]) => ({ action, label: LABELS[action] ?? action }));
+    .map(([action]) => ({
+      action,
+      label: WORK_ORDER_ACTION_LABELS[action as keyof typeof WORK_ORDER_ACTIONS],
+    }));
 
   const completable = (COMPLETABLE_STATUSES as readonly string[]).includes(workOrder.status);
 
@@ -114,10 +110,13 @@ export default async function WorkOrderDetailPage({
 
       {/* Lifecycle strip */}
       <Card flush>
-        <div className="grid grid-cols-2 divide-x divide-hairline md:grid-cols-4">
+        <div className="divide-hairline grid grid-cols-2 divide-x md:grid-cols-4">
           <StripCell label="Vehicle">
             {vehicle ? (
-              <Link href={`/vehicles/${vehicle.id}`} className="font-medium text-link hover:underline">
+              <Link
+                href={`/vehicles/${vehicle.id}`}
+                className="text-link font-medium hover:underline"
+              >
                 {vehicle.regNumber}
               </Link>
             ) : (
@@ -126,7 +125,7 @@ export default async function WorkOrderDetailPage({
           </StripCell>
           <StripCell label="Assigned to">
             {workOrder.assignedToUserId
-              ? userNames.get(workOrder.assignedToUserId) ?? workOrder.assignedToUserId
+              ? (userNames.get(workOrder.assignedToUserId) ?? workOrder.assignedToUserId)
               : "Unassigned"}
           </StripCell>
           <StripCell label="Provider">
@@ -142,7 +141,7 @@ export default async function WorkOrderDetailPage({
         <div className="flex flex-col gap-6 xl:col-span-2">
           {workOrder.description && (
             <Card title="Description" icon={FileText}>
-              <p className="text-body-sm whitespace-pre-wrap text-ink">{workOrder.description}</p>
+              <p className="text-body-sm text-ink whitespace-pre-wrap">{workOrder.description}</p>
             </Card>
           )}
 
@@ -160,9 +159,11 @@ export default async function WorkOrderDetailPage({
                       className="hover:bg-subtle flex items-center justify-between gap-3 px-5 py-3 transition-colors"
                     >
                       <span className="flex min-w-0 items-center gap-3">
-                        <FileWarning aria-hidden="true" className="h-4 w-4 shrink-0 text-faint" />
+                        <FileWarning aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />
                         <span className="flex min-w-0 flex-col">
-                          <span className="text-data truncate font-medium text-ink">{issue.title}</span>
+                          <span className="text-data text-ink truncate font-medium">
+                            {issue.title}
+                          </span>
                           <span className="text-data-xs text-muted">
                             {issue.number ?? "Issue"} · {issue.severity.toLowerCase()}
                           </span>
@@ -177,19 +178,23 @@ export default async function WorkOrderDetailPage({
           )}
 
           {resolvedSchedules.length > 0 && (
-            <Card title={`Maintenance schedules (${resolvedSchedules.length})`} icon={CalendarClock} flush>
+            <Card
+              title={`Maintenance schedules (${resolvedSchedules.length})`}
+              icon={CalendarClock}
+              flush
+            >
               <ul className="divide-hairline divide-y">
                 {resolvedSchedules.map((schedule) => (
                   <li key={schedule.id} className="flex items-center gap-3 px-5 py-2.5">
-                    <CircleDot aria-hidden="true" className="h-4 w-4 shrink-0 text-faint" />
-                    <span className="text-data flex-1 text-ink">{schedule.taskName}</span>
+                    <CircleDot aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />
+                    <span className="text-data text-ink flex-1">{schedule.taskName}</span>
                     <span className="text-data-xs text-muted">
                       {scheduleIntervalLabel(schedule.intervalKm, schedule.intervalDays)}
                     </span>
                   </li>
                 ))}
               </ul>
-              <p className="text-body-xs border-hairline border-t px-5 py-3 text-muted">
+              <p className="text-body-xs border-hairline text-muted border-t px-5 py-3">
                 Completing this order resets the baselines of exactly these schedules.
               </p>
             </Card>
@@ -205,16 +210,18 @@ export default async function WorkOrderDetailPage({
                       className="hover:bg-subtle flex items-center justify-between gap-3 px-5 py-2.5 transition-colors"
                     >
                       <span className="flex min-w-0 items-center gap-3">
-                        <ReceiptText aria-hidden="true" className="h-4 w-4 shrink-0 text-faint" />
+                        <ReceiptText aria-hidden="true" className="text-faint h-4 w-4 shrink-0" />
                         <span className="flex min-w-0 flex-col">
-                          <span className="text-data truncate font-medium text-ink">
+                          <span className="text-data text-ink truncate font-medium">
                             {expense.category.replace(/_/g, " ").toLowerCase()}
                           </span>
-                          <span className="text-data-xs text-muted">{formatDate(expense.incurredOn)}</span>
+                          <span className="text-data-xs text-muted">
+                            {formatDate(expense.incurredOn)}
+                          </span>
                         </span>
                       </span>
                       <span className="flex items-center gap-2">
-                        <span className="text-data tabular-nums text-ink">
+                        <span className="text-data text-ink tabular-nums">
                           {formatMoney(expense.amountMinor, expense.currency)}
                         </span>
                         <StatusBadge status={expense.status} />
@@ -235,7 +242,9 @@ export default async function WorkOrderDetailPage({
                   {serviceRecord.odometerKm.toLocaleString()} km
                 </DetailRow>
                 <DetailRow label="Work performed">{serviceRecord.workPerformed}</DetailRow>
-                {serviceRecord.outcome && <DetailRow label="Outcome">{serviceRecord.outcome}</DetailRow>}
+                {serviceRecord.outcome && (
+                  <DetailRow label="Outcome">{serviceRecord.outcome}</DetailRow>
+                )}
                 {serviceRecord.providerName && (
                   <DetailRow label="Provider">{serviceRecord.providerName}</DetailRow>
                 )}
@@ -271,13 +280,19 @@ export default async function WorkOrderDetailPage({
                   }}
                 />
               )}
-              {canComplete && completable && (
+              {canComplete && completable && vehicle && (
                 <CompleteWorkOrderDialog
                   workOrderId={workOrder.id}
-                  currentOdometerKm={vehicle?.odometerKm ?? 0}
+                  currentOdometerKm={vehicle.odometerKm}
                   schedules={scheduleOptions}
                   issues={issueOptions}
                 />
+              )}
+              {canComplete && completable && !vehicle && (
+                <p className="text-body-xs text-error">
+                  This work order&rsquo;s vehicle record is missing, so completion cannot be
+                  recorded.
+                </p>
               )}
             </div>
           </Card>
@@ -287,7 +302,9 @@ export default async function WorkOrderDetailPage({
               {userNames.get(workOrder.createdBy) ?? workOrder.createdBy}
             </DetailRow>
             <DetailRow label="Created">{formatDate(workOrder.createdAt)}</DetailRow>
-            {workOrder.startedAt && <DetailRow label="Started">{formatDate(workOrder.startedAt)}</DetailRow>}
+            {workOrder.startedAt && (
+              <DetailRow label="Started">{formatDate(workOrder.startedAt)}</DetailRow>
+            )}
             {workOrder.waitingSince && (
               <DetailRow label="Waiting since">{formatDate(workOrder.waitingSince)}</DetailRow>
             )}
@@ -304,11 +321,13 @@ export default async function WorkOrderDetailPage({
               <DetailRow label="Verified">
                 {formatDate(workOrder.verifiedAt)} by{" "}
                 {workOrder.verifiedByUserId
-                  ? userNames.get(workOrder.verifiedByUserId) ?? workOrder.verifiedByUserId
+                  ? (userNames.get(workOrder.verifiedByUserId) ?? workOrder.verifiedByUserId)
                   : "—"}
               </DetailRow>
             )}
-            {workOrder.closedAt && <DetailRow label="Closed">{formatDate(workOrder.closedAt)}</DetailRow>}
+            {workOrder.closedAt && (
+              <DetailRow label="Closed">{formatDate(workOrder.closedAt)}</DetailRow>
+            )}
           </Card>
         </div>
       </div>
@@ -319,10 +338,10 @@ export default async function WorkOrderDetailPage({
 function StripCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5 px-5 py-4">
-      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
         {label}
       </span>
-      <span className="text-data font-medium text-ink">{children}</span>
+      <span className="text-data text-ink font-medium">{children}</span>
     </div>
   );
 }
@@ -330,16 +349,17 @@ function StripCell({ label, children }: { label: string; children: React.ReactNo
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2.5">
-      <span className="font-ui text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] text-muted">
+      <span className="font-ui text-data-xs text-muted font-medium tracking-[var(--tracking-ui)] uppercase">
         {label}
       </span>
-      <span className="text-data text-right text-ink">{children}</span>
+      <span className="text-data text-ink text-right">{children}</span>
     </div>
   );
 }
 
 function scheduleIntervalLabel(intervalKm?: number, intervalDays?: number): string {
-  if (intervalKm && intervalDays) return `every ${intervalKm.toLocaleString()} km or ${intervalDays} days`;
+  if (intervalKm && intervalDays)
+    return `every ${intervalKm.toLocaleString()} km or ${intervalDays} days`;
   if (intervalKm) return `every ${intervalKm.toLocaleString()} km`;
   if (intervalDays) return `every ${intervalDays} days`;
   return "interval not set";
@@ -384,11 +404,11 @@ function Timeline({
         const done = step.at !== undefined;
         const isLast = index === steps.length - 1;
         return (
-          <li key={step.label} className="relative flex gap-3 px-5 pb-4 pt-4">
+          <li key={step.label} className="relative flex gap-3 px-5 pt-4 pb-4">
             {!isLast && (
               <span
                 aria-hidden="true"
-                className={`absolute left-[1.625rem] top-9 h-full w-px ${
+                className={`absolute top-9 left-[1.625rem] h-full w-px ${
                   done ? "bg-accent" : "bg-[var(--border-hairline)]"
                 }`}
               />

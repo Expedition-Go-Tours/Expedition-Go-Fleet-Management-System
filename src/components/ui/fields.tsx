@@ -35,10 +35,7 @@ export function Field({
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label
-        htmlFor={htmlFor}
-        className="field-label flex items-baseline gap-1"
-      >
+      <label htmlFor={htmlFor} className="field-label flex items-baseline gap-1">
         {label}
         {required && (
           <span aria-hidden="true" className="text-error">
@@ -65,11 +62,7 @@ export const Input = forwardRef<
   return (
     <input
       ref={ref}
-      className={cn(
-        "field-control",
-        invalid && "border-error focus:border-error",
-        className,
-      )}
+      className={cn("field-control", invalid && "border-error focus:border-error", className)}
       {...props}
     />
   );
@@ -82,11 +75,7 @@ export const Textarea = forwardRef<
   return (
     <textarea
       ref={ref}
-      className={cn(
-        "field-control-area",
-        invalid && "border-error focus:border-error",
-        className,
-      )}
+      className={cn("field-control-area", invalid && "border-error focus:border-error", className)}
       {...props}
     />
   );

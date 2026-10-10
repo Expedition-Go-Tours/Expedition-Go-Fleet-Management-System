@@ -1,6 +1,9 @@
 import { Bell } from "lucide-react";
 
-import { NotificationCentre, type CentreNotification } from "@/components/notifications/NotificationCentre";
+import {
+  NotificationCentre,
+  type CentreNotification,
+} from "@/components/notifications/NotificationCentre";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { requirePagePermission } from "@/lib/auth/page-guard";

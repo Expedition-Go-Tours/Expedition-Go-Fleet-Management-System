@@ -81,7 +81,13 @@ export function CloseIssueDialog({ issueId }: { issueId: string }) {
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" type="submit" form="close-issue-form" isLoading={busy}>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              form="close-issue-form"
+              isLoading={busy}
+            >
               Close issue
             </Button>
           </>
@@ -89,7 +95,10 @@ export function CloseIssueDialog({ issueId }: { issueId: string }) {
       >
         <form id="close-issue-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           {error && (
-            <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error">
+            <p
+              role="alert"
+              className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3"
+            >
               {error}
             </p>
           )}
@@ -116,7 +125,7 @@ export function CloseIssueDialog({ issueId }: { issueId: string }) {
                   onChange={() => setMode(value)}
                   className="accent-orange h-4 w-4"
                 />
-                <span className="text-data text-sm font-medium text-ink">{label}</span>
+                <span className="text-data text-ink text-sm font-medium">{label}</span>
               </label>
             ))}
           </div>

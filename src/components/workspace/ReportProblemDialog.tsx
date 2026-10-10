@@ -84,7 +84,10 @@ export function ReportProblemDialog({
       >
         <form id="problem-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           {error && (
-            <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error">
+            <p
+              role="alert"
+              className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3"
+            >
               {error}
             </p>
           )}
@@ -101,7 +104,13 @@ export function ReportProblemDialog({
           </Field>
 
           <Field label="Title" required htmlFor="pp-title">
-            <Input id="pp-title" name="title" required maxLength={200} placeholder="e.g. Brake pedal feels soft" />
+            <Input
+              id="pp-title"
+              name="title"
+              required
+              maxLength={200}
+              placeholder="e.g. Brake pedal feels soft"
+            />
           </Field>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -143,7 +152,7 @@ export function ReportProblemDialog({
           </Field>
 
           <div className="flex flex-wrap gap-4">
-            <label className="hover:bg-subtle flex cursor-pointer items-center gap-2 rounded-md border border-hairline p-2.5">
+            <label className="hover:bg-subtle border-hairline flex cursor-pointer items-center gap-2 rounded-md border p-2.5">
               <input
                 type="checkbox"
                 checked={immobilized}

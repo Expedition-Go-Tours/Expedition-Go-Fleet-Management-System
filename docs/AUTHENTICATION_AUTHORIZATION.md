@@ -1,9 +1,27 @@
 # Expedition Go Tours — Authentication & Authorization Specification
 
-**Document type:** Production implementation specification  
+> **⚠️ HISTORICAL / PARTIALLY SUPERSEDED.** The *conceptual* security model in
+> this document (invite-only access, server-side authorization on every request,
+> permission checks, resource scoping, session revocation, audit logging and the
+> role boundaries) **remains authoritative**. The **storage/session technology
+> recommendations are NOT the implemented architecture**:
+>
+> - **Redis-backed sessions → NOT USED.** Sessions are opaque, server-managed and
+>   persisted in **Cloud Firestore** (`sessions`), with a SHA-256 hashed token.
+> - **PostgreSQL + Prisma → NOT USED.** Employee profiles, roles, permissions and
+>   audit records live in **Cloud Firestore**.
+> - **Node.js + Express → NOT USED.** The API is implemented with **Next.js App
+>   Router route handlers** under `/api/v1/*` on Vercel.
+>
+> The current, binding architecture is [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+> Read this document for the authorization *contract*; read ARCHITECTURE.md for
+> how it is actually built. Where the two disagree on storage or runtime, the
+> implemented architecture wins.
+
+**Document type:** Production implementation specification (security model)  
 **Application:** Internal vehicle maintenance and fleet management  
 **Scope:** Staff identity, sessions, permissions, audit events, and account lifecycle  
-**Status:** Recommended baseline for MVP
+**Status:** Security model authoritative; storage/runtime recommendations superseded by ARCHITECTURE.md
 
 ## 1. Executive decision
 

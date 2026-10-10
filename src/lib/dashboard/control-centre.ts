@@ -48,11 +48,7 @@ export interface ActionItem {
   /** Stable, unique key for React lists (entity id, not display text). */
   id: string;
   kind:
-    | "critical_issue"
-    | "safety_hold"
-    | "overdue_maintenance"
-    | "document"
-    | "waiting_work_order";
+    "critical_issue" | "safety_hold" | "overdue_maintenance" | "document" | "waiting_work_order";
   title: string;
   details: string;
   href: string;
@@ -106,17 +102,25 @@ export async function loadControlCentre(input: {
     return result;
   }
 
-  const [vehicles, activeAssignments, openIssuesAll, triagedIssuesAll, openCritical, triagedCritical, workOrders, expenses] =
-    await Promise.all([
-      listVehicles(),
-      listAssignments({ status: "ACTIVE", limit: 500 }),
-      canReadAllReports ? listIssues({ status: "OPEN", limit: 500 }) : [],
-      canReadAllReports ? listIssues({ status: "TRIAGED", limit: 500 }) : [],
-      canReadAllReports ? listIssues({ safetyCritical: true, status: "OPEN", limit: 200 }) : [],
-      canReadAllReports ? listIssues({ safetyCritical: true, status: "TRIAGED", limit: 200 }) : [],
-      canReadWorkOrders ? listWorkOrders({ limit: 500 }) : [],
-      canReadExpenses ? listExpenses({ status: "RECORDED", limit: 500 }) : [],
-    ]);
+  const [
+    vehicles,
+    activeAssignments,
+    openIssuesAll,
+    triagedIssuesAll,
+    openCritical,
+    triagedCritical,
+    workOrders,
+    expenses,
+  ] = await Promise.all([
+    listVehicles(),
+    listAssignments({ status: "ACTIVE", limit: 500 }),
+    canReadAllReports ? listIssues({ status: "OPEN", limit: 500 }) : [],
+    canReadAllReports ? listIssues({ status: "TRIAGED", limit: 500 }) : [],
+    canReadAllReports ? listIssues({ safetyCritical: true, status: "OPEN", limit: 200 }) : [],
+    canReadAllReports ? listIssues({ safetyCritical: true, status: "TRIAGED", limit: 200 }) : [],
+    canReadWorkOrders ? listWorkOrders({ limit: 500 }) : [],
+    canReadExpenses ? listExpenses({ status: "RECORDED", limit: 500 }) : [],
+  ]);
 
   const fleetVehicles = vehicles.filter((v) => v.status !== "ARCHIVED");
   const activeVehicleIds = new Set(activeAssignments.map((a) => a.vehicleId));
@@ -217,7 +221,10 @@ export async function loadControlCentre(input: {
       details: string;
       href: string;
     }
-    const docFindings: { missing: DocFinding[]; expired: DocFinding[] } = { missing: [], expired: [] };
+    const docFindings: { missing: DocFinding[]; expired: DocFinding[] } = {
+      missing: [],
+      expired: [],
+    };
 
     for (const vehicle of fleetVehicles) {
       const documents = await listDocuments(vehicle.id);

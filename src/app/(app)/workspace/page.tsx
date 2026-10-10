@@ -70,11 +70,17 @@ export default async function WorkspacePage() {
     listIncidents({ reportedBy: context.user.id, limit: 10 }),
     countIncidents({ reportedBy: context.user.id }),
     listVehicles(),
-    Promise.all(context.user.roles.map((role) => listNotifications({ recipientRole: role, limit: 500 }))),
+    Promise.all(
+      context.user.roles.map((role) => listNotifications({ recipientRole: role, limit: 500 })),
+    ),
     listInspections({ inspectorUserId: context.user.id, limit: 8 }),
     // Today's inspections on the assigned vehicle decide the "submitted" state.
     assignment
-      ? listInspections({ vehicleId: assignment.vehicleId, inspectorUserId: context.user.id, limit: 100 })
+      ? listInspections({
+          vehicleId: assignment.vehicleId,
+          inspectorUserId: context.user.id,
+          limit: 100,
+        })
       : Promise.resolve([]),
   ]);
 
@@ -129,7 +135,7 @@ export default async function WorkspacePage() {
               <div className="flex flex-wrap items-center gap-3">
                 <Link
                   href={`/vehicles/${vehicle.id}`}
-                  className="text-body-sm font-semibold text-link hover:underline"
+                  className="text-body-sm text-link font-semibold hover:underline"
                 >
                   {vehicle.regNumber} — {vehicle.make} {vehicle.model}
                 </Link>
@@ -171,9 +177,7 @@ export default async function WorkspacePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-3 py-2">
-              <p className="text-body-sm text-ink">
-                You have no assigned trip.
-              </p>
+              <p className="text-body-sm text-ink">You have no assigned trip.</p>
               <p className="text-body-xs text-muted">
                 Contact operations to be assigned a vehicle. Inspections and end-of-trip readings
                 can only be submitted against an active assignment.
@@ -199,12 +203,12 @@ export default async function WorkspacePage() {
               <div className="flex flex-col gap-4 p-5">
                 <p className="text-body-xs text-muted">
                   Run the pre-trip check before departure and the return check once the trip ends.
-                  Failed critical items raise linked issues and a safety hold — that cannot be undone
-                  from the workspace.
+                  Failed critical items raise linked issues and a safety hold — that cannot be
+                  undone from the workspace.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   {preTripSubmitted ? (
-                    <span className="text-success inline-flex items-center gap-1.5 rounded-md border border-success/25 bg-success/10 px-3 py-2 text-body-xs font-medium">
+                    <span className="text-success border-success/25 bg-success/10 text-body-xs inline-flex items-center gap-1.5 rounded-md border px-3 py-2 font-medium">
                       <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
                       Pre-trip submitted today
                     </span>
@@ -219,7 +223,7 @@ export default async function WorkspacePage() {
                     />
                   )}
                   {returnSubmitted ? (
-                    <span className="text-success inline-flex items-center gap-1.5 rounded-md border border-success/25 bg-success/10 px-3 py-2 text-body-xs font-medium">
+                    <span className="text-success border-success/25 bg-success/10 text-body-xs inline-flex items-center gap-1.5 rounded-md border px-3 py-2 font-medium">
                       <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
                       Return submitted today
                     </span>
@@ -246,9 +250,7 @@ export default async function WorkspacePage() {
             icon={AlertTriangle}
           >
             {issues.length === 0 ? (
-              <p className="text-body-xs text-muted px-5 py-6">
-                You have not reported any issues.
-              </p>
+              <p className="text-body-xs text-muted px-5 py-6">You have not reported any issues.</p>
             ) : (
               <ul className="divide-hairline divide-y">
                 {issues.map((issue) => {
@@ -260,12 +262,13 @@ export default async function WorkspacePage() {
                         className="hover:bg-subtle flex items-start justify-between gap-3 px-5 py-3 transition-colors"
                       >
                         <div className="min-w-0">
-                          <p className="text-body-sm font-medium text-ink">
+                          <p className="text-body-sm text-ink font-medium">
                             {issue.number ? `${issue.number} — ` : ""}
                             {issue.title}
                           </p>
                           <p className="text-body-xs text-muted mt-0.5">
-                            {v ? v.regNumber : "—"} · {issue.severity} · {formatDate(issue.createdAt)}
+                            {v ? v.regNumber : "—"} · {issue.severity} ·{" "}
+                            {formatDate(issue.createdAt)}
                           </p>
                         </div>
                         <StatusBadge status={issue.status} />
@@ -299,7 +302,7 @@ export default async function WorkspacePage() {
                         className="hover:bg-subtle flex items-start justify-between gap-3 px-5 py-3 transition-colors"
                       >
                         <div className="min-w-0">
-                          <p className="text-body-sm font-medium text-ink">
+                          <p className="text-body-sm text-ink font-medium">
                             {incident.type.replace(/_/g, " ").toLowerCase()} — {incident.severity}
                           </p>
                           <p className="text-body-xs text-muted mt-0.5">
@@ -326,7 +329,7 @@ export default async function WorkspacePage() {
                     className="flex items-center justify-between gap-3 px-5 py-3"
                   >
                     <div className="min-w-0">
-                      <p className="text-body-sm font-medium text-ink">
+                      <p className="text-body-sm text-ink font-medium">
                         {inspection.type === "PRE_TRIP" ? "Pre-trip" : "Return"} ·{" "}
                         {formatDate(inspection.submittedAt)}
                       </p>
@@ -369,7 +372,7 @@ export default async function WorkspacePage() {
             action={
               <Link
                 href="/notifications"
-                className="text-body-xs font-medium text-link hover:underline"
+                className="text-body-xs text-link font-medium hover:underline"
               >
                 View all
               </Link>

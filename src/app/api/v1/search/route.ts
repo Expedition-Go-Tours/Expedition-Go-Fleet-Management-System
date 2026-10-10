@@ -41,20 +41,24 @@ export async function GET(request: NextRequest) {
     }
     const needle = q.toLowerCase();
 
-    const response: SearchResponse = { query: q, vehicles: [], issues: [], workOrders: [], matched: needle };
+    const response: SearchResponse = {
+      query: q,
+      vehicles: [],
+      issues: [],
+      workOrders: [],
+      matched: needle,
+    };
 
     const canReadVehicles = rolesHavePermission(context.user.roles, PERMISSIONS.VEHICLE_READ);
     const canReadAllReports = rolesHavePermission(context.user.roles, PERMISSIONS.REPORT_READ_ALL);
+    const canReadOwnReports = rolesHavePermission(context.user.roles, PERMISSIONS.REPORT_READ_OWN);
     const canReadWorkOrders = rolesHavePermission(context.user.roles, PERMISSIONS.WORK_ORDER_READ);
 
     if (canReadVehicles) {
       const vehicles = await listVehicles({ limit: 200 });
       response.vehicles = vehicles
         .filter((v) =>
-          [v.regNumber, v.make, v.model, String(v.year)]
-            .join(" ")
-            .toLowerCase()
-            .includes(needle),
+          [v.regNumber, v.make, v.model, String(v.year)].join(" ").toLowerCase().includes(needle),
         )
         .slice(0, 5)
         .map((v) => ({
@@ -65,19 +69,24 @@ export async function GET(request: NextRequest) {
         }));
     }
 
-    const issues = await listIssues({
-      ...(canReadAllReports ? {} : { reportedBy: context.user.id }),
-      limit: 300,
-    });
-    response.issues = issues
-      .filter((issue) => `${issue.number ?? ""} ${issue.title}`.toLowerCase().includes(needle))
-      .slice(0, 5)
-      .map((issue) => ({
-        id: issue.id,
-        label: issue.title,
-        sublabel: `${issue.number ?? "Issue"} · ${issue.severity.toLowerCase()}`,
-        href: `/reports/${issue.id}`,
-      }));
+    // The issues group requires an explicit report-read permission: a user with
+    // no report permission must not see issues through global search, and a
+    // user with only report:read:own must not see anyone else's.
+    if (canReadAllReports || canReadOwnReports) {
+      const issues = await listIssues({
+        ...(canReadAllReports ? {} : { reportedBy: context.user.id }),
+        limit: 300,
+      });
+      response.issues = issues
+        .filter((issue) => `${issue.number ?? ""} ${issue.title}`.toLowerCase().includes(needle))
+        .slice(0, 5)
+        .map((issue) => ({
+          id: issue.id,
+          label: issue.title,
+          sublabel: `${issue.number ?? "Issue"} · ${issue.severity.toLowerCase()}`,
+          href: `/reports/${issue.id}`,
+        }));
+    }
 
     if (canReadWorkOrders) {
       const workOrders = await listWorkOrders({ limit: 300 });

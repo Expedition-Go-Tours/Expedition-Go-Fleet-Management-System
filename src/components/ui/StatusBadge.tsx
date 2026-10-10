@@ -95,7 +95,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "rounded-pill font-ui inline-flex items-center whitespace-nowrap border px-2.5 py-0.5 text-[length:var(--fs-ui-xs)] font-medium tracking-[var(--tracking-ui)] uppercase",
+        "rounded-pill font-ui inline-flex items-center border px-2.5 py-0.5 text-[length:var(--fs-ui-xs)] font-medium tracking-[var(--tracking-ui)] whitespace-nowrap uppercase",
         TONES[resolved],
         className,
       )}
@@ -118,7 +118,7 @@ export function StatusDot({
   return (
     <span className={cn("inline-flex items-center gap-1.5", className)}>
       <span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", DOT_TONES[resolved])} />
-      <span className="font-ui text-ink-2 text-[length:var(--fs-data-xs)] font-medium uppercase tracking-[var(--tracking-ui)]">
+      <span className="font-ui text-ink-2 text-[length:var(--fs-data-xs)] font-medium tracking-[var(--tracking-ui)] uppercase">
         {formatStatusLabel(status)}
       </span>
     </span>

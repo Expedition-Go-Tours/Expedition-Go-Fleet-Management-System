@@ -22,7 +22,9 @@ export const POST = makeActionHandler<IncidentStatus, IncidentReport>({
     if (def.to === "RESOLVED") {
       const resolution = typeof body.resolution === "string" ? body.resolution.trim() : "";
       if (!resolution || resolution.length > 2000) {
-        throw ApiError.badRequest("Resolving an incident requires a resolution note (max 2000 chars)");
+        throw ApiError.badRequest(
+          "Resolving an incident requires a resolution note (max 2000 chars)",
+        );
       }
       return applyIncidentStatus(entity.id, def.to, actorId, { resolution });
     }

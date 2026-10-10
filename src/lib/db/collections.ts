@@ -6,6 +6,7 @@ export const COLLECTIONS = {
   sessions: "sessions",
   invites: "invites",
   vehicles: "vehicles",
+  registrationLocks: "registrationLocks",
   odometerReadings: "odometerReadings",
   mileageEntries: "mileageEntries", // deprecated alias kept for migration
   maintenanceTemplates: "maintenanceTemplates",
@@ -16,6 +17,7 @@ export const COLLECTIONS = {
   workOrders: "workOrders",
   workOrderIssues: "workOrderIssues",
   assignments: "assignments",
+  assignmentReservations: "assignmentReservations",
   inspections: "inspections",
   expenses: "expenses",
   fuelEntries: "fuelEntries",

@@ -8,10 +8,13 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ASSIGNMENT_PURPOSES } from "@/lib/domain/assignment";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import {
+  AssignmentConflictError,
+  cancelAssignment,
   getActiveAssignmentForDriver,
   getActiveAssignmentForVehicle,
   listAssignments,
-  startAssignment,
+  reserveAssignment,
+  setAssignmentStartReading,
 } from "@/lib/repos/assignments";
 import { getVehicleById } from "@/lib/repos/vehicles";
 import { recordReading } from "@/lib/repos/odometers";
@@ -112,28 +115,21 @@ export async function POST(request: NextRequest) {
       throw ApiError.conflict("Vehicle is in the workshop");
     }
 
-    // One active assignment per vehicle and per driver.
-    const existingForVehicle = await getActiveAssignmentForVehicle(vehicleId);
-    if (existingForVehicle) {
+    // Advisory pre-checks: friendly errors and legacy safety (an ACTIVE
+    // assignment created before reservations existed). The authoritative
+    // concurrency enforcement is the reservation transaction below.
+    if (await getActiveAssignmentForVehicle(vehicleId)) {
       throw ApiError.conflict("Vehicle already has an active assignment");
     }
-    const existingForDriver = await getActiveAssignmentForDriver(driverUserId);
-    if (existingForDriver) {
+    if (await getActiveAssignmentForDriver(driverUserId)) {
       throw ApiError.conflict("Driver already has an active assignment");
     }
 
-    // Start odometer through the ledger (transactional with its own checks).
-    const reading = await recordReading({
-      vehicleId,
-      km: startOdometerKm,
-      source: "TRIP_START",
-      recordedByUserId: context.user.id,
-      notes: `Assignment start — ${purpose}`,
-      clientToken:
-        typeof body.clientToken === "string" ? body.clientToken.slice(0, 100) : undefined,
-    });
-
-    const assignment = await startAssignment({
+    // Acquire the vehicle and driver reservation and create the assignment in
+    // ONE Firestore transaction. This is the concurrency-safe enforcement
+    // point: simultaneous requests contend on the same reservation documents,
+    // so only one can win. The reads above are friendly pre-checks only.
+    const assignment = await reserveAssignment({
       vehicleId,
       driverUserId,
       purpose: purpose as import("@/lib/domain/assignment").AssignmentPurpose,
@@ -143,9 +139,29 @@ export async function POST(request: NextRequest) {
           : undefined,
       notes: typeof body.notes === "string" ? body.notes.slice(0, 1000) : undefined,
       startOdometerKm,
-      startOdometerReadingId: reading.reading.id,
       createdBy: context.user.id,
+    }).catch((error: unknown) => {
+      if (error instanceof AssignmentConflictError) throw ApiError.conflict(error.message);
+      throw error;
     });
+
+    // Start odometer through the ledger (transactional with its own checks).
+    // If the ledger rejects the reading (e.g. a stale submission), release the
+    // reservation so a failed start leaves no permanent partial state.
+    const reading = await recordReading({
+      vehicleId,
+      km: startOdometerKm,
+      source: "TRIP_START",
+      recordedByUserId: context.user.id,
+      notes: `Assignment start — ${purpose}`,
+      clientToken:
+        typeof body.clientToken === "string" ? body.clientToken.slice(0, 100) : undefined,
+    }).catch(async (error: unknown) => {
+      await cancelAssignment(assignment.id, "Start odometer reading rejected").catch(() => {});
+      throw error;
+    });
+
+    await setAssignmentStartReading(assignment.id, reading.reading.id);
 
     await writeAuditEvent({
       eventType: AUDIT_EVENTS.ASSIGNMENT_STARTED,

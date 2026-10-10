@@ -83,9 +83,24 @@ export default async function FuelPage({
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <KpiCard label="Entries shown" value={rows.length} icon={<Droplets aria-hidden="true" className="h-4 w-4" />} context={`${vehicleCount} vehicle${vehicleCount === 1 ? "" : "s"}`} />
-        <KpiCard label="Volume" value={`${formatNumber(totalLitres)} L`} context="Recorded litres" icon={<Fuel aria-hidden="true" className="h-4 w-4" />} />
-        <KpiCard label="Spend" value={formatMoney(totalMinor)} context="Mirrored into expenses" icon={<ReceiptText aria-hidden="true" className="h-4 w-4" />} />
+        <KpiCard
+          label="Entries shown"
+          value={rows.length}
+          icon={<Droplets aria-hidden="true" className="h-4 w-4" />}
+          context={`${vehicleCount} vehicle${vehicleCount === 1 ? "" : "s"}`}
+        />
+        <KpiCard
+          label="Volume"
+          value={`${formatNumber(totalLitres)} L`}
+          context="Recorded litres"
+          icon={<Fuel aria-hidden="true" className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Spend"
+          value={formatMoney(totalMinor)}
+          context="Mirrored into expenses"
+          icon={<ReceiptText aria-hidden="true" className="h-4 w-4" />}
+        />
         <KpiCard
           label="Measured efficiency"
           value={measuredCount > 0 ? `${measuredCount} fill-ups` : "—"}
@@ -132,40 +147,45 @@ export default async function FuelPage({
                 <CellMeta className="block">{row.station ?? ""}</CellMeta>
               </Td>
               <Td>
-                <Link href={row.vehicleHref} className="text-data font-medium text-link hover:underline">
+                <Link
+                  href={row.vehicleHref}
+                  className="text-data text-link font-medium hover:underline"
+                >
                   {row.vehicleLabel}
                 </Link>
               </Td>
               <Td>
-                <span className="text-data tabular-nums text-ink">
+                <span className="text-data text-ink tabular-nums">
                   {row.odometerKm.toLocaleString()} km
                 </span>
               </Td>
               <Td>
-                <span className="text-data tabular-nums text-ink">
+                <span className="text-data text-ink tabular-nums">
                   {formatNumber(row.litres)} L
                 </span>
               </Td>
               <Td>
-                <span className="text-data tabular-nums text-ink">
+                <span className="text-data text-ink tabular-nums">
                   {typeof row.unitPriceMinor === "number"
                     ? formatMoney(row.unitPriceMinor, row.currency)
                     : "—"}
                 </span>
               </Td>
               <Td>
-                <span className="text-data tabular-nums font-medium text-ink">
+                <span className="text-data text-ink font-medium tabular-nums">
                   {formatMoney(row.totalMinor, row.currency)}
                 </span>
               </Td>
               <Td>
-                <span className={`text-data-xs font-medium uppercase tracking-[var(--tracking-ui)] ${row.fullTank ? "text-success" : "text-muted"}`}>
+                <span
+                  className={`text-data-xs font-medium tracking-[var(--tracking-ui)] uppercase ${row.fullTank ? "text-success" : "text-muted"}`}
+                >
                   {row.fullTank ? "Full" : "Partial"}
                 </span>
               </Td>
               <Td>
                 {row.kmPerLitre !== null ? (
-                  <span className="text-data tabular-nums text-ink">
+                  <span className="text-data text-ink tabular-nums">
                     {formatNumber(row.kmPerLitre)} km/l
                   </span>
                 ) : (

@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
 
-import {
-  ShellLayout,
-  type ShellUser,
-} from "@/components/layout/ShellLayout";
+import { ShellLayout, type ShellUser } from "@/components/layout/ShellLayout";
 import { visibleNavGroups } from "@/components/layout/nav";
 import type { BellNotification } from "@/components/notifications/NotificationBell";
 import type { PublicUser } from "@/lib/auth/types";

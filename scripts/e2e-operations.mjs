@@ -144,6 +144,11 @@ async function createUser(email, roles) {
 const created = { users: [], docIds: [] };
 async function cleanup() {
   for (const user of created.users) {
+    await db
+      .collection("assignmentReservations")
+      .doc(`driver:${user.uid}`)
+      .delete()
+      .catch(() => {});
     for (const coll of ["sessions", "auditLogs"]) {
       const field = coll === "sessions" ? "userId" : "actorId";
       const snap = await db.collection(coll).where(field, "==", user.uid).get();
@@ -157,6 +162,13 @@ async function cleanup() {
     await adminAuth.deleteUser(user.uid).catch(() => {});
   }
   for (const [collection, id] of created.docIds) {
+    if (collection === "vehicles") {
+      await db
+        .collection("assignmentReservations")
+        .doc(`vehicle:${id}`)
+        .delete()
+        .catch(() => {});
+    }
     await db
       .collection(collection)
       .doc(id)
@@ -271,8 +283,24 @@ try {
       conflictEnd.status === 409,
       JSON.stringify(conflictEnd.body).slice(0, 200),
     );
-    // Clean up the stuck assignment directly.
+    // Clean up the stuck assignment directly, releasing its vehicle/driver
+    // reservations so the vehicle is left genuinely free (mirrors the
+    // transactional cancelAssignment path).
     await db.collection("assignments").doc(a2).update({ status: "CANCELLED" });
+    const a2VehicleId = start2.body.assignment?.vehicleId ?? vehRef.id;
+    const a2DriverId = start2.body.assignment?.driverUserId;
+    await db
+      .collection("assignmentReservations")
+      .doc(`vehicle:${a2VehicleId}`)
+      .delete()
+      .catch(() => {});
+    if (a2DriverId) {
+      await db
+        .collection("assignmentReservations")
+        .doc(`driver:${a2DriverId}`)
+        .delete()
+        .catch(() => {});
+    }
   }
 
   /* ── Fuel: canonical expense, defensible consumption ────────────────── */

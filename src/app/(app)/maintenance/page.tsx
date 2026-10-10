@@ -1,11 +1,5 @@
 import Link from "next/link";
-import {
-  AlertTriangle,
-  CalendarClock,
-  CheckCircle2,
-  ClipboardList,
-  Clock3,
-} from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Clock3 } from "lucide-react";
 
 import { MaintenanceFilters } from "@/components/maintenance/MaintenanceFilters";
 import { Card } from "@/components/ui/Card";
@@ -50,7 +44,9 @@ export default async function MaintenancePage({
 }) {
   await requirePagePermission(PERMISSIONS.SCHEDULE_READ);
   const { state, vehicleId } = await searchParams;
-  const validState = STATE_ORDER.includes(state as ScheduleStatus) ? (state as ScheduleStatus) : null;
+  const validState = STATE_ORDER.includes(state as ScheduleStatus)
+    ? (state as ScheduleStatus)
+    : null;
 
   const [schedules, vehicles] = await Promise.all([listAllSchedules(), listVehicles()]);
 
@@ -100,11 +96,18 @@ export default async function MaintenancePage({
   const sorted = filtered.sort((a, b) => {
     const rank = (s: ScheduleStatus) => STATE_ORDER.indexOf(s);
     if (rank(a.status) !== rank(b.status)) return rank(a.status) - rank(b.status);
-    return a.vehicleLabel.localeCompare(b.vehicleLabel) || a.schedule.taskName.localeCompare(b.schedule.taskName);
+    return (
+      a.vehicleLabel.localeCompare(b.vehicleLabel) ||
+      a.schedule.taskName.localeCompare(b.schedule.taskName)
+    );
   });
 
   const onTime = counts.get("OK") ?? 0;
-  const totalConfigured = (counts.get("OVERDUE") ?? 0) + (counts.get("DUE") ?? 0) + (counts.get("DUE_SOON") ?? 0) + onTime;
+  const totalConfigured =
+    (counts.get("OVERDUE") ?? 0) +
+    (counts.get("DUE") ?? 0) +
+    (counts.get("DUE_SOON") ?? 0) +
+    onTime;
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,7 +142,14 @@ export default async function MaintenancePage({
           context="Inside the warning window"
           icon={<Clock3 aria-hidden="true" className="h-4 w-4" />}
         />
-        <KpiCard label="On schedule" value={onTime} tone="success" href="/maintenance?state=OK" context="Within limits" icon={<CheckCircle2 aria-hidden="true" className="h-4 w-4" />} />
+        <KpiCard
+          label="On schedule"
+          value={onTime}
+          tone="success"
+          href="/maintenance?state=OK"
+          context="Within limits"
+          icon={<CheckCircle2 aria-hidden="true" className="h-4 w-4" />}
+        />
         <KpiCard
           label="Not configured"
           value={counts.get("NOT_CONFIGURED") ?? 0}
@@ -194,12 +204,15 @@ export default async function MaintenancePage({
                 <StatusBadge status={row.status} />
               </Td>
               <Td>
-                <Link href={row.vehicleHref} className="text-data font-medium text-link hover:underline">
+                <Link
+                  href={row.vehicleHref}
+                  className="text-data text-link font-medium hover:underline"
+                >
                   {row.vehicleLabel}
                 </Link>
               </Td>
               <Td>
-                <span className="text-data font-medium text-ink">{row.schedule.taskName}</span>
+                <span className="text-data text-ink font-medium">{row.schedule.taskName}</span>
                 <CellMeta className="block">
                   {row.schedule.category.replace(/_/g, " ").toLowerCase()}
                 </CellMeta>
@@ -227,9 +240,7 @@ export default async function MaintenancePage({
                   status={row.status}
                   remainingKm={row.remainingKm}
                   remainingDays={row.remainingDays}
-                  lastServiceKm={
-                    row.schedule.lastServiceOdometerKm
-                  }
+                  lastServiceKm={row.schedule.lastServiceOdometerKm}
                 />
               </Td>
             </tr>
@@ -266,9 +277,7 @@ function RemainingCell({
 }) {
   if (status === "NOT_CONFIGURED") {
     return (
-      <CellMeta>
-        {typeof lastServiceKm === "number" ? "Baseline only" : "No baseline set"}
-      </CellMeta>
+      <CellMeta>{typeof lastServiceKm === "number" ? "Baseline only" : "No baseline set"}</CellMeta>
     );
   }
   if (remainingKm !== null) {

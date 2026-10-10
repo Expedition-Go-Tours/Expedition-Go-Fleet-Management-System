@@ -32,11 +32,11 @@ export function EmptyState({
     >
       {Icon && (
         <div className="bg-subtle border-hairline mb-1 flex h-11 w-11 items-center justify-center rounded-full border">
-          <Icon aria-hidden="true" className="h-5 w-5 text-faint" />
+          <Icon aria-hidden="true" className="text-faint h-5 w-5" />
         </div>
       )}
-      <h3 className="font-heading text-card-title font-semibold text-ink">{title}</h3>
-      {description && <p className="max-w-sm text-body-xs text-muted">{description}</p>}
+      <h3 className="font-heading text-card-title text-ink font-semibold">{title}</h3>
+      {description && <p className="text-body-xs text-muted max-w-sm">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   );

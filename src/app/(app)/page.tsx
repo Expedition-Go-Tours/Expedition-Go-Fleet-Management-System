@@ -49,7 +49,10 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <DashboardHero
-        updatedLabel={new Date(centre.asOf).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+        updatedLabel={new Date(centre.asOf).toLocaleString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
         canBrowseFleet={canReadVehicles}
       />
 
@@ -75,7 +78,13 @@ export default async function DashboardPage() {
       {centre.fleet && (
         <section aria-label="Fleet overview">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <KpiCard label="Total vehicles" value={formatNumber(centre.fleet.total)} href="/vehicles" context="Non-archived" icon={<Car aria-hidden="true" className="h-4 w-4" />} />
+            <KpiCard
+              label="Total vehicles"
+              value={formatNumber(centre.fleet.total)}
+              href="/vehicles"
+              context="Non-archived"
+              icon={<Car aria-hidden="true" className="h-4 w-4" />}
+            />
             <KpiCard
               label="Available now"
               value={formatNumber(centre.fleet.available)}
@@ -84,7 +93,13 @@ export default async function DashboardPage() {
               context="Active, unassigned, no critical issue"
               icon={<KeyRound aria-hidden="true" className="h-4 w-4" />}
             />
-            <KpiCard label="In use" value={formatNumber(centre.fleet.inUse)} href="/vehicles?availability=in_use" context="Active with a current assignment" icon={<Route aria-hidden="true" className="h-4 w-4" />} />
+            <KpiCard
+              label="In use"
+              value={formatNumber(centre.fleet.inUse)}
+              href="/vehicles?availability=in_use"
+              context="Active with a current assignment"
+              icon={<Route aria-hidden="true" className="h-4 w-4" />}
+            />
             <KpiCard
               label="In workshop"
               value={formatNumber(centre.fleet.inWorkshop)}
@@ -133,7 +148,11 @@ export default async function DashboardPage() {
               label="Open work orders"
               value={formatNumber(centre.maintenance.openWorkOrders)}
               href="/work-orders?open=1"
-              context={centre.maintenance.waitingWorkOrders > 0 ? `${centre.maintenance.waitingWorkOrders} waiting` : "No waiting orders"}
+              context={
+                centre.maintenance.waitingWorkOrders > 0
+                  ? `${centre.maintenance.waitingWorkOrders} waiting`
+                  : "No waiting orders"
+              }
               tone={centre.maintenance.waitingWorkOrders > 0 ? "warning" : "default"}
               icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
             />
@@ -177,13 +196,16 @@ export default async function DashboardPage() {
           {centre.issuesBySeverity && (
             <Card title="Open issues by severity" icon={AlertTriangle} flush>
               {centre.issuesBySeverity.length === 0 ? (
-                <p className="text-body-xs px-5 py-6 text-muted">No open issues.</p>
+                <p className="text-body-xs text-muted px-5 py-6">No open issues.</p>
               ) : (
                 <ul className="divide-hairline divide-y">
                   {centre.issuesBySeverity.map((row) => (
-                    <li key={row.severity} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <li
+                      key={row.severity}
+                      className="flex items-center justify-between gap-3 px-5 py-3"
+                    >
                       <StatusBadge status={row.severity} />
-                      <span className="font-heading text-heading-md font-semibold tabular-nums text-ink">
+                      <span className="font-heading text-heading-md text-ink font-semibold tabular-nums">
                         {formatNumber(row.count)}
                       </span>
                     </li>
@@ -199,17 +221,21 @@ export default async function DashboardPage() {
               description="This calendar month (RECORDED only)"
               icon={ReceiptText}
               action={
-                <Link href="/expenses" className="text-body-xs font-medium text-link hover:underline">
+                <Link
+                  href="/expenses"
+                  className="text-body-xs text-link font-medium hover:underline"
+                >
                   Open ledger
                 </Link>
               }
             >
               <div className="flex items-end justify-between gap-4">
-                <p className="font-heading text-heading-lg font-semibold tabular-nums text-ink">
+                <p className="font-heading text-heading-lg text-ink font-semibold tabular-nums">
                   {formatMoney(centre.monthExpenses.totalMinor)}
                 </p>
                 <p className="text-body-xs text-muted">
-                  {formatNumber(centre.monthExpenses.count)} entr{centre.monthExpenses.count === 1 ? "y" : "ies"}
+                  {formatNumber(centre.monthExpenses.count)} entr
+                  {centre.monthExpenses.count === 1 ? "y" : "ies"}
                 </p>
               </div>
             </Card>
@@ -218,14 +244,20 @@ export default async function DashboardPage() {
           {canReadSchedules && (
             <Link
               href="/maintenance"
-              className="hover:bg-panel-2 group bg-panel-1 flex flex-col gap-2 rounded-lg p-5 text-on-dark transition-colors"
+              className="hover:bg-panel-2 group bg-panel-1 text-on-dark flex flex-col gap-2 rounded-lg p-5 transition-colors"
             >
-              <span className="font-heading text-card-title font-semibold text-white">Maintenance centre</span>
+              <span className="font-heading text-card-title font-semibold text-white">
+                Maintenance centre
+              </span>
               <span className="text-body-xs text-on-dark-muted">
                 Fleet-wide preventive maintenance schedules, due dates and history.
               </span>
-              <span className="mt-1 inline-flex items-center gap-1.5 text-body-xs font-medium text-accent">
-                Open maintenance <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              <span className="text-body-xs text-accent mt-1 inline-flex items-center gap-1.5 font-medium">
+                Open maintenance{" "}
+                <ArrowRight
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                />
               </span>
             </Link>
           )}
@@ -247,16 +279,18 @@ function QueueRow({ item }: { item: ActionItem }) {
     <li>
       <Link
         href={item.href}
-        className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-subtle"
+        className="hover:bg-subtle flex items-start gap-3 px-5 py-3.5 transition-colors"
       >
-        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${toneClasses}`}>
+        <span
+          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${toneClasses}`}
+        >
           <Icon aria-hidden="true" className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="text-data block truncate font-semibold text-ink">{item.title}</span>
-          <span className="text-data-xs mt-0.5 block break-words text-muted">{item.details}</span>
+          <span className="text-data text-ink block truncate font-semibold">{item.title}</span>
+          <span className="text-data-xs text-muted mt-0.5 block break-words">{item.details}</span>
         </span>
-        <ArrowRight aria-hidden="true" className="mt-2 h-4 w-4 shrink-0 text-faint" />
+        <ArrowRight aria-hidden="true" className="text-faint mt-2 h-4 w-4 shrink-0" />
       </Link>
     </li>
   );

@@ -74,9 +74,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    const resolvedIssueIds = Array.isArray(parsed.resolvedIssueIds)
-      ? parsed.resolvedIssueIds.filter((s): s is string => typeof s === "string").slice(0, 20)
-      : workOrder.issueIds;
+    // Supplied issue ids are validated against the authoritative work-order
+    // relationships inside completeWorkOrder — they are never trusted just
+    // because the caller holds work_order:complete. Reject malformed input here
+    // instead of silently truncating it (truncation would close fewer issues
+    // than the user confirmed).
+    let resolvedIssueIds = workOrder.issueIds;
+    if (parsed.resolvedIssueIds !== undefined) {
+      if (!Array.isArray(parsed.resolvedIssueIds)) {
+        throw ApiError.badRequest("resolvedIssueIds must be an array");
+      }
+      if (parsed.resolvedIssueIds.some((s) => typeof s !== "string")) {
+        throw ApiError.badRequest("resolvedIssueIds must contain only strings");
+      }
+      if (parsed.resolvedIssueIds.length > 20) {
+        throw ApiError.badRequest("Too many resolvedIssueIds (max 20)");
+      }
+      resolvedIssueIds = parsed.resolvedIssueIds as string[];
+    }
 
     const result = await completeWorkOrder({
       workOrderId,

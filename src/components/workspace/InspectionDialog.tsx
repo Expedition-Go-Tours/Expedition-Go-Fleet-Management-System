@@ -68,17 +68,14 @@ export function InspectionDialog({
     setBusy(true);
     setError(null);
     try {
-      const response = await api.post<{ safetyHoldApplied: boolean }>(
-        "/api/v1/inspections",
-        {
-          vehicleId,
-          type,
-          assignmentId,
-          odometerKm,
-          items,
-          clientToken: `${type}-${vehicleId}-${Date.now()}`,
-        },
-      );
+      const response = await api.post<{ safetyHoldApplied: boolean }>("/api/v1/inspections", {
+        vehicleId,
+        type,
+        assignmentId,
+        odometerKm,
+        items,
+        clientToken: `${type}-${vehicleId}-${Date.now()}`,
+      });
       if (response?.safetyHoldApplied) {
         setResults({});
         setNotes({});
@@ -110,7 +107,13 @@ export function InspectionDialog({
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" type="submit" form="inspection-form" isLoading={busy}>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              form="inspection-form"
+              isLoading={busy}
+            >
               Submit {type === "PRE_TRIP" ? "pre-trip" : "return"} inspection
             </Button>
           </>
@@ -118,7 +121,10 @@ export function InspectionDialog({
       >
         <form id="inspection-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           {error && (
-            <p role="alert" className="bg-error/10 text-body-xs rounded-md border border-error/25 p-3 text-error">
+            <p
+              role="alert"
+              className="bg-error/10 text-body-xs border-error/25 text-error rounded-md border p-3"
+            >
               {error}
             </p>
           )}
@@ -144,15 +150,19 @@ export function InspectionDialog({
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-data flex items-center gap-2 font-medium text-ink">
+                  <p className="text-data text-ink flex items-center gap-2 font-medium">
                     {item.label}
                     {item.critical && (
-                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[var(--tracking-ui)] text-error">
+                      <span className="font-ui text-error text-[10px] font-semibold tracking-[var(--tracking-ui)] uppercase">
                         Critical
                       </span>
                     )}
                   </p>
-                  <div className="flex gap-1.5" role="radiogroup" aria-label={`Result for ${item.label}`}>
+                  <div
+                    className="flex gap-1.5"
+                    role="radiogroup"
+                    aria-label={`Result for ${item.label}`}
+                  >
                     {(["PASS", "FAIL", "NOT_APPLICABLE"] as const).map((result) => (
                       <label
                         key={result}
@@ -174,17 +184,25 @@ export function InspectionDialog({
                           onChange={() => setResult(item.key, result)}
                           className="sr-only"
                         />
-                        {result === "NOT_APPLICABLE" ? "N/A" : result.charAt(0) + result.slice(1).toLowerCase()}
+                        {result === "NOT_APPLICABLE"
+                          ? "N/A"
+                          : result.charAt(0) + result.slice(1).toLowerCase()}
                       </label>
                     ))}
                   </div>
                 </div>
                 {results[item.key] === "FAIL" && (
-                  <Field label="Notes (what you found)" htmlFor={`note-${item.key}`} className="mt-2">
+                  <Field
+                    label="Notes (what you found)"
+                    htmlFor={`note-${item.key}`}
+                    className="mt-2"
+                  >
                     <Input
                       id={`note-${item.key}`}
                       value={notes[item.key] ?? ""}
-                      onChange={(e) => setNotes((prev) => ({ ...prev, [item.key]: e.target.value }))}
+                      onChange={(e) =>
+                        setNotes((prev) => ({ ...prev, [item.key]: e.target.value }))
+                      }
                       placeholder="Optional detail for the issue record"
                     />
                   </Field>
@@ -199,7 +217,16 @@ export function InspectionDialog({
             hint={`Current accepted reading: ${currentOdometerKm.toLocaleString()} km`}
             htmlFor="insp-odo"
           >
-            <Input id="insp-odo" name="odometerKm" type="number" min={0} step={1} inputMode="numeric" required placeholder="0" />
+            <Input
+              id="insp-odo"
+              name="odometerKm"
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              required
+              placeholder="0"
+            />
           </Field>
         </form>
       </Modal>

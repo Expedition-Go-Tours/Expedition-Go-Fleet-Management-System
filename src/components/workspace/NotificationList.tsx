@@ -50,7 +50,12 @@ export function NotificationList({ notifications }: { notifications: WorkspaceNo
             </p>
           </div>
           {!n.read && (
-            <Button size="sm" variant="outline" disabled={busy === n.id} onClick={() => markRead(n.id)}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy === n.id}
+              onClick={() => markRead(n.id)}
+            >
               {busy === n.id ? "…" : "Mark read"}
             </Button>
           )}

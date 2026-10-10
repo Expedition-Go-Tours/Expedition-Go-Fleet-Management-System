@@ -12,6 +12,7 @@ import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import {
   WORK_ORDER_ACTIONS,
+  WORK_ORDER_ACTION_LABELS,
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_STATUSES,
   type WorkOrderStatus,
@@ -22,13 +23,6 @@ import { countWorkOrderTotals, countWorkOrders, listWorkOrders } from "@/lib/rep
 import Link from "next/link";
 
 export const metadata = { title: "Work orders" };
-
-const LABELS: Record<string, string> = {
-  start: "Start",
-  complete: "Mark complete",
-  close: "Close",
-  reopen: "Reopen",
-};
 
 const OPEN_STATUSES = new Set(["OPEN", "IN_PROGRESS", "WAITING"]);
 
@@ -64,7 +58,11 @@ export default async function WorkOrdersPage({
     : openOnly
       ? workOrdersAll.filter((w) => OPEN_STATUSES.has(w.status))
       : workOrdersAll;
-  const shownTotal = status ? (statusCount ?? workOrders.length) : openOnly ? totals.open : totals.total;
+  const shownTotal = status
+    ? (statusCount ?? workOrders.length)
+    : openOnly
+      ? totals.open
+      : totals.total;
 
   const vehicleName = (id: string) => {
     const v = vehicles.find((x) => x.id === id);
@@ -82,10 +80,13 @@ export default async function WorkOrdersPage({
       <WorkOrderFilters vehicles={vehicles.map((v) => ({ id: v.id, label: v.regNumber }))} />
 
       {filteredVehicle && (
-        <div className="text-body-xs flex flex-wrap items-center gap-3 text-muted">
+        <div className="text-body-xs text-muted flex flex-wrap items-center gap-3">
           <span>
             Filtered to{" "}
-            <Link href={`/vehicles/${filteredVehicle.id}`} className="font-medium text-link hover:underline">
+            <Link
+              href={`/vehicles/${filteredVehicle.id}`}
+              className="text-link font-medium hover:underline"
+            >
               {filteredVehicle.regNumber}
             </Link>
           </span>
@@ -112,14 +113,17 @@ export default async function WorkOrdersPage({
                         (def.from as readonly string[]).includes(wo.status) &&
                         permissions.includes(def.permission),
                     )
-                    .map(([action]) => ({ action, label: LABELS[action] ?? action }));
+                    .map(([action]) => ({
+                      action,
+                      label: WORK_ORDER_ACTION_LABELS[action as keyof typeof WORK_ORDER_ACTIONS],
+                    }));
 
                   return (
                     <li key={wo.id} className="flex flex-col gap-3 px-5 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-col">
                           <Link href={`/work-orders/${wo.id}`} className="hover:text-ink">
-                            <span className="text-body-sm font-medium text-ink">{wo.title}</span>
+                            <span className="text-body-sm text-ink font-medium">{wo.title}</span>
                           </Link>
                           <span className="text-body-xs text-muted">
                             {vehicleName(wo.vehicleId)} · {wo.priority} · {formatDate(wo.createdAt)}

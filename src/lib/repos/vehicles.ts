@@ -58,31 +58,119 @@ export interface CreateVehicleInput {
   createdBy: string;
 }
 
-export async function createVehicle(input: CreateVehicleInput): Promise<Vehicle> {
+/** Raised when atomic vehicle creation cannot proceed (duplicate plate). */
+export class VehicleCreationError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "VehicleCreationError";
+    this.code = code;
+  }
+}
+
+export interface CreateVehicleAtomicInput extends CreateVehicleInput {
+  requestId?: string;
+}
+
+/**
+ * Register a vehicle, its initial odometer ledger entry, its current-odometer
+ * projection and the `vehicle.created` audit event in ONE Firestore
+ * transaction.
+ *
+ * Duplicate registration numbers are prevented atomically by a deterministic
+ * lock document keyed by the normalized plate (`registrationLocks/<PLATE>`):
+ * two concurrent registrations of the same plate contend on the same document,
+ * so exactly one wins. A partially created vehicle is impossible — either the
+ * whole record (vehicle + ledger + audit) commits or none of it does.
+ */
+export async function createVehicleAtomic(input: CreateVehicleAtomicInput): Promise<Vehicle> {
   const { FieldValue } = await import("firebase-admin/firestore");
+  const db = getAdminDb();
   const now = FieldValue.serverTimestamp();
   const initialKm = input.odometerKm ?? 0;
-  const doc = await vehiclesRef().add({
-    regNumber: input.regNumber,
-    make: input.make,
-    model: input.model,
-    year: input.year,
-    type: input.type,
-    vin: input.vin ?? null,
-    seatingCapacity: input.seatingCapacity ?? null,
-    fuelType: input.fuelType ?? null,
-    ownership: input.ownership ?? "COMPANY_OWNED",
-    acquiredOn: input.acquiredOn ?? null,
-    inServiceOn: input.inServiceOn ?? null,
-    odometerKm: initialKm,
-    odometerAt: initialKm > 0 ? new Date() : null,
-    odometerSource: initialKm > 0 ? "MANUAL_ENTRY" : null,
-    status: "ACTIVE",
-    createdBy: input.createdBy,
-    createdAt: now,
-    updatedAt: now,
+
+  const vehicleRef = vehiclesRef().doc();
+  const regNumber = input.regNumber.trim().toUpperCase();
+  const lockRef = db.collection(COLLECTIONS.registrationLocks).doc(regNumber);
+  const readingRef = db
+    .collection(COLLECTIONS.odometerReadings)
+    .doc(`${vehicleRef.id}_setup-${vehicleRef.id}`);
+  const auditRef = db.collection(COLLECTIONS.auditLogs).doc();
+
+  await db.runTransaction(async (tx) => {
+    // Reads before writes.
+    const lockSnap = await tx.get(lockRef);
+    if (lockSnap.exists) {
+      throw new VehicleCreationError(
+        "DUPLICATE_REGISTRATION",
+        `A vehicle with registration "${regNumber}" already exists`,
+      );
+    }
+
+    tx.set(vehicleRef, {
+      regNumber,
+      make: input.make,
+      model: input.model,
+      year: input.year,
+      type: input.type,
+      vin: input.vin ?? null,
+      seatingCapacity: input.seatingCapacity ?? null,
+      fuelType: input.fuelType ?? null,
+      ownership: input.ownership ?? "COMPANY_OWNED",
+      acquiredOn: input.acquiredOn ?? null,
+      inServiceOn: input.inServiceOn ?? null,
+      odometerKm: initialKm,
+      odometerAt: initialKm > 0 ? now : null,
+      odometerSource: initialKm > 0 ? "MANUAL_ENTRY" : null,
+      status: "ACTIVE",
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    if (initialKm > 0) {
+      tx.set(readingRef, {
+        vehicleId: vehicleRef.id,
+        km: initialKm,
+        effectiveAt: now,
+        createdAt: now,
+        recordedByUserId: input.createdBy,
+        source: "MANUAL_ENTRY",
+        notes: "Initial odometer baseline at vehicle registration",
+        status: "ACCEPTED",
+        deltaKm: initialKm,
+        clientToken: `setup-${vehicleRef.id}`,
+      });
+    }
+
+    tx.set(lockRef, {
+      vehicleId: vehicleRef.id,
+      regNumber,
+      createdAt: now,
+    });
+
+    // Audit event inside the same transaction: the registration and its audit
+    // trail commit together.
+    tx.set(auditRef, {
+      eventType: "vehicle.created",
+      actorId: input.createdBy,
+      entityType: "vehicle",
+      entityId: vehicleRef.id,
+      before: null,
+      after: {
+        regNumber,
+        make: input.make,
+        model: input.model,
+        odometerKm: initialKm,
+      },
+      reason: null,
+      requestId: input.requestId ?? null,
+      outcome: "SUCCESS",
+      createdAt: now,
+    });
   });
-  const created = await getVehicleById(doc.id);
+
+  const created = await getVehicleById(vehicleRef.id);
   if (!created) throw new Error("Vehicle not found after creation");
   return created;
 }

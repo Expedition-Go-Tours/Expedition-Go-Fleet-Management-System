@@ -29,21 +29,16 @@ export function PageHeader({
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {crumbs && crumbs.length > 0 && (
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-body-xs text-muted">
+        <nav aria-label="Breadcrumb" className="text-body-xs text-muted flex items-center gap-1.5">
           {crumbs.map((crumb, index) => (
             <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
-              {index > 0 && (
-                <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 text-faint" />
-              )}
+              {index > 0 && <ChevronRight aria-hidden="true" className="text-faint h-3.5 w-3.5" />}
               {crumb.href ? (
-                <Link
-                  href={crumb.href}
-                  className="hover:text-ink rounded-sm transition-colors"
-                >
+                <Link href={crumb.href} className="hover:text-ink rounded-sm transition-colors">
                   {crumb.label}
                 </Link>
               ) : (
-                <span aria-current="page" className="font-medium text-ink">
+                <span aria-current="page" className="text-ink font-medium">
                   {crumb.label}
                 </span>
               )}
@@ -53,7 +48,7 @@ export function PageHeader({
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="font-heading text-page-title font-semibold tracking-[var(--tracking-heading)] text-ink">
+          <h1 className="font-heading text-page-title text-ink font-semibold tracking-[var(--tracking-heading)]">
             {title}
           </h1>
           {description && <p className="text-body-sm text-muted">{description}</p>}

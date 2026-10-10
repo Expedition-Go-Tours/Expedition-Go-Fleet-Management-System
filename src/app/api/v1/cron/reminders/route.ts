@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 
+import { isValidCronBearer, readCronSecret } from "@/lib/api/cron";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
-import { serverEnv } from "@/lib/env";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
 import { deriveDocumentReminders, deriveScheduleReminders } from "@/lib/domain/reminders";
 import { listAllSchedules } from "@/lib/repos/maintenance";
+import { reconcileAssignmentReservations } from "@/lib/repos/assignments";
 import { listDocumentsExpiringSoon } from "@/lib/repos/documents";
 import { createNotification } from "@/lib/repos/notifications";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -12,22 +13,32 @@ import { listVehicles } from "@/lib/repos/vehicles";
 export const runtime = "nodejs";
 
 /**
- * POST /api/v1/cron/reminders
- * Vercel Cron maintenance-reminder sweep.
+ * GET /api/v1/cron/reminders — Vercel Cron invocation (Vercel Cron sends GET).
+ * POST /api/v1/cron/reminders — deliberate internal/manual invocation.
  *
- * Protected by CRON_SECRET (bearer token). The sweep reads LIVE data —
- * schedules recomputed from current odometer + date, documents from their
- * expiry dates — and writes notifications idempotently: every notification
- * carries a dedupe key, so a retry or overlapping run produces no
- * duplicates. The sweep is safe to re-run at any time.
+ * Both methods run the identical handler and are gated by the identical
+ * `Authorization: Bearer <CRON_SECRET>` check (constant-time), so supporting a
+ * manual POST does not weaken the scheduled endpoint: neither method can run
+ * the sweep without the shared secret.
+ *
+ * The sweep reads LIVE data — schedules recomputed from current odometer +
+ * date, documents from their expiry dates — and writes notifications
+ * idempotently: every notification carries a dedupe key, so a Vercel retry, a
+ * duplicate request or two overlapping invocations produce no duplicates. The
+ * sweep is safe to re-run at any time.
  *
  * Reminder statuses are never the source of truth — vehicle pages always
  * compute status live; this job only creates the actionable nudges.
  */
-export async function POST(request: NextRequest) {
+async function runReminders(request: NextRequest) {
   try {
-    const auth = request.headers.get("authorization");
-    if (auth !== `Bearer ${serverEnv.cronSecret}`) {
+    const secret = readCronSecret();
+    // Fail closed: if CRON_SECRET is unset the sweep must not run at all, and
+    // the response must not reveal whether a secret exists.
+    if (!secret) {
+      throw ApiError.unauthorized("Invalid cron secret");
+    }
+    if (!isValidCronBearer(request.headers.get("authorization"), secret)) {
       throw ApiError.unauthorized("Invalid cron secret");
     }
 
@@ -120,6 +131,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Repair assignment reservations (clear stale, backfill legacy) so the
+    // vehicle/driver concurrency invariant holds even for pre-existing data.
+    // Isolated so a reconciliation failure cannot suppress reminders.
+    let reconciliation: { released: number; backfilled: number } | { error: string };
+    try {
+      reconciliation = await reconcileAssignmentReservations(500);
+    } catch (error) {
+      reconciliation = { error: error instanceof Error ? error.message : "unknown error" };
+    }
+
+    // Outcome only — no secret, token or user data — so a failed or partial
+    // sweep is detectable and recoverable from the function logs.
+    console.log(
+      `[cron/reminders] vehicles=${vehicles.length} schedules=${schedules.length} documents=${expiring.length} created=${created} skipped=${skipped} reconciliation=${JSON.stringify(reconciliation)}`,
+    );
+
     return jsonOk({
       ok: true,
       vehiclesScanned: vehicles.length,
@@ -127,9 +154,20 @@ export async function POST(request: NextRequest) {
       documentsScanned: expiring.length,
       notificationsCreated: created,
       duplicatesSkipped: skipped,
+      reservations: reconciliation,
       ranAt: now.toISOString(),
     });
   } catch (error) {
     return toErrorResponse(error);
   }
+}
+
+/** Vercel Cron invokes scheduled paths with GET. */
+export async function GET(request: NextRequest) {
+  return runReminders(request);
+}
+
+/** Internal/manual invocation, same secret gate as GET. */
+export async function POST(request: NextRequest) {
+  return runReminders(request);
 }

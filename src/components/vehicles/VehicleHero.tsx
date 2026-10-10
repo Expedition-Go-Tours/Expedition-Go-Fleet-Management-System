@@ -31,13 +31,21 @@ export function VehicleHero({
             {crumbs && crumbs.length > 0 && (
               <nav
                 aria-label="Breadcrumb"
-                className="text-on-dark-muted flex flex-wrap items-center gap-1.5 text-body-xs"
+                className="text-on-dark-muted text-body-xs flex flex-wrap items-center gap-1.5"
               >
                 {crumbs.map((crumb, index) => (
                   <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
-                    {index > 0 && <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 text-on-dark-muted/60" />}
+                    {index > 0 && (
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="text-on-dark-muted/60 h-3.5 w-3.5"
+                      />
+                    )}
                     {crumb.href ? (
-                      <Link href={crumb.href} className="rounded-sm transition-colors hover:text-white">
+                      <Link
+                        href={crumb.href}
+                        className="rounded-sm transition-colors hover:text-white"
+                      >
                         {crumb.label}
                       </Link>
                     ) : (

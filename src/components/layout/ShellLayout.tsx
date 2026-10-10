@@ -4,16 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import {
-  LogOut,
-  Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-  X,
-} from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
 import { NAV_GROUPS } from "@/components/layout/nav";
-import { NotificationBell, type BellNotification } from "@/components/notifications/NotificationBell";
+import {
+  NotificationBell,
+  type BellNotification,
+} from "@/components/notifications/NotificationBell";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
@@ -57,6 +54,17 @@ export function ShellLayout({
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
+  // Close the mobile navigation drawer on Escape, matching the modal behaviour
+  // used everywhere else in the app.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen]);
+
   async function signOut() {
     await fetch("/api/v1/auth/logout", {
       method: "POST",
@@ -81,11 +89,11 @@ export function ShellLayout({
 
   function renderNav(innerCollapsed: boolean, onNavigate?: () => void) {
     return (
-      <nav aria-label="Main" className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4 pt-2">
+      <nav aria-label="Main" className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pt-2 pb-4">
         {groups.map((group) => (
           <div key={group.label}>
             {!innerCollapsed && (
-              <p className="font-ui px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[var(--tracking-ui)] text-on-dark-muted">
+              <p className="font-ui text-on-dark-muted px-3 pb-1.5 text-[10px] font-semibold tracking-[var(--tracking-ui)] uppercase">
                 {group.label}
               </p>
             )}
@@ -133,8 +141,10 @@ export function ShellLayout({
       />
       {!collapsed && (
         <span className="flex min-w-0 flex-col">
-          <span className="font-heading truncate text-sm font-semibold text-white">Expedition Go Tours</span>
-          <span className="font-ui text-[10px] uppercase tracking-[var(--tracking-ui)] text-on-dark-muted">
+          <span className="font-heading truncate text-sm font-semibold text-white">
+            Expedition Go Tours
+          </span>
+          <span className="font-ui text-on-dark-muted text-[10px] tracking-[var(--tracking-ui)] uppercase">
             Fleet operations
           </span>
         </span>
@@ -165,13 +175,17 @@ export function ShellLayout({
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close navigation"
-                className="text-on-dark-muted hover:text-white p-2"
+                className="text-on-dark-muted p-2 hover:text-white"
               >
                 <X aria-hidden="true" className="h-5 w-5" />
               </button>
             </div>
             {renderNav(false, () => setMobileOpen(false))}
-            <UserIdentity user={user} className="border-t border-white/10 px-4 py-3" onSignOut={signOut} />
+            <UserIdentity
+              user={user}
+              className="border-t border-white/10 px-4 py-3"
+              onSignOut={signOut}
+            />
           </div>
         </div>
       )}
@@ -179,7 +193,7 @@ export function ShellLayout({
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "bg-panel-1 border-r border-white/10 fixed inset-y-0 left-0 z-30 hidden flex-col transition-[width] duration-200 lg:flex",
+          "bg-panel-1 fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-white/10 transition-[width] duration-200 lg:flex",
           sideWidth,
         )}
       >
@@ -189,7 +203,7 @@ export function ShellLayout({
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="hover:bg-white/5 flex items-center justify-center gap-2 border-t border-white/10 py-3 text-xs text-on-dark-muted hover:text-white"
+          className="text-on-dark-muted flex items-center justify-center gap-2 border-t border-white/10 py-3 text-xs hover:bg-white/5 hover:text-white"
         >
           {collapsed ? (
             <PanelLeftOpen aria-hidden="true" className="h-4 w-4" />
@@ -226,7 +240,7 @@ export function ShellLayout({
 
           <div className="ml-auto flex items-center gap-1.5">
             <div className="md:hidden">
-              <GlobalSearch />
+              <GlobalSearch enableHotkey={false} />
             </div>
             <NotificationBell notifications={notifications} unreadCount={unreadCount} />
             <div className="relative">
@@ -240,8 +254,8 @@ export function ShellLayout({
               >
                 <Avatar name={user.name} tone="dark" />
                 <span className="hidden text-left leading-tight xl:block">
-                  <span className="text-data block font-semibold text-ink">{user.name}</span>
-                  <span className="font-ui text-[10px] uppercase tracking-[var(--tracking-ui)] text-muted">
+                  <span className="text-data text-ink block font-semibold">{user.name}</span>
+                  <span className="font-ui text-muted text-[10px] tracking-[var(--tracking-ui)] uppercase">
                     {user.roles.join(" · ").toLowerCase()}
                   </span>
                 </span>
@@ -250,16 +264,16 @@ export function ShellLayout({
                 <div
                   role="menu"
                   aria-label="Account"
-                  className="border-hairline bg-surface absolute right-0 top-11 z-40 w-56 overflow-hidden rounded-lg border shadow-[var(--shadow-lg)]"
+                  className="border-hairline bg-surface absolute top-11 right-0 z-40 w-56 overflow-hidden rounded-lg border shadow-[var(--shadow-lg)]"
                 >
                   <div className="border-hairline bg-subtle border-b px-4 py-3">
-                    <p className="text-data truncate font-semibold text-ink">{user.name}</p>
-                    <p className="text-data-xs truncate text-muted">{user.email}</p>
+                    <p className="text-data text-ink truncate font-semibold">{user.name}</p>
+                    <p className="text-data-xs text-muted truncate">{user.email}</p>
                   </div>
                   <Link
                     href="/change-password"
                     onClick={() => setUserMenuOpen(false)}
-                    className="text-data hover:bg-subtle block px-4 py-2.5 text-ink"
+                    className="text-data hover:bg-subtle text-ink block px-4 py-2.5"
                   >
                     Change password
                   </Link>
@@ -267,7 +281,7 @@ export function ShellLayout({
                     type="button"
                     role="menuitem"
                     onClick={signOut}
-                    className="hover:bg-subtle text-data flex w-full items-center gap-2 px-4 py-2.5 text-error"
+                    className="hover:bg-subtle text-data text-error flex w-full items-center gap-2 px-4 py-2.5"
                   >
                     <LogOut aria-hidden="true" className="h-4 w-4" />
                     Sign out
@@ -280,8 +294,17 @@ export function ShellLayout({
       </header>
 
       {/* Main */}
-      <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-[68px]" : "lg:pl-[15.5rem]")}>
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1440px] px-4 py-6 outline-none lg:px-6 lg:py-8">
+      <div
+        className={cn(
+          "transition-[padding] duration-200",
+          collapsed ? "lg:pl-[68px]" : "lg:pl-[15.5rem]",
+        )}
+      >
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[1440px] px-4 py-6 outline-none lg:px-6 lg:py-8"
+        >
           {children}
         </main>
       </div>
@@ -303,7 +326,7 @@ function UserIdentity({
       <Avatar name={user.name} tone="dark" />
       <span className="min-w-0 flex-1 leading-tight">
         <span className="text-data block truncate font-semibold text-white">{user.name}</span>
-        <span className="font-ui text-[10px] uppercase tracking-[var(--tracking-ui)] text-on-dark-muted">
+        <span className="font-ui text-on-dark-muted text-[10px] tracking-[var(--tracking-ui)] uppercase">
           {user.roles.join(" · ").toLowerCase()}
         </span>
       </span>
@@ -311,7 +334,7 @@ function UserIdentity({
         type="button"
         onClick={onSignOut}
         aria-label="Sign out"
-        className="text-on-dark-muted hover:bg-white/10 rounded-md p-2 hover:text-white"
+        className="text-on-dark-muted rounded-md p-2 hover:bg-white/10 hover:text-white"
       >
         <LogOut aria-hidden="true" className="h-4 w-4" />
       </button>

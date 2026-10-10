@@ -68,7 +68,12 @@ const counts = {
   serviceHistory: { promoted: 0, skipped: 0 },
 };
 
-const LEGACY_EXPENSE_TO_NEW = { PENDING: "RECORDED", APPROVED: "RECORDED", PAID: "RECORDED", VOID: "VOID" };
+const LEGACY_EXPENSE_TO_NEW = {
+  PENDING: "RECORDED",
+  APPROVED: "RECORDED",
+  PAID: "RECORDED",
+  VOID: "VOID",
+};
 
 /** Mirror the vehicle odometerKm write semantics used by the ledger. */
 const BASELINE_SOURCE = "HISTORICAL_IMPORT";
@@ -145,7 +150,12 @@ async function migrateExpenses() {
   }
 }
 
-const LEGACY_WO_TO_NEW = { OPEN: "OPEN", IN_PROGRESS: "IN_PROGRESS", COMPLETED: "COMPLETED", CLOSED: "CLOSED" };
+const LEGACY_WO_TO_NEW = {
+  OPEN: "OPEN",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED",
+  CLOSED: "CLOSED",
+};
 
 async function migrateWorkOrders() {
   const snap = await db.collection("workOrders").limit(5000).get();
@@ -165,7 +175,8 @@ async function migrateWorkOrders() {
     const number = Number(data.number) || null;
     const payload = {
       status: clean,
-      number: number !== null ? `WO-${year}-${String(number).padStart(6, "0")}` : `WO-${year}-MIGRATED`,
+      number:
+        number !== null ? `WO-${year}-${String(number).padStart(6, "0")}` : `WO-${year}-MIGRATED`,
       migrationV1: { fromStatus: legacy, at: new Date() },
       updatedAt: new Date(),
     };
@@ -196,18 +207,24 @@ async function migrateServiceHistory() {
       continue;
     }
     // Promote legacy history to a first-class ServiceRecord (idempotent id).
-    await db.collection("serviceRecords").doc(`mig_${doc.id}`).set({
-      vehicleId: data.vehicleId ?? null,
-      legacyServiceHistoryId: doc.id,
-      workOrderId: workOrderId ?? null,
-      taskName: data.description ?? data.taskName ?? "Legacy service record",
-      scheduledTaskId: data.scheduleId ?? null,
-      odometerKm: data.odometerKm ?? null,
-      completedAt: data.completedAt ?? data.date ?? new Date(),
-      completionNotes: data.notes ?? null,
-      recordedBy: "migration-v1",
-      createdAt: new Date(),
-    }, { merge: true });
+    await db
+      .collection("serviceRecords")
+      .doc(`mig_${doc.id}`)
+      .set(
+        {
+          vehicleId: data.vehicleId ?? null,
+          legacyServiceHistoryId: doc.id,
+          workOrderId: workOrderId ?? null,
+          taskName: data.description ?? data.taskName ?? "Legacy service record",
+          scheduledTaskId: data.scheduleId ?? null,
+          odometerKm: data.odometerKm ?? null,
+          completedAt: data.completedAt ?? data.date ?? new Date(),
+          completionNotes: data.notes ?? null,
+          recordedBy: "migration-v1",
+          createdAt: new Date(),
+        },
+        { merge: true },
+      );
     counts.serviceHistory.promoted += 1;
   }
 }
@@ -220,10 +237,18 @@ try {
   await migrateServiceHistory();
 
   console.log("Migration summary (v1 account → fleet-accountability):");
-  console.log(`  vehicles       migrated    : ${counts.vehicles.migrated}   skipped: ${counts.vehicles.skipped}`);
-  console.log(`  expenses       remapped    : ${counts.expenses.migrated}   skipped: ${counts.expenses.skipped}`);
-  console.log(`  work orders    remapped    : ${counts.workOrders.migrated}   skipped: ${counts.workOrders.skipped}`);
-  console.log(`  serviceHistory promoted    : ${counts.serviceHistory.promoted}   skipped: ${counts.serviceHistory.skipped}`);
+  console.log(
+    `  vehicles       migrated    : ${counts.vehicles.migrated}   skipped: ${counts.vehicles.skipped}`,
+  );
+  console.log(
+    `  expenses       remapped    : ${counts.expenses.migrated}   skipped: ${counts.expenses.skipped}`,
+  );
+  console.log(
+    `  work orders    remapped    : ${counts.workOrders.migrated}   skipped: ${counts.workOrders.skipped}`,
+  );
+  console.log(
+    `  serviceHistory promoted    : ${counts.serviceHistory.promoted}   skipped: ${counts.serviceHistory.skipped}`,
+  );
   console.log(DRY_RUN ? "\n(dry run — nothing written)" : "\n✓ migration complete");
 } catch (error) {
   console.error("✗ Migration failed:", error instanceof Error ? error.message : error);

@@ -91,7 +91,7 @@ export default async function ExpensesPage() {
                           <span className="text-body-xs text-muted">
                             <Link
                               href={`/vehicles/${expense.vehicleId}`}
-                              className="font-medium text-link hover:underline"
+                              className="text-link font-medium hover:underline"
                             >
                               {vehicleName(expense.vehicleId)}
                             </Link>{" "}
@@ -169,6 +169,7 @@ export default async function ExpensesPage() {
                     type: "number",
                     required: true,
                     placeholder: "250.00",
+                    step: "0.01",
                   },
                   { name: "description", label: "Description", required: true },
                   {

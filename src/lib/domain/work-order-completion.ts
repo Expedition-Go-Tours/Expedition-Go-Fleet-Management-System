@@ -48,6 +48,57 @@ export interface CompleteWorkOrderResult {
   resetScheduleIds: string[];
 }
 
+/** A requested issue, as loaded from the authoritative store. */
+export interface FetchedIssue {
+  id: string;
+  exists: boolean;
+  vehicleId?: string;
+  status?: string;
+}
+
+/**
+ * Pure issue-link validation, extracted so it can be unit-tested without
+ * Firestore. Given the authoritative work-order relationship (`linkedIssueIds`)
+ * and the issues actually fetched from the store, it returns the ids that may
+ * transition to CLOSED. Anything unrelated, missing, on another vehicle,
+ * duplicated or already closed is rejected/skipped — an issue is never closed
+ * merely because the request named it.
+ */
+export function planIssueClosure(input: {
+  workOrderId: string;
+  vehicleId: string;
+  linkedIssueIds: string[];
+  requestedIssueIds: string[];
+  fetched: FetchedIssue[];
+}): string[] {
+  if (new Set(input.requestedIssueIds).size !== input.requestedIssueIds.length) {
+    throw new CompletionError("DUPLICATE_ISSUE", "Duplicate ids in resolvedIssueIds");
+  }
+  const toClose: string[] = [];
+  for (const issueId of input.requestedIssueIds) {
+    if (!input.linkedIssueIds.includes(issueId)) {
+      throw new CompletionError(
+        "UNRELATED_ISSUE",
+        `Issue ${issueId} is not linked to work order ${input.workOrderId}`,
+      );
+    }
+    const issue = input.fetched.find((f) => f.id === issueId);
+    if (!issue || !issue.exists) {
+      throw new CompletionError("ISSUE_NOT_FOUND", `Issue ${issueId} not found`);
+    }
+    if (String(issue.vehicleId ?? "") !== input.vehicleId) {
+      throw new CompletionError(
+        "ISSUE_VEHICLE_MISMATCH",
+        `Issue ${issueId} does not belong to vehicle ${input.vehicleId}`,
+      );
+    }
+    // Only OPEN/TRIAGED issues may transition to CLOSED; an already-closed
+    // issue is left untouched so a retry cannot overwrite its resolution.
+    if (String(issue.status ?? "") !== "CLOSED") toClose.push(issueId);
+  }
+  return toClose;
+}
+
 export async function completeWorkOrder(
   input: CompleteWorkOrderInput,
 ): Promise<CompleteWorkOrderResult> {
@@ -72,6 +123,26 @@ export async function completeWorkOrder(
   if (["COMPLETED", "VERIFIED", "CLOSED"].includes(String(wo.status))) {
     const existing = await findServiceRecordByKey(idempotencyKey);
     if (existing) {
+      // Heal records completed before the ledger write became transactional:
+      // recording with the same client token is a no-op if the reading exists,
+      // and closes the gap if a crash lost it. Failure is logged (detectable),
+      // not silently swallowed, and does not fail the replay.
+      await recordReading({
+        vehicleId: existing.vehicleId,
+        km: existing.odometerKm,
+        source: "SERVICE_COMPLETION",
+        recordedByUserId: input.recordedByUserId,
+        effectiveAt: existing.completedAt,
+        serviceRecordId: existing.id,
+        notes: `Completion of work order — ${existing.workPerformed.slice(0, 200)}`,
+        clientToken: `svc-${input.workOrderId}`,
+      }).catch((error: unknown) => {
+        console.error(
+          "[work-order-completion] replay odometer heal failed",
+          input.workOrderId,
+          error,
+        );
+      });
       return { serviceRecord: existing, duplicate: true, resetScheduleIds: input.scheduleIds };
     }
     throw new CompletionError("ALREADY_COMPLETE", `Work order is already ${String(wo.status)}`);
@@ -92,6 +163,48 @@ export async function completeWorkOrder(
   if (!validation.ok) {
     throw new CompletionError(validation.code, validation.message);
   }
+
+  // --- Issue-link integrity --------------------------------------------------
+  // An issue is never closed merely because the request named it. Every
+  // requested id must (a) be linked to THIS work order on the authoritative
+  // record and (b) belong to THIS vehicle. Anything else is rejected before a
+  // single write happens, so an invalid request cannot partially close records.
+  const requestedIssueIds = input.resolvedIssueIds;
+  const linkedIssueIds = Array.isArray(wo.issueIds) ? wo.issueIds.map(String) : [];
+  const issuesRef = db.collection(COLLECTIONS.maintenanceReports);
+
+  // Reject unrelated ids before reading anything else.
+  for (const issueId of requestedIssueIds) {
+    if (!linkedIssueIds.includes(issueId)) {
+      throw new CompletionError(
+        "UNRELATED_ISSUE",
+        `Issue ${issueId} is not linked to work order ${input.workOrderId}`,
+      );
+    }
+  }
+
+  const fetched: FetchedIssue[] = await Promise.all(
+    requestedIssueIds.map(async (issueId) => {
+      const snap = await issuesRef.doc(issueId).get();
+      return snap.exists
+        ? {
+            id: snap.id,
+            exists: true,
+            vehicleId: String(snap.data()?.vehicleId ?? ""),
+            status: String(snap.data()?.status ?? ""),
+          }
+        : { id: issueId, exists: false };
+    }),
+  );
+
+  // Authoritative relationship + lifecycle validation (pure, unit-tested).
+  const issuesToClose = planIssueClosure({
+    workOrderId: input.workOrderId,
+    vehicleId,
+    linkedIssueIds,
+    requestedIssueIds,
+    fetched,
+  });
 
   const serviceRecordsRef = db.collection(COLLECTIONS.serviceRecords);
   const serviceRecordId = serviceRecordsRef.doc().id;
@@ -146,7 +259,7 @@ export async function completeWorkOrder(
       });
     }
 
-    for (const issueId of input.resolvedIssueIds) {
+    for (const issueId of issuesToClose) {
       tx.update(db.collection(COLLECTIONS.maintenanceReports).doc(issueId), {
         status: "CLOSED",
         resolvedByWorkOrderId: input.workOrderId,
@@ -155,19 +268,34 @@ export async function completeWorkOrder(
         updatedAt: now,
       });
     }
-  });
 
-  // Completion odometer through the ledger (own transaction; monotonicity is
-  // re-checked there and the write is idempotent on its client token).
-  await recordReading({
-    vehicleId,
-    km: input.odometerKm,
-    source: "SERVICE_COMPLETION",
-    recordedByUserId: input.recordedByUserId,
-    effectiveAt: input.completedAt,
-    serviceRecordId,
-    notes: `Completion of work order — ${input.workPerformed.slice(0, 200)}`,
-    clientToken: `svc-${input.workOrderId}`,
+    // Completion odometer: the ledger entry and the current-odometer projection
+    // are written in the SAME transaction as the service record, so a completed
+    // service can never be left without its odometer event. The reading id
+    // matches what recordReading() would derive from the client token, so a
+    // replay is a no-op.
+    const readingId = `${vehicleId}_svc-${input.workOrderId}`;
+    tx.set(db.collection(COLLECTIONS.odometerReadings).doc(readingId), {
+      vehicleId,
+      km: input.odometerKm,
+      effectiveAt: input.completedAt,
+      createdAt: now,
+      recordedByUserId: input.recordedByUserId,
+      source: "SERVICE_COMPLETION",
+      serviceRecordId,
+      notes: `Completion of work order — ${input.workPerformed.slice(0, 200)}`,
+      status: "ACCEPTED",
+      deltaKm: input.odometerKm - projection,
+      clientToken: `svc-${input.workOrderId}`,
+    });
+    if (input.odometerKm > projection) {
+      tx.update(db.collection(COLLECTIONS.vehicles).doc(vehicleId), {
+        odometerKm: input.odometerKm,
+        odometerAt: input.completedAt,
+        odometerSource: "SERVICE_COMPLETION",
+        updatedAt: now,
+      });
+    }
   });
 
   return { serviceRecord, duplicate: false, resetScheduleIds: input.scheduleIds };
