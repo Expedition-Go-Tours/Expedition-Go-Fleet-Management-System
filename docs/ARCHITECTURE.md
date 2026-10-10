@@ -53,10 +53,12 @@ Layered guards, applied in order:
 2. `requirePermission('key')`
 3. `authorizeResource(scope)`
 
-State changes go through **explicit action endpoints** — e.g.
-`POST /api/v1/vehicles/:id/release`, `/work-orders/:id/complete`,
-`/expenses/:id/void` — never a generic `PATCH { status }`. Every state change is
-written to the audit log.
+State changes go through **explicit action endpoints** — a generic
+`PATCH { status }` is rejected everywhere; states move only via
+`POST /<entity>/{id}/status` with an `action` in the body, or the dedicated
+`POST /work-orders/:id/complete` evidence endpoint (work-order completion
+writes a service record + schedule resets, so it is not an action-map action).
+Every state change is written to the audit log.
 
 MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 
@@ -77,7 +79,16 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 `mileageEntries`, `maintenanceReports`, `workOrders`, `expenses`,
 `serviceHistory`, `notifications`, `auditLogs`, `providers`.
 
-## Fleet domain (Phase 3)
+## Firestore collections
+
+`users`, `roles`, `userRoles`, `sessions`, `invites`, `vehicles`,
+`odometerReadings` (+ `mileageEntries` deprecated alias), `maintenanceTemplates`,
+`maintenanceSchedules`, `serviceRecords` (+ `serviceHistory` promoted alias),
+`maintenanceReports` (persisted store for `VehicleIssue`), `incidentReports`,
+`workOrders`, `workOrderIssues`, `assignments`, `inspections`, `expenses`,
+`fuelEntries`, `vehicleDocuments`, `notifications`, `auditLogs`, `providers`.
+
+## Fleet domain (Phases A–F)
 
 - **Lifecycle state machines, explicit action endpoints.** Each entity's status
   changes only through `POST /<entity>/{id}/status` with an `action` in the
@@ -90,22 +101,47 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 - **Key invariants:**
   - Vehicle `SAFETY_HOLD → ACTIVE` requires the dedicated `vehicle:release`
     permission (no role has it by default); `ARCHIVED` is terminal; archiving
-    is blocked while open work orders exist; the odometer never decreases.
-  - Work orders run a strict forward pipeline
-    `OPEN → IN_PROGRESS → COMPLETED → CLOSED` with an explicit `reopen`.
-  - Expenses follow `PENDING → APPROVED → PAID`; `PAID` and `VOID` are
-    terminal — paid expenses are never voided in place.
+    is blocked while open work orders exist; the odometer ledger never
+    decreases (corrections supersede, historical imports flag, never delete).
+  - Work orders run the pipeline
+    `OPEN → IN_PROGRESS ⇄ WAITING → COMPLETED → VERIFIED → CLOSED →(reopen) OPEN`;
+    completion is evidence-gated (`workPerformed` + `odometerKm`) and
+    idempotent per work order (replays return the existing service record).
+  - Expenses follow `RECORDED → VOID` only — no in-app approval. Voiding
+    requires a reason and is FINANCE-only (`expense:void`).
   - Report ownership: `report:read:own` scoping enforced in the list and
-    get endpoints; `report:read:all` reads everything.
+    get endpoints; `report:read:all` reads everything. Closing an issue
+    requires a resolution, a duplicate link, or a not-actionable reason.
+  - Inspections: failed critical items auto-create one issue per item and
+    raise a safety hold; completion never releases the hold.
+  - Trip distance = end − start ledger readings; decreasing end readings are
+    `409 DECREASE_REJECTED`.
+  - Fuel entries create the canonical `Expense` in one transaction; full-tank
+    purchases only.
+  - A vehicle with a missing/expired mandatory document cannot start an
+    assignment (409 naming the document).
+  - Notifications are idempotent per `dedupeKey`; the Vercel Cron
+    (`vercel.json` → `POST /api/v1/cron/reminders`, `CRON_SECRET` bearer,
+    daily 07:00 UTC) generates PM / document-expiry / assignment reminders.
 - **Money is integer minor units** (`amountMinor`, GHS exponent 2). Creation
-  accepts a decimal major-unit value and converts with string arithmetic —
-  no floats ever reach the ledger.
+  accepts a decimal major-unit value and converts with string arithmetic via
+  `toPesewas` — no floats ever reach the ledger.
+- **OdometerLedger:** `Vehicle.odometerKm` is a projection of the highest
+  accepted reading, written only by the transactional ledger recorder
+  (`src/lib/repos/odometers.ts`). Mandated mileage boundaries are
+  unit-tested in `odometer.test.ts`; the maintenance engine boundaries in
+  `maintenance.test.ts`.
 - **Queries are equality-filter + in-memory sort.** Firestore composite indexes
   are deliberately avoided at MVP: lists filter with single-field `where`s and
   sort/limit in memory (collections are small for an internal tool). If a
-  collection grows past ~2k docs, add the composite index instead.
+  collection grows past ~2k docs, add the composite index instead. No composite
+  indexes are deployed (see section on data access).
 - **Providers** (garages/vendors) are plain CRUD with an `active` flag —
   deactivated providers stay in history rather than being deleted.
+- **Data migration:** `scripts/migrate-v1.mjs` is the idempotent forward
+  migration (legacy `mileage` → odometer baseline reading, expense statuses
+  → `RECORDED`/`VOID`, work-order status remap, `serviceHistory` promotion).
+  Run with `--dry-run` first; it never deletes data.
 
 ## App shell & screens (Phase 4)
 
@@ -158,5 +194,11 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
 | 2     | RBAC, permission guards, audit logging         |
 | 3     | Fleet domain (vehicles, work orders, expenses) |
 | 4     | Dashboard & app shell                          |
-| 5     | Scheduled maintenance reminders (Vercel Cron)  |
+| A     | Odometer ledger + preventive maintenance engine|
+| B     | Repair workflow (work-order pipeline, completion evidence gate) |
+| C     | Issue↔work-order ecosystem (report→issue→work-order→service→release) |
+| D     | Assignments, trip distance, inspections (safety-hold net) |
+| E–F   | Fuel (canonical Expense), documents (expiry gates), idempotent notifications + Vercel Cron reminders |
+| G     | Incidents, hardened indexes, responsive verification (open) |
+| 5     | Scheduled maintenance reminders (Vercel Cron) — shipped with E–F |
 | 6     | Hardening (CSP, rate limiting, observability)  |

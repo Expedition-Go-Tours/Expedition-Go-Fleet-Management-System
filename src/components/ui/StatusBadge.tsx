@@ -28,11 +28,11 @@ const STATUS_TONES: Record<string, StatusTone> = {
   CLOSED: "muted",
   // work orders
   IN_PROGRESS: "warning",
+  WAITING: "accent",
   COMPLETED: "success",
+  VERIFIED: "success",
   // expenses
-  PENDING: "warning",
-  APPROVED: "success",
-  PAID: "success",
+  RECORDED: "success",
   VOID: "danger",
   // users
   INVITED: "muted",
@@ -41,6 +41,23 @@ const STATUS_TONES: Record<string, StatusTone> = {
   // audit outcomes
   SUCCESS: "success",
   FAILURE: "danger",
+  // odometer ledger
+  ACCEPTED: "success",
+  FLAGGED: "warning",
+  SUPERSEDED: "muted",
+  // maintenance schedule states
+  OK: "success",
+  DUE_SOON: "warning",
+  DUE: "accent",
+  OVERDUE: "danger",
+  NOT_CONFIGURED: "muted",
+  // documents
+  VALID: "success",
+  EXPIRING_SOON: "warning",
+  EXPIRED: "danger",
+  MISSING: "danger",
+  // assignments
+  CANCELLED: "muted",
 } as const;
 
 export function StatusBadge({

@@ -83,15 +83,28 @@ docs/                  Requirements & design references (see below)
   note at the top of `src/design/tokens.css` for how it is applied to an
   application rather than a marketing site.
 - `docs/ARCHITECTURE.md` — system decisions, data model and delivery phases.
+- `docs/FLEET_DOMAIN_GAP_ANALYSIS.md` — spec↔implementation gap analysis for
+  the fleet operations ecosystem.
+- `docs/FLEET_DOMAIN_MODEL.md` — source-of-truth entities, ledger rules and
+  state transitions.
+- `docs/FLEET_WORKFLOWS.md` — end-to-end operational workflows (defect→repair→
+  release, ledger, inspections, fuel, documents, notifications, cron) and the
+  mandated scenario walkthroughs.
 
 ## Delivery phases
 
-| Phase | Scope                                          | Status  |
-| ----- | ---------------------------------------------- | ------- |
-| 0     | Scaffold, design tokens, tooling, CI           | Done    |
-| 1     | Auth core (invites, sessions, sign-in/out)     | Done    |
-| 2     | RBAC, permission guards, audit logging         | Done    |
-| 3     | Fleet domain (vehicles, work orders, expenses) | Done    |
-| 4     | Dashboard & app shell                          | Done    |
-| 5     | Scheduled maintenance reminders (Vercel Cron)  | Pending |
-| 6     | Hardening (CSP, rate limiting, observability)  | Pending |
+| Phase | Scope                                             | Status  |
+| ----- | ------------------------------------------------- | ------- |
+| 0     | Scaffold, design tokens, tooling, CI              | Done    |
+| 1     | Auth core (invites, sessions, sign-in/out)        | Done    |
+| 2     | RBAC, permission guards, audit logging            | Done    |
+| 3     | Fleet domain (vehicles, reports, work orders)     | Done    |
+| 4     | Dashboard & app shell                             | Done    |
+| A     | Odometer ledger + preventive maintenance engine   | Done    |
+| B     | Repair workflow (pipeline + completion evidence)  | Done    |
+| C     | Issue↔work-order ecosystem (report→release)       | Done    |
+| D     | Assignments, trip distance, inspections           | Done    |
+| E–F   | Fuel, documents, notifications + Cron reminders   | Done    |
+| 5     | Scheduled maintenance reminders (Vercel Cron)     | Done    |
+| G     | Incidents, hardened indexes, responsive pass      | Open    |
+| 6     | Hardening (CSP, rate limiting, observability)     | Pending |

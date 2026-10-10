@@ -17,6 +17,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard" },
+  { href: "/workspace", label: "Workspace", permission: "report:create" },
   { href: "/vehicles", label: "Vehicles", permission: "vehicle:read" },
   { href: "/reports", label: "Reports", permission: "report:read:own" },
   { href: "/work-orders", label: "Work orders", permission: "work_order:read" },
