@@ -86,6 +86,23 @@ e2e/                   Playwright specs
 docs/                  Requirements & design references (see below)
 ```
 
+## Guided onboarding tours
+
+The application includes role-specific interactive onboarding powered by
+**Driver.js**. Each employee sees a welcome modal on their first visit and a
+concise, cross-route walkthrough of the controls their role actually uses:
+
+- **Driver tour** (6 steps) — workspace, trips, inspections, reporting
+- **Operations tour** (5 steps) — dashboard, fleet, report triage
+- **Maintenance tour** (6 steps) — reminders, work orders, repairs
+- **Finance tour** (5 steps) — expenses, fuel, exports
+- **Admin & manager tour** (6 steps) — fleet, vehicles, users, audit
+
+Every tour is persisted per employee in Firestore and replayable from the
+header Help menu at any time. Tour versioning re-offers a redesigned tour
+automatically. See `docs/GUIDED_ONBOARDING_REPORT.md` for the full
+acceptance-matrix evidence and screenshots.
+
 ## Documentation
 
 - `docs/AUTHENTICATION_AUTHORIZATION.md` — binding auth/authz specification
