@@ -45,7 +45,7 @@ export default async function VehiclesPage() {
                         </span>
                         <span className="text-body-xs text-muted">
                           {vehicle.make} {vehicle.model} · {vehicle.year} ·{" "}
-                          {formatKm(vehicle.mileage)}
+                          {formatKm(vehicle.odometerKm)}
                         </span>
                       </div>
                       <StatusBadge status={vehicle.status} />

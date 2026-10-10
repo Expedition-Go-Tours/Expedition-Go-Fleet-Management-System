@@ -4,19 +4,18 @@ import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
-import { WORK_ORDER_PRIORITIES, type WorkOrder } from "@/lib/domain/work-order";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { WORK_ORDER_PRIORITIES, type WorkOrder } from "@/lib/domain/work-order";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
-import { getReportById, linkReportToWorkOrder } from "@/lib/repos/reports";
+import { getIssueById, linkIssueToWorkOrder } from "@/lib/repos/reports";
 import { createWorkOrder } from "@/lib/repos/work-orders";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/v1/reports/[id]/work-order
- * Create a work order for this report (work_order:create). Links the report to
- * the new work order so the trail stays connected. Works on OPEN or TRIAGED
- * reports; closed reports cannot receive work orders.
+ * Create a work order from this issue (work_order:create). Prefills vehicle,
+ * title and description from the issue and links both directions.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const requestId = randomUUID();
@@ -26,47 +25,54 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     requirePermission(context, PERMISSIONS.WORK_ORDER_CREATE);
 
     const { id } = await params;
-    const report = await getReportById(id);
-    if (!report) throw ApiError.notFound("Report not found");
-    if (report.status === "CLOSED") {
-      throw ApiError.conflict("Cannot create a work order for a closed report");
+    const issue = await getIssueById(id);
+    if (!issue) throw ApiError.notFound("Issue not found");
+    if (issue.status === "CLOSED") {
+      throw ApiError.conflict("Cannot create a work order for a closed issue");
     }
-    if (report.workOrderId) {
-      throw ApiError.conflict("This report already has a work order");
+    if (issue.linkedWorkOrderIds.length > 0) {
+      throw ApiError.conflict("This issue is already linked to a work order");
     }
 
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const description = typeof body?.description === "string" ? body.description.trim() : "";
     const priority = typeof body?.priority === "string" ? body.priority : "NORMAL";
-    const assignedTo = typeof body?.assignedTo === "string" ? body.assignedTo.trim() : undefined;
+    const assignedToUserId =
+      typeof body?.assignedToUserId === "string" ? body.assignedToUserId.trim() : undefined;
     if (!(WORK_ORDER_PRIORITIES as readonly string[]).includes(priority)) {
       throw ApiError.badRequest(`Priority must be one of: ${WORK_ORDER_PRIORITIES.join(", ")}`);
     }
-    if (description.length > 5000) {
-      throw ApiError.badRequest("Description is too long (max 5000 chars)");
-    }
 
     const workOrder = await createWorkOrder({
-      vehicleId: report.vehicleId,
-      reportId: report.id,
-      title: report.title,
-      description: description || report.description,
+      vehicleId: issue.vehicleId,
+      issueIds: [issue.id],
+      title: issue.title,
+      description: description || issue.description,
       priority: priority as WorkOrder["priority"],
-      assignedTo,
+      assignedToUserId,
       createdBy: context.user.id,
     });
-    await linkReportToWorkOrder(report.id, workOrder.id);
+    await linkIssueToWorkOrder(issue.id, workOrder.id);
 
     await writeAuditEvent({
       eventType: AUDIT_EVENTS.WORK_ORDER_CREATED,
       actorId: context.user.id,
       entityType: "workOrder",
       entityId: workOrder.id,
-      after: { reportId: report.id, vehicleId: report.vehicleId, priority },
+      after: {
+        issueId: issue.id,
+        issueNumber: issue.number ?? null,
+        vehicleId: issue.vehicleId,
+        number: workOrder.number,
+        priority,
+      },
       requestId,
     });
 
-    return jsonOk({ workOrder, report: { ...report, workOrderId: workOrder.id } }, { status: 201 });
+    return jsonOk(
+      { workOrder, report: { ...issue, linkedWorkOrderIds: [workOrder.id] } },
+      { status: 201 },
+    );
   } catch (error) {
     return toErrorResponse(error);
   }

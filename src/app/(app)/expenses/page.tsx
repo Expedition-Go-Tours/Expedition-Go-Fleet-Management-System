@@ -74,7 +74,7 @@ export default async function ExpensesPage() {
                         <div className="flex min-w-0 flex-col">
                           <span className="text-body-sm font-medium">{expense.description}</span>
                           <span className="text-body-xs text-muted">
-                            {expense.category} · {woTitle(expense.workOrderId)}
+                            {expense.category} · {woTitle(expense.workOrderId ?? "")}
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">

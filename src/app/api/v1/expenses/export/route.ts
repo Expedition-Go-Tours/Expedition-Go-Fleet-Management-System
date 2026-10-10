@@ -6,14 +6,14 @@ import { jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
-import { listExpenses, totalPaidMinor } from "@/lib/repos/expenses";
+import { listExpenses, totalExpensesMinor } from "@/lib/repos/expenses";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/v1/expenses/export
- * Finance export: paid-expense totals as CSV or JSON.
- * Requires expense:export (FINANCE baseline). Recorded in the audit log.
+ * Expense export as CSV or JSON (expense:export). Non-VOID expenses only;
+ * the export itself is audited.
  * Query: ?format=csv|json (default csv), ?vehicleId=, ?workOrderId=
  */
 export async function GET(request: NextRequest) {
@@ -27,43 +27,46 @@ export async function GET(request: NextRequest) {
     const vehicleId = params.get("vehicleId") ?? undefined;
     const workOrderId = params.get("workOrderId") ?? undefined;
 
-    const paidExpenses = (
-      await listExpenses({ vehicleId, workOrderId, status: "PAID", limit: 1000 })
-    ).filter((expense) => expense.status === "PAID");
-    const totalMinor = await totalPaidMinor({ vehicleId, workOrderId });
+    const expenses = (await listExpenses({ vehicleId, workOrderId, limit: 2000 })).filter(
+      (e) => e.status !== "VOID",
+    );
+    const totalMinor = await totalExpensesMinor({ vehicleId, workOrderId });
 
     await writeAuditEvent({
       eventType: AUDIT_EVENTS.EXPORT_GENERATED,
       actorId: context.user.id,
       entityType: "expense",
-      reason: `export ${format} (${paidExpenses.length} rows)`,
+      reason: `export ${format} (${expenses.length} rows)`,
       requestId,
     });
 
     if (format === "json") {
       return jsonOk({
-        expenses: paidExpenses,
+        expenses,
         totalMinor,
-        currency: paidExpenses[0]?.currency ?? "GHS",
-        count: paidExpenses.length,
+        currency: expenses[0]?.currency ?? "GHS",
+        count: expenses.length,
       });
     }
 
-    const header = "id,workOrderId,vehicleId,category,amountMinor,currency,description,paidAt";
-    const rows = paidExpenses.map((e) =>
+    const header =
+      "id,incurredOn,vehicleId,workOrderId,serviceRecordId,category,amountMinor,currency,description,supplier,externalReference";
+    const rows = expenses.map((e) =>
       [
         e.id,
-        e.workOrderId,
+        e.incurredOn.toISOString().slice(0, 10),
         e.vehicleId,
+        e.workOrderId ?? "",
+        e.serviceRecordId ?? "",
         e.category,
         e.amountMinor,
         e.currency,
-        // Escape quotes/commas for CSV safety.
         `"${e.description.replace(/"/g, '""')}"`,
-        e.paidAt ? e.paidAt.toISOString() : "",
+        e.supplierName ? `"${e.supplierName.replace(/"/g, '""')}"` : "",
+        e.externalReference ?? "",
       ].join(","),
     );
-    const csv = [header, ...rows, `TOTAL,,,,${totalMinor},,,,`].join("\n");
+    const csv = [header, ...rows, `TOTAL,,,,,,,${totalMinor},,,`].join("\n");
 
     return new Response(csv, {
       status: 200,

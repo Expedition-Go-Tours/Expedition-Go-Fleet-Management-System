@@ -10,16 +10,15 @@ import { requireAuthContext } from "@/lib/auth/guards";
 import { permissionsForRoles } from "@/lib/auth/permissions";
 import { VEHICLE_STATUS_ACTIONS } from "@/lib/domain/vehicle";
 import { formatDate, formatKm } from "@/lib/format";
-import { listReports } from "@/lib/repos/reports";
+import { listIssues } from "@/lib/repos/reports";
 import { getVehicleById } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
 
 export const metadata = { title: "Vehicle" };
 
 /**
- * Build the visible action buttons for a vehicle's current status from the
- * server-side action map + the user's permissions — the client can only see
- * (and thus try) actions it is allowed to perform, and the server re-checks.
+ * Visible action buttons computed from the server-side action map + the
+ * user's permissions — the server re-checks regardless.
  */
 function visibleActions(status: string, permissions: string[]) {
   const labels: Record<string, string> = {
@@ -49,8 +48,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   const permissions = [...permissionsForRoles(context.user.roles)];
   const actions = visibleActions(vehicle.status, permissions);
-  const [reports, workOrders] = await Promise.all([
-    listReports({ vehicleId: vehicle.id, limit: 10 }),
+  const [issues, workOrders] = await Promise.all([
+    listIssues({ vehicleId: vehicle.id, limit: 10 }),
     listWorkOrders({ vehicleId: vehicle.id, limit: 10 }),
   ]);
 
@@ -69,7 +68,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </div>
         <p className="text-body-sm text-muted">
           {vehicle.make} {vehicle.model} · {vehicle.year} · {vehicle.type} ·{" "}
-          {formatKm(vehicle.mileage)}
+          {formatKm(vehicle.odometerKm)}
         </p>
       </div>
 
@@ -90,18 +89,21 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title={`Recent reports (${reports.length})`}>
-          {reports.length === 0 ? (
-            <p className="text-body-xs text-muted px-5 py-6">No reports for this vehicle.</p>
+        <Card title={`Recent issues (${issues.length})`}>
+          {issues.length === 0 ? (
+            <p className="text-body-xs text-muted px-5 py-6">No issues for this vehicle.</p>
           ) : (
             <ul className="divide-hairline divide-y">
-              {reports.map((report) => (
-                <li key={report.id} className="flex items-center justify-between gap-3 px-5 py-3">
+              {issues.map((issue) => (
+                <li key={issue.id} className="flex items-center justify-between gap-3 px-5 py-3">
                   <div className="flex min-w-0 flex-col">
-                    <span className="text-body-sm truncate">{report.title}</span>
-                    <span className="text-body-xs text-muted">{formatDate(report.createdAt)}</span>
+                    <span className="text-body-sm truncate">
+                      {issue.number ? `${issue.number} — ` : ""}
+                      {issue.title}
+                    </span>
+                    <span className="text-body-xs text-muted">{formatDate(issue.createdAt)}</span>
                   </div>
-                  <StatusBadge status={report.status} />
+                  <StatusBadge status={issue.status} />
                 </li>
               ))}
             </ul>
@@ -116,7 +118,10 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
               {workOrders.map((wo) => (
                 <li key={wo.id} className="flex items-center justify-between gap-3 px-5 py-3">
                   <div className="flex min-w-0 flex-col">
-                    <span className="text-body-sm truncate">{wo.title}</span>
+                    <span className="text-body-sm truncate">
+                      {wo.number ? `${wo.number} — ` : ""}
+                      {wo.title}
+                    </span>
                     <span className="text-body-xs text-muted">{wo.priority}</span>
                   </div>
                   <StatusBadge status={wo.status} />

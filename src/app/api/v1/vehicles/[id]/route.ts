@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { VEHICLE_TYPES } from "@/lib/domain/vehicle";
+import { FUEL_TYPES, VEHICLE_TYPES } from "@/lib/domain/vehicle";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { getVehicleById, updateVehicle } from "@/lib/repos/vehicles";
 
@@ -31,10 +31,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 /**
  * PATCH /api/v1/vehicles/[id]
- * Update vehicle details (make/model/year/type/vin/mileage).
- * Requires vehicle:update. `status` is NOT updatable here — status changes go
- * through POST /vehicles/[id]/status with an explicit action. The odometer
- * value can never decrease.
+ * Update vehicle details (make/model/year/type/vin/seating/fuel/dates).
+ * Requires vehicle:update.
+ *
+ * `odometerKm` is NOT editable here — mileage changes go exclusively through
+ * the audited odometer-recording workflow (POST /vehicles/[id]/odometer).
+ * `status` is NOT editable here — status changes are explicit actions.
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const requestId = randomUUID();
@@ -52,6 +54,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if ("status" in body) {
       throw ApiError.badRequest(
         "Status cannot be changed here — use POST /vehicles/{id}/status with an action",
+      );
+    }
+    if ("odometerKm" in body || "mileage" in body) {
+      throw ApiError.badRequest(
+        "Odometer cannot be edited directly — use POST /vehicles/{id}/odometer to record a reading",
       );
     }
 
@@ -88,17 +95,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const value = typeof body.vin === "string" ? body.vin.trim() : "";
       fields.vin = value.length > 0 ? value : undefined;
     }
-    if (body.mileage !== undefined) {
-      const value = Number(body.mileage);
-      if (!Number.isSafeInteger(value) || value < 0) {
-        throw ApiError.badRequest("Mileage must be a non-negative integer (km)");
+    if (body.seatingCapacity !== undefined) {
+      const value = Number(body.seatingCapacity);
+      if (!Number.isInteger(value) || value < 1) {
+        throw ApiError.badRequest("Seating capacity must be a positive integer");
       }
-      if (value < vehicle.mileage) {
-        throw ApiError.badRequest(
-          `Odometer cannot decrease (current: ${vehicle.mileage} km, got: ${value} km)`,
-        );
+      fields.seatingCapacity = value;
+    }
+    if (body.fuelType !== undefined) {
+      if (
+        typeof body.fuelType !== "string" ||
+        !(FUEL_TYPES as readonly string[]).includes(body.fuelType)
+      ) {
+        throw ApiError.badRequest(`Fuel type must be one of: ${FUEL_TYPES.join(", ")}`);
       }
-      fields.mileage = value;
+      fields.fuelType = body.fuelType as import("@/lib/domain/vehicle").FuelType;
+    }
+    if (body.acquiredOn !== undefined) {
+      fields.acquiredOn = typeof body.acquiredOn === "string" ? body.acquiredOn : undefined;
+    }
+    if (body.inServiceOn !== undefined) {
+      fields.inServiceOn = typeof body.inServiceOn === "string" ? body.inServiceOn : undefined;
     }
 
     if (Object.keys(fields).length === 0) {
@@ -116,13 +133,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         make: vehicle.make,
         model: vehicle.model,
         year: vehicle.year,
-        mileage: vehicle.mileage,
+        seatingCapacity: vehicle.seatingCapacity ?? null,
+        fuelType: vehicle.fuelType ?? null,
       },
       after: {
         make: updated.make,
         model: updated.model,
         year: updated.year,
-        mileage: updated.mileage,
+        seatingCapacity: updated.seatingCapacity ?? null,
+        fuelType: updated.fuelType ?? null,
       },
       requestId,
     });

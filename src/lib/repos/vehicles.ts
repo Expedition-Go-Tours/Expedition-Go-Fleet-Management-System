@@ -1,6 +1,6 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
-import type { Vehicle, VehicleStatus } from "@/lib/domain/vehicle";
+import type { FuelType, OwnershipClass, Vehicle, VehicleStatus } from "@/lib/domain/vehicle";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
@@ -20,9 +20,20 @@ function toVehicle(id: string, data: DocumentData): Vehicle {
     year: Number(data.year ?? 0),
     type: (data.type ?? "OTHER") as Vehicle["type"],
     vin: data.vin ? String(data.vin) : undefined,
-    mileage: Number(data.mileage ?? 0),
+    seatingCapacity: typeof data.seatingCapacity === "number" ? data.seatingCapacity : undefined,
+    fuelType: data.fuelType ? (String(data.fuelType) as FuelType) : undefined,
+    ownership: (data.ownership ?? "COMPANY_OWNED") as OwnershipClass,
+    acquiredOn: data.acquiredOn ? String(data.acquiredOn) : undefined,
+    inServiceOn: data.inServiceOn ? String(data.inServiceOn) : undefined,
+    // `mileage` is the legacy field name; `odometerKm` is the projection.
+    odometerKm: Number(data.odometerKm ?? data.mileage ?? 0),
+    odometerAt: toDate(data.odometerAt),
+    odometerSource: data.odometerSource ? String(data.odometerSource) : undefined,
     status: (data.status ?? "ACTIVE") as VehicleStatus,
     safetyHoldReason: data.safetyHoldReason ? String(data.safetyHoldReason) : undefined,
+    safetyHoldIssueId: data.safetyHoldIssueId ? String(data.safetyHoldIssueId) : undefined,
+    safetyHoldAppliedBy: data.safetyHoldAppliedBy ? String(data.safetyHoldAppliedBy) : undefined,
+    safetyHoldAppliedAt: toDate(data.safetyHoldAppliedAt),
     archivedAt: toDate(data.archivedAt),
     createdAt: toDate(data.createdAt) ?? new Date(0),
     updatedAt: toDate(data.updatedAt) ?? new Date(0),
@@ -37,17 +48,37 @@ export interface CreateVehicleInput {
   year: number;
   type: Vehicle["type"];
   vin?: string;
-  mileage: number;
+  seatingCapacity?: number;
+  fuelType?: FuelType;
+  ownership?: OwnershipClass;
+  acquiredOn?: string;
+  inServiceOn?: string;
+  /** Initial baseline odometer — explicit, audited setup path. */
+  odometerKm?: number;
   createdBy: string;
 }
 
 export async function createVehicle(input: CreateVehicleInput): Promise<Vehicle> {
   const { FieldValue } = await import("firebase-admin/firestore");
   const now = FieldValue.serverTimestamp();
+  const initialKm = input.odometerKm ?? 0;
   const doc = await vehiclesRef().add({
-    ...input,
+    regNumber: input.regNumber,
+    make: input.make,
+    model: input.model,
+    year: input.year,
+    type: input.type,
     vin: input.vin ?? null,
+    seatingCapacity: input.seatingCapacity ?? null,
+    fuelType: input.fuelType ?? null,
+    ownership: input.ownership ?? "COMPANY_OWNED",
+    acquiredOn: input.acquiredOn ?? null,
+    inServiceOn: input.inServiceOn ?? null,
+    odometerKm: initialKm,
+    odometerAt: initialKm > 0 ? new Date() : null,
+    odometerSource: initialKm > 0 ? "MANUAL_ENTRY" : null,
     status: "ACTIVE",
+    createdBy: input.createdBy,
     createdAt: now,
     updatedAt: now,
   });
@@ -82,9 +113,7 @@ export async function listVehicles(options?: {
   const snap = await query.get();
   const vehicles = snap.docs.map((doc) => toVehicle(doc.id, doc.data()));
   if (options?.includeArchived) return vehicles;
-  // Fetch + filter in memory: fleets are small, and this avoids a composite
-  // index just to exclude ARCHIVED while keeping newest-first ordering.
-  return vehicles.filter((vehicle) => vehicle.status !== "ARCHIVED");
+  return vehicles.filter((v) => v.status !== "ARCHIVED");
 }
 
 export interface UpdateVehicleFields {
@@ -93,8 +122,10 @@ export interface UpdateVehicleFields {
   year?: number;
   type?: Vehicle["type"];
   vin?: string;
-  /** Odometer — must never decrease (enforced by the route). */
-  mileage?: number;
+  seatingCapacity?: number;
+  fuelType?: FuelType;
+  acquiredOn?: string;
+  inServiceOn?: string;
 }
 
 export async function updateVehicle(id: string, fields: UpdateVehicleFields): Promise<Vehicle> {
@@ -113,11 +144,14 @@ export async function updateVehicle(id: string, fields: UpdateVehicleFields): Pr
   return updated;
 }
 
-/** Apply a lifecycle transition with optional per-action fields. */
+/**
+ * Apply a lifecycle transition with optional per-action fields.
+ * `safety_hold` records who applied it and which issue caused it.
+ */
 export async function applyVehicleStatus(
   id: string,
   status: VehicleStatus,
-  extra?: { safetyHoldReason?: string },
+  extra?: { safetyHoldReason?: string; actorId?: string; issueId?: string },
 ): Promise<Vehicle> {
   const { FieldValue } = await import("firebase-admin/firestore");
   const update: Record<string, unknown> = {
@@ -126,15 +160,36 @@ export async function applyVehicleStatus(
   };
   if (status === "SAFETY_HOLD") {
     update.safetyHoldReason = extra?.safetyHoldReason ?? null;
+    update.safetyHoldIssueId = extra?.issueId ?? null;
+    update.safetyHoldAppliedBy = extra?.actorId ?? null;
+    update.safetyHoldAppliedAt = FieldValue.serverTimestamp();
   }
   if (status === "ARCHIVED") {
     update.archivedAt = FieldValue.serverTimestamp();
   }
   if (status === "ACTIVE") {
     update.safetyHoldReason = null;
+    update.safetyHoldIssueId = null;
+    update.safetyHoldAppliedBy = null;
+    update.safetyHoldAppliedAt = null;
   }
   await vehiclesRef().doc(id).update(update);
   const updated = await getVehicleById(id);
   if (!updated) throw new Error("Vehicle not found after status change");
   return updated;
+}
+
+/**
+ * Effective availability for assignment: a vehicle is assignable when it is
+ * ACTIVE and has no open critical issue.
+ */
+export async function countOpenCriticalIssues(vehicleId: string): Promise<number> {
+  const snap = await getAdminDb()
+    .collection(COLLECTIONS.maintenanceReports)
+    .where("vehicleId", "==", vehicleId)
+    .get();
+  return snap.docs.filter((d) => {
+    const data = d.data();
+    return data.severity === "CRITICAL" && data.safetyCritical === true && data.status !== "CLOSED";
+  }).length;
 }

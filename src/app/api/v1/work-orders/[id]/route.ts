@@ -74,8 +74,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
       fields.priority = body.priority as import("@/lib/domain/work-order").WorkOrder["priority"];
     }
-    if (body.assignedTo !== undefined) {
-      fields.assignedTo = typeof body.assignedTo === "string" ? body.assignedTo.trim() : undefined;
+    if (body.assignedToUserId !== undefined) {
+      fields.assignedToUserId =
+        typeof body.assignedToUserId === "string" ? body.assignedToUserId.trim() : undefined;
     }
 
     if (Object.keys(fields).length === 0) {
@@ -92,12 +93,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       before: {
         title: workOrder.title,
         priority: workOrder.priority,
-        assignedTo: workOrder.assignedTo ?? null,
+        assignedToUserId: workOrder.assignedToUserId ?? null,
       },
       after: {
         title: updated.title,
         priority: updated.priority,
-        assignedTo: updated.assignedTo ?? null,
+        assignedToUserId: updated.assignedToUserId ?? null,
       },
       requestId,
     });

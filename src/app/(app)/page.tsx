@@ -6,10 +6,9 @@ import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requireAuthContext } from "@/lib/auth/guards";
-import { rolesHavePermission } from "@/lib/auth/permissions";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import { formatDate, formatKm } from "@/lib/format";
-import { listReports } from "@/lib/repos/reports";
+import { listIssues } from "@/lib/repos/reports";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
 
@@ -22,10 +21,12 @@ export default async function DashboardPage() {
 
   const [vehicles, reports, workOrders] = await Promise.all([
     listVehicles(),
-    listReports(
-      canReadAllReports ? { status: "OPEN" } : { scopeUserId: context.user.id, status: "OPEN" },
+    listIssues(
+      canReadAllReports
+        ? { status: "OPEN", limit: 50 }
+        : { reportedBy: context.user.id, status: "OPEN", limit: 50 },
     ),
-    canReadWorkOrders ? listWorkOrders({ status: "IN_PROGRESS" }) : Promise.resolve([]),
+    canReadWorkOrders ? listWorkOrders({ status: "IN_PROGRESS", limit: 50 }) : Promise.resolve([]),
   ]);
 
   const activeVehicles = vehicles.filter((v) => v.status === "ACTIVE");
@@ -129,7 +130,7 @@ export default async function DashboardPage() {
                     {vehicle.safetyHoldReason ?? "No reason recorded"}
                   </span>
                 </div>
-                <span className="text-body-xs text-muted">{formatKm(vehicle.mileage)}</span>
+                <span className="text-body-xs text-muted">{formatKm(vehicle.odometerKm)}</span>
               </li>
             ))}
           </ul>
