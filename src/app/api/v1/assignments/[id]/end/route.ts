@@ -7,7 +7,8 @@ import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/li
 import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { completeAssignment, getAssignmentById } from "@/lib/repos/assignments";
-import { recordReading } from "@/lib/repos/odometers";
+import { recordReading, OdometerError } from "@/lib/repos/odometers";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return jsonOk({ assignment: completed });
   } catch (error) {
+    if (error instanceof OdometerError) {
+      // A lower end reading than the ledger projection is a conflict, not a
+      // fabricated (negative) distance.
+      return NextResponse.json(
+        { error: { code: error.code, message: error.message } },
+        { status: error.code === "DECREASE_REJECTED" ? 409 : 400 },
+      );
+    }
     return toErrorResponse(error);
   }
 }

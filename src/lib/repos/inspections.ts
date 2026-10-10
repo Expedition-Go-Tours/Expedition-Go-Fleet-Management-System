@@ -60,6 +60,11 @@ export async function submitInspection(input: SubmitInspectionInput): Promise<In
   if (existing.exists) return toInspection(existing.id, existing.data() ?? {});
 
   const now = new Date();
+  // Firestore rejects undefined values at any depth — normalise item notes.
+  const definedItems = input.items.map((item) => ({
+    ...item,
+    notes: item.notes ?? null,
+  }));
   await inspectionsRef()
     .doc(docId)
     .set({
@@ -69,7 +74,7 @@ export async function submitInspection(input: SubmitInspectionInput): Promise<In
       assignmentId: input.assignmentId ?? null,
       odometerKm: input.odometerKm,
       odometerReadingId: input.odometerReadingId ?? null,
-      items: input.items,
+      items: definedItems,
       overall: input.overall,
       issueIds: input.issueIds,
       submittedAt: now,

@@ -5,12 +5,14 @@
  *   npm run dev &
  *   node scripts/e2e-fleet.mjs
  *
- * Covers: vehicle reads + lifecycle transitions (permission-gated), report
- * ownership scoping, report/work-order lifecycles including invalid transitions,
- * expense permission gating, provider CRUD, and audit access. Uses only
- * non-privileged roles (DRIVER/OPERATIONS/MAINTENANCE) so no MFA is needed;
- * vehicle + expense fixtures are seeded directly via the Admin SDK because
- * vehicle:create / expense:create are ADMIN/FINANCE baselines.
+ * Covers: vehicle reads + lifecycle transitions (permission-gated), the
+ * odometer ledger (PATCH mileage retired), report ownership scoping,
+ * report/work-order lifecycles including invalid transitions and
+ * evidence-gated completion, expense permission gating, provider CRUD, and
+ * audit access. Uses only non-privileged roles (DRIVER/OPERATIONS/
+ * MAINTENANCE) so no MFA is needed; vehicle + expense fixtures are seeded
+ * directly via the Admin SDK because vehicle:create / expense:create are
+ * ADMIN/FINANCE baselines.
  */
 import { readFileSync } from "node:fs";
 
@@ -247,14 +249,14 @@ try {
     );
   }
 
-  // ── B. Vehicle PATCH validation (odometer, status via action only) ────────
+  // ── B. Odometer ledger (PATCH mileage retired, status via action only) ────
   {
     const back = await send("PATCH", "/api/v1/vehicles/e2e-veh-1", sMaint.cookies, {
       mileage: 5,
     });
     check(
-      "odometer cannot decrease (400)",
-      back.status === 400 && /cannot decrease/i.test(back.body?.error?.message ?? ""),
+      "PATCH mileage is rejected (400, ledger endpoint only)",
+      back.status === 400 && /odometer/i.test(back.body?.error?.message ?? ""),
       JSON.stringify(back.body),
     );
 
@@ -267,13 +269,27 @@ try {
       JSON.stringify(statusPatch.body),
     );
 
-    const okPatch = await send("PATCH", "/api/v1/vehicles/e2e-veh-1", sMaint.cookies, {
-      mileage: 15000,
+    const record = await send("POST", "/api/v1/vehicles/e2e-veh-1/odometer", sMaint.cookies, {
+      km: 15000,
+      source: "MANUAL_ENTRY",
+      notes: "e2e ledger record",
     });
     check(
-      "MAINTENANCE can increase mileage (200)",
-      okPatch.status === 200 && okPatch.body?.vehicle?.mileage === 15000,
-      JSON.stringify(okPatch.body).slice(0, 200),
+      "MAINTENANCE records an odometer reading (201 → projection 15000)",
+      record.status === 201 &&
+        record.body?.reading?.km === 15000 &&
+        record.body?.currentOdometerKm === 15000,
+      JSON.stringify(record.body).slice(0, 200),
+    );
+
+    const decrease = await send("POST", "/api/v1/vehicles/e2e-veh-1/odometer", sMaint.cookies, {
+      km: 14000,
+      source: "MANUAL_ENTRY",
+    });
+    check(
+      "ledger rejects a decreasing reading (409 DECREASE_REJECTED)",
+      decrease.status === 409 && decrease.body?.error?.code === "DECREASE_REJECTED",
+      JSON.stringify(decrease.body),
     );
   }
 
@@ -426,17 +442,28 @@ try {
       JSON.stringify(opsClose.body),
     );
 
-    const maintClose = await send("POST", `/api/v1/reports/${reportB.id}/status`, sMaint.cookies, {
+    const noResolution = await send("POST", `/api/v1/reports/${reportA.id}/status`, sMaint.cookies, {
       action: "close",
     });
     check(
-      "MAINTENANCE closes report from OPEN (200 → CLOSED)",
+      "closing without resolution/duplicate is 400 (accountability)",
+      noResolution.status === 400 && /resolution/i.test(noResolution.body?.error?.message ?? ""),
+      JSON.stringify(noResolution.body),
+    );
+
+    const maintClose = await send("POST", `/api/v1/reports/${reportB.id}/status`, sMaint.cookies, {
+      action: "close",
+      resolution: "Inspected — no fault found; interior light replaced by driver.",
+    });
+    check(
+      "MAINTENANCE closes report from OPEN with resolution (200 → CLOSED)",
       maintClose.status === 200 && maintClose.body?.report?.status === "CLOSED",
       JSON.stringify(maintClose.body).slice(0, 250),
     );
 
     const closeAgain = await send("POST", `/api/v1/reports/${reportB.id}/status`, sMaint.cookies, {
       action: "close",
+      resolution: "Already closed.",
     });
     check(
       "closing a closed report is 409",
@@ -513,14 +540,32 @@ try {
 
     const complete = await send(
       "POST",
-      `/api/v1/work-orders/${workOrder.id}/status`,
+      `/api/v1/work-orders/${workOrder.id}/complete`,
       sMaint.cookies,
-      { action: "complete" },
+      {
+        workPerformed: "Replaced front brake pads; inspected discs for wear.",
+        odometerKm: 15050,
+        providerName: "E2E Garage",
+      },
     );
     check(
-      "complete (200 → COMPLETED)",
-      complete.status === 200 && complete.body?.workOrder?.status === "COMPLETED",
-      JSON.stringify(complete.body).slice(0, 200),
+      "complete with evidence (200 → COMPLETED, service record created)",
+      complete.status === 200 &&
+        complete.body?.serviceRecord?.workOrderId === workOrder.id &&
+        complete.body?.duplicate === false,
+      JSON.stringify(complete.body).slice(0, 250),
+    );
+
+    const replay = await send(
+      "POST",
+      `/api/v1/work-orders/${workOrder.id}/complete`,
+      sMaint.cookies,
+      { workPerformed: "Replaced front brake pads; inspected discs for wear.", odometerKm: 15050 },
+    );
+    check(
+      "completion replay is idempotent (duplicate: true)",
+      replay.status === 200 && replay.body?.duplicate === true,
+      JSON.stringify(replay.body).slice(0, 250),
     );
 
     const close = await send("POST", `/api/v1/work-orders/${workOrder.id}/status`, sMaint.cookies, {
@@ -539,24 +584,24 @@ try {
       { action: "reopen" },
     );
     check(
-      "reopen (200 → OPEN, timestamps cleared)",
+      "reopen (200 → OPEN, evidence cleared from WO)",
       reopen.status === 200 &&
         reopen.body?.workOrder?.status === "OPEN" &&
         !reopen.body?.workOrder?.closedAt &&
-        !reopen.body?.workOrder?.completedAt,
+        !reopen.body?.workOrder?.serviceRecordId,
       JSON.stringify(reopen.body).slice(0, 250),
     );
 
     const completeFromOpen = await send(
       "POST",
-      `/api/v1/work-orders/${workOrder.id}/status`,
+      `/api/v1/work-orders/${workOrder.id}/complete`,
       sMaint.cookies,
-      { action: "complete" },
+      { workPerformed: "Re-diagnosed after reopening — no further action.", odometerKm: 15060 },
     );
     check(
-      "complete from OPEN is 409 (must start first)",
-      completeFromOpen.status === 409,
-      JSON.stringify(completeFromOpen.body),
+      "completion from OPEN is allowed (200 → COMPLETED)",
+      completeFromOpen.status === 200 && completeFromOpen.body?.duplicate === false,
+      JSON.stringify(completeFromOpen.body).slice(0, 250),
     );
   }
 
@@ -569,7 +614,7 @@ try {
       amountMinor: 45500,
       currency: "GHS",
       description: "Front brake pads",
-      status: "PENDING",
+      status: "RECORDED",
       createdBy: "e2e-setup",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -596,16 +641,16 @@ try {
       JSON.stringify(create.body),
     );
 
-    const approve = await send(
+    const voidAttempt = await send(
       "POST",
       `/api/v1/expenses/${expenseFixture.id}/status`,
       sMaint.cookies,
-      { action: "approve" },
+      { action: "void", reason: "should be denied to MAINTENANCE" },
     );
     check(
-      "MAINTENANCE cannot approve expenses (403 expense:update)",
-      approve.status === 403 && /expense:update/.test(approve.body?.error?.message ?? ""),
-      JSON.stringify(approve.body),
+      "MAINTENANCE cannot void expenses (403 expense:void)",
+      voidAttempt.status === 403 && /expense:void/.test(voidAttempt.body?.error?.message ?? ""),
+      JSON.stringify(voidAttempt.body),
     );
 
     const exportRes = await get("/api/v1/expenses/export", sMaint.cookies);
