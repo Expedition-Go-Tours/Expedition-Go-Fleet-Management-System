@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { Field, Input } from "@/components/ui/fields";
 import { api } from "@/lib/client/api";
 
 /**
@@ -53,22 +54,24 @@ export function EndAssignmentButton({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="font-ui text-muted text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase">
-            End odometer ({vehicleLabel})
-          </span>
-          <input
+        <Field
+          label={`End odometer (${vehicleLabel})`}
+          hint={`Trip start was ${minKm.toLocaleString()} km — end cannot be lower.`}
+          htmlFor="end-odo"
+          className="w-56"
+        >
+          <Input
+            id="end-odo"
             type="number"
             min={minKm}
             step={1}
             value={km}
             onChange={(e) => setKm(e.target.value)}
             placeholder={`≥ ${minKm.toLocaleString()}`}
-            className="border-hairline bg-surface text-body-sm w-44 rounded-md border px-3 py-2 outline-none focus:border-accent"
           />
-        </label>
-        <Button variant="primary" size="sm" disabled={busy} onClick={endTrip}>
-          {busy ? "Ending…" : "End trip"}
+        </Field>
+        <Button variant="primary" size="md" disabled={busy} isLoading={busy} onClick={endTrip}>
+          End trip
         </Button>
       </div>
       {error && (
