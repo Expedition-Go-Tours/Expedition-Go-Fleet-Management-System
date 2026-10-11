@@ -1,11 +1,8 @@
-import { randomUUID } from "node:crypto";
-
 import { NextRequest, NextResponse } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { TripError, completeTrip, getTripById } from "@/lib/repos/trips";
 
 export const runtime = "nodejs";
@@ -16,7 +13,6 @@ export const runtime = "nodejs";
  * Idempotent — returns existing result if the trip is already completed.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const requestId = randomUUID();
   try {
     await assertCsrfAndOrigin();
     const context = await requireAuthContext();
@@ -42,22 +38,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       endOdometerKm,
       notes,
     });
-
-    // Only write audit event for the initial completion (not idempotent replays)
-    if (result.trip.completedAt && existing.status === "DRAFT") {
-      await writeAuditEvent({
-        eventType: AUDIT_EVENTS.TRIP_COMPLETED,
-        actorId: context.user.id,
-        entityType: "trip",
-        entityId: tripId,
-        after: {
-          status: "COMPLETED",
-          distanceBasis: result.trip.distanceBasis,
-          actualDistanceKm: result.trip.actualDistanceKm,
-        },
-        requestId,
-      });
-    }
 
     return jsonOk({ trip: result.trip, projectionUpdated: result.projectionUpdated });
   } catch (error) {

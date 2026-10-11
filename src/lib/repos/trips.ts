@@ -718,23 +718,36 @@ async function reconcileVehicleEstimatedKmInTx(
     return { estimatedKm: newEstimatedKm, tripCount: tripCount + 1 };
   }
 
-  // Fallback: full recompute (for standalone reconciliation calls)
+  // Fallback: full recompute using a cursor-based scan.
+  // Firestore limits transaction queries; we fetch all COMPLETED trips
+  // for the vehicle in batches so no trips are silently dropped.
   const odometerKm = Number(vehicle.odometerKm ?? 0);
   const odometerAt = vehicle.odometerAt;
 
-  const tripsSnap = await tripsRef()
-    .where("vehicleId", "==", vehicleId)
-    .where("status", "==", "COMPLETED")
-    .limit(5000)
-    .get();
-
-  const completedTrips = tripsSnap.docs.map((d) => toTrip(d.id, d.data()));
+  const allCompletedTrips: Trip[] = [];
+  let cursor: import("firebase-admin/firestore").QueryDocumentSnapshot | null = null;
+  const BATCH = 500;
+  for (;;) {
+    let q = tripsRef()
+      .where("vehicleId", "==", vehicleId)
+      .where("status", "==", "COMPLETED")
+      .orderBy("createdAt", "asc")
+      .limit(BATCH);
+    if (cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    for (const doc of snap.docs) {
+      allCompletedTrips.push(toTrip(doc.id, doc.data()));
+    }
+    if (snap.docs.length < BATCH) break;
+    cursor = snap.docs[snap.docs.length - 1] ?? null;
+    if (!cursor) break;
+  }
 
   const baselineAt = odometerAt
     ? (toDate(odometerAt)?.toISOString() ?? new Date(0).toISOString())
     : new Date(0).toISOString();
 
-  const projection = computeEstimatedProjection(odometerKm, baselineAt, completedTrips);
+  const projection = computeEstimatedProjection(odometerKm, baselineAt, allCompletedTrips);
 
   const nowIso = new Date().toISOString();
   tx.update(vehicleRef, {

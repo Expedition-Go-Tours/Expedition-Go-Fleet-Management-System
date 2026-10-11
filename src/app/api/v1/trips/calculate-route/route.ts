@@ -49,8 +49,16 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest(`Cannot calculate route for a ${trip.status} trip`);
       }
 
+      // Validate all stops have coordinates — never silently discard stops.
+      const missing = trip.stops.filter((s) => s.latitude === null || s.longitude === null);
+      if (missing.length > 0) {
+        const labels = missing.map((s) => s.label || `Stop ${s.sequence + 1}`);
+        throw ApiError.badRequest(
+          `Cannot calculate route: ${missing.length} stop(s) need a valid location: ${labels.join(", ")}`,
+        );
+      }
+
       waypoints = trip.stops
-        .filter((s) => s.latitude !== null && s.longitude !== null)
         .sort((a, b) => a.sequence - b.sequence)
         .map((s) => ({
           latitude: s.latitude!,
@@ -58,15 +66,10 @@ export async function POST(request: NextRequest) {
           label: s.label,
         }));
 
-      stopIds = trip.stops
-        .filter((s) => s.latitude !== null && s.longitude !== null)
-        .sort((a, b) => a.sequence - b.sequence)
-        .map((s) => s.id);
+      stopIds = trip.stops.sort((a, b) => a.sequence - b.sequence).map((s) => s.id);
 
       if (waypoints.length < 2) {
-        throw ApiError.badRequest(
-          "Trip does not have enough stops with coordinates (need at least 2)",
-        );
+        throw ApiError.badRequest("Trip needs at least 2 stops with coordinates");
       }
     } else if (Array.isArray(body.waypoints)) {
       // Use provided waypoints

@@ -6,6 +6,7 @@ import {
   deriveOriginDestination,
   generateIdempotencyKey,
   generateStopId,
+  getTripDistanceMetres,
   markRouteStale,
   TRIP_ACTIONS,
   TRIP_PURPOSES,
@@ -513,5 +514,61 @@ describe("computeEstimatedProjection", () => {
     const result = computeEstimatedProjection(1000, "2026-10-01T00:00:00.000Z", trips);
     // 1000 + 12.345 = 1012.345 → 1012.35
     expect(result.estimatedKm).toBe(1012.35);
+  });
+
+  it("prefers actual odometer over route estimate in projection", () => {
+    const trips = [
+      makeTrip({
+        status: "COMPLETED",
+        completedAt: "2026-10-05T12:00:00.000Z",
+        routeDistanceM: 50000,
+        actualDistanceKm: 48,
+        distanceBasis: "ACTUAL_ODOMETER",
+      }),
+    ];
+    const result = computeEstimatedProjection(1000, "2026-10-01T00:00:00.000Z", trips);
+    expect(result.estimatedKm).toBe(1048);
+    expect(result.totalRouteM).toBe(48000);
+  });
+});
+
+describe("getTripDistanceMetres", () => {
+  it("returns null for a trip with no distance data", () => {
+    const trip = makeTrip({ routeDistanceM: null, actualDistanceKm: null, manualDistanceKm: null });
+    expect(getTripDistanceMetres(trip)).toBeNull();
+  });
+
+  it("prefers actual odometer when available", () => {
+    const trip = makeTrip({
+      routeDistanceM: 50000,
+      actualDistanceKm: 48,
+      distanceBasis: "ACTUAL_ODOMETER",
+    });
+    expect(getTripDistanceMetres(trip)).toBe(48000);
+  });
+
+  it("uses manual override when explicitly authorized", () => {
+    const trip = makeTrip({
+      routeDistanceM: 50000,
+      actualDistanceKm: null,
+      manualDistanceKm: 45,
+      distanceBasis: "MANUAL_OVERRIDE",
+    });
+    expect(getTripDistanceMetres(trip)).toBe(45000);
+  });
+
+  it("falls back to route estimate", () => {
+    const trip = makeTrip({
+      routeDistanceM: 50000,
+      actualDistanceKm: null,
+      manualDistanceKm: null,
+      distanceBasis: "ROUTE_ESTIMATE",
+    });
+    expect(getTripDistanceMetres(trip)).toBe(50000);
+  });
+
+  it("ignores zero or negative values", () => {
+    const trip = makeTrip({ routeDistanceM: 0, actualDistanceKm: 0, manualDistanceKm: 0 });
+    expect(getTripDistanceMetres(trip)).toBeNull();
   });
 });

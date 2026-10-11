@@ -102,6 +102,9 @@ function PlaceSearch({
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
+  // Track the sequence of searches so stale responses are discarded.
+  const searchSeq = useRef(0);
+
   function search(q: string) {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (q.trim().length < 2) {
@@ -110,20 +113,24 @@ function PlaceSearch({
       return;
     }
     setLoading(true);
+    const seq = ++searchSeq.current;
     timerRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/v1/trips/search-places?q=${encodeURIComponent(q.trim())}`);
+        // Discard stale response if a newer search was started.
+        if (seq !== searchSeq.current) return;
         if (!res.ok) {
           setResults([]);
           return;
         }
         const data = (await res.json()) as { places: PlaceResult[] };
+        if (seq !== searchSeq.current) return;
         setResults(data.places ?? []);
         setOpen((data.places ?? []).length > 0);
       } catch {
-        setResults([]);
+        if (seq === searchSeq.current) setResults([]);
       } finally {
-        setLoading(false);
+        if (seq === searchSeq.current) setLoading(false);
       }
     }, 300);
   }

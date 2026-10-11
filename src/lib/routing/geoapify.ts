@@ -115,16 +115,11 @@ export class GeoapifyRoutingProvider implements RoutingProvider {
       durationS: Math.round((leg.time ?? 0) / 1000),
     }));
 
-    // If no per-leg data, synthesize from waypoints
-    if (legs.length === 0 && waypoints.length >= 2) {
-      // Distribute total distance proportionally (approximate)
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        legs.push({
-          distanceM: Math.round(totalDistanceM / (waypoints.length - 1)),
-          durationS: Math.round(totalDurationS / (waypoints.length - 1)),
-        });
-      }
-    }
+    // Do NOT fabricate per-leg distances by dividing the total evenly.
+    // Two legs of a multi-stop journey may have very different lengths.
+    // If the provider does not supply leg data, leave legs empty and let
+    // callers use totalDistanceM/totalDurationS for the overall trip.
+    // Leg distances are only usable when explicitly returned by the provider.
 
     // Extract GeoJSON geometry
     let geometry: GeoJsonLineString | undefined;

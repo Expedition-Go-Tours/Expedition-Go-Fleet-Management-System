@@ -155,8 +155,6 @@ test.describe("trip management", () => {
     const distanceText = page.locator("text=/\\d+\\.\\d+\\s*km/").first();
     const distanceVisible = (await distanceText.count()) > 0;
 
-    
-
     // Check for route summary
     const routeSummary = page.locator("text=/Route estimate/i").first();
     const summaryVisible = (await routeSummary.count()) > 0;

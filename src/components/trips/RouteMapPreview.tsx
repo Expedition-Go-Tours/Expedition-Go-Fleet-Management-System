@@ -67,36 +67,36 @@ export function RouteMapPreview({
           }
           map.fitBounds(bounds, { padding: 50 });
 
-          // Add route line
-          const lineCoords =
-            routeGeometry?.coordinates ?? coordStops.map((s) => [s.longitude!, s.latitude!]);
-
-          map.addSource("route", {
-            type: "geojson",
-            data: {
-              type: "Feature",
-              properties: {},
-              geometry: {
-                type: "LineString",
-                coordinates: lineCoords,
+          // Add route line only when actual road geometry is available.
+          // Straight-line connections between stops misrepresent driving routes.
+          if (routeGeometry?.coordinates && routeGeometry.coordinates.length > 1) {
+            map.addSource("route", {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: {
+                  type: "LineString",
+                  coordinates: routeGeometry.coordinates,
+                },
               },
-            },
-          });
+            });
 
-          map.addLayer({
-            id: "route-line",
-            type: "line",
-            source: "route",
-            layout: {
-              "line-join": "round",
-              "line-cap": "round",
-            },
-            paint: {
-              "line-color": "#f15a24", // Expedition Go Tours accent
-              "line-width": 4,
-              "line-opacity": 0.85,
-            },
-          });
+            map.addLayer({
+              id: "route-line",
+              type: "line",
+              source: "route",
+              layout: {
+                "line-join": "round",
+                "line-cap": "round",
+              },
+              paint: {
+                "line-color": "#f15a24",
+                "line-width": 4,
+                "line-opacity": 0.85,
+              },
+            });
+          }
 
           // Add stop markers
           coordStops.forEach((stop, i) => {
@@ -114,9 +114,21 @@ export function RouteMapPreview({
             new maplibregl.Marker({ element: el })
               .setLngLat([stop.longitude!, stop.latitude!])
               .setPopup(
-                new maplibregl.Popup({ offset: 20 }).setHTML(
-                  `<strong>${stop.label || `Stop ${i + 1}`}</strong>` +
-                    (stop.purpose ? `<br/><small>${stop.purpose}</small>` : ""),
+                new maplibregl.Popup({ offset: 20 }).setDOMContent(
+                  (() => {
+                    const frag = document.createDocumentFragment();
+                    const strong = document.createElement("strong");
+                    strong.textContent = stop.label || `Stop ${i + 1}`;
+                    frag.appendChild(strong);
+                    if (stop.purpose) {
+                      const br = document.createElement("br");
+                      frag.appendChild(br);
+                      const small = document.createElement("small");
+                      small.textContent = stop.purpose;
+                      frag.appendChild(small);
+                    }
+                    return frag;
+                  })(),
                 ),
               )
               .addTo(map);

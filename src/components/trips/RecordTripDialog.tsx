@@ -112,8 +112,12 @@ export function RecordTripDialog({
     setError(null);
   }, [busy]);
 
-  // Calculate route.
-  const calculateRoute = useCallback(async () => {
+  // Calculate route — returns the result so callers can use it without waiting
+  // for React state to propagate (avoids stale-closure bugs in async flows).
+  const calculateRoute = useCallback(async (): Promise<{
+    distanceM: number | null;
+    stale: boolean;
+  }> => {
     setCalculating(true);
     setCalcError(null);
     setError(null);
@@ -129,15 +133,11 @@ export function RecordTripDialog({
     if (waypoints.length < 2) {
       setCalcError("Add coordinates to at least 2 stops to calculate a route.");
       setCalculating(false);
-      return;
+      return { distanceM: null, stale: true };
     }
 
     try {
-      // If we have a saved trip, calculate and persist in one call.
-      // Otherwise, calculate standalone.
-      const endpoint = savedTripId
-        ? "/api/v1/trips/calculate-route"
-        : "/api/v1/trips/calculate-route";
+      const endpoint = "/api/v1/trips/calculate-route";
       const body = savedTripId ? { tripId: savedTripId } : { waypoints };
 
       const result = await api.post<{
@@ -163,9 +163,11 @@ export function RecordTripDialog({
           : null,
       );
       setRouteStale(false);
+      return { distanceM: result.route.totalDistanceM, stale: false };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Route calculation failed";
       setCalcError(msg);
+      return { distanceM: null, stale: true };
     } finally {
       setCalculating(false);
     }
@@ -237,13 +239,31 @@ export function RecordTripDialog({
     setBusy(true);
     setError(null);
     try {
-      // Ensure route is calculated before completion
-      if (routeStale || routeDistanceM === null) {
-        await calculateRoute();
-        // Re-check: if route calculation failed, don't proceed
-        if (routeDistanceM === null && routeStale) {
+      // Ensure route is calculated before completion.
+      // Use the returned result directly — React state from calculateRoute()
+      // may not have propagated yet (stale-closure bug).
+      let routeValid = routeDistanceM !== null && !routeStale;
+      if (!routeValid) {
+        const calcResult = await calculateRoute();
+        routeValid = calcResult.distanceM !== null && !calcResult.stale;
+        if (!routeValid) {
           throw new Error("Route must be calculated before completing the trip");
         }
+      }
+
+      // Verify the server agrees the route is persisted before completing
+      const tripCheck = await api.get<{ trip: Trip }>(`/api/v1/trips/${tripId}`);
+      if (tripCheck.trip.routeStale) {
+        throw new Error("Route is stale on the server — please recalculate");
+      }
+      if (
+        !tripCheck.trip.routeDistanceM &&
+        !tripCheck.trip.manualDistanceKm &&
+        !tripCheck.trip.actualDistanceKm
+      ) {
+        throw new Error(
+          "Trip has no valid distance basis — calculate a route or provide a manual distance",
+        );
       }
 
       await api.post(`/api/v1/trips/${tripId}/complete`, {});
