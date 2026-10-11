@@ -163,7 +163,7 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
         type="button"
         data-tour="header-search"
         onClick={() => setOpen(true)}
-        className="hover:bg-subtle focus-visible:outline-accent border-hairline text-body-sm text-muted bg-surface flex h-9 w-full items-center gap-2 rounded-md border px-3 transition-colors"
+        className="hover:bg-subtle focus-visible:outline-accent border-hairline text-body-sm text-muted bg-surface flex h-9 w-full items-center gap-2 rounded-md border px-3 whitespace-nowrap transition-colors"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -213,7 +213,7 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-2">
+            <div data-lenis-prevent className="flex-1 overflow-y-auto py-2">
               {!results && !busy && (
                 <p className="text-muted px-4 py-6 text-center text-[var(--fs-body-xs)]">
                   Type at least two characters to search vehicles, issues and work orders.

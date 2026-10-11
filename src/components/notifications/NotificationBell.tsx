@@ -119,7 +119,7 @@ export function NotificationBell({
               View all
             </Link>
           </div>
-          <div className="max-h-96 overflow-y-auto">
+          <div data-lenis-prevent className="max-h-96 overflow-y-auto">
             {notifications.length === 0 && (
               <p className="text-muted px-4 py-6 text-center text-[var(--fs-body-xs)]">
                 You&apos;re all caught up.

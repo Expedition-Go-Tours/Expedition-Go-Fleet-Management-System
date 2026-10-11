@@ -59,6 +59,9 @@ export const serverEnv = {
         .replace(/\\n/g, "\n"),
     };
   },
+  get mapboxAccessToken(): string | undefined {
+    return process.env.MAPBOX_ACCESS_TOKEN;
+  },
 } as const;
 
 /** True when the app is served over HTTPS (drives the Secure cookie flag). */

@@ -108,7 +108,9 @@ export function Modal({
             <X aria-hidden="true" className="h-4 w-4" />
           </Button>
         </header>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div data-lenis-prevent className="flex-1 overflow-y-auto px-5 py-4">
+          {children}
+        </div>
         {footer && (
           <footer className="bg-subtle border-hairline flex items-center justify-end gap-2 border-t px-5 py-3">
             {footer}

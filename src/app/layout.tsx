@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
 
+import SmoothScroll from "@/components/layout/SmoothScroll";
 import "./globals.css";
 
 const dmSans = localFont({
@@ -42,7 +43,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${dmSans.variable} ${manrope.variable} h-full`}>
-      <body className="bg-page text-ink flex min-h-full flex-col font-sans">{children}</body>
+      <body className="bg-page text-ink flex min-h-full flex-col font-sans">
+        <SmoothScroll />
+        {children}
+      </body>
     </html>
   );
 }

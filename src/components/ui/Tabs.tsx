@@ -79,7 +79,7 @@ export function Tabs({
         className="border-hairline border-b"
         onKeyDown={onKeyDown}
       >
-        <div className="-mb-px flex gap-1 overflow-x-auto">
+        <div data-lenis-prevent className="-mb-px flex gap-1 overflow-x-auto">
           {tabs.map((tab) => {
             const selected = tab.id === active;
             return (

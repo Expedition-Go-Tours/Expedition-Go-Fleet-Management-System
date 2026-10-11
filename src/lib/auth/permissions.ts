@@ -66,6 +66,12 @@ export const PERMISSIONS = {
   DOCUMENT_UPLOAD: "document:upload",
   DOCUMENT_MANAGE: "document:manage",
 
+  TRIP_CREATE: "trip:create",
+  TRIP_READ: "trip:read",
+  TRIP_UPDATE: "trip:update",
+  TRIP_COMPLETE: "trip:complete",
+  TRIP_READ_ALL: "trip:read:all",
+
   PROVIDER_READ: "provider:read",
   PROVIDER_CREATE: "provider:create",
   PROVIDER_UPDATE: "provider:update",
@@ -109,6 +115,10 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.INCIDENT_CREATE,
     PERMISSIONS.INCIDENT_READ_OWN,
     PERMISSIONS.NOTIFICATION_READ,
+    PERMISSIONS.TRIP_CREATE,
+    PERMISSIONS.TRIP_READ,
+    PERMISSIONS.TRIP_UPDATE,
+    PERMISSIONS.TRIP_COMPLETE,
   ],
 
   OPERATIONS: [
@@ -136,6 +146,11 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.DOCUMENT_UPLOAD,
     PERMISSIONS.NOTIFICATION_READ,
     PERMISSIONS.AUDIT_READ,
+    PERMISSIONS.TRIP_CREATE,
+    PERMISSIONS.TRIP_READ,
+    PERMISSIONS.TRIP_READ_ALL,
+    PERMISSIONS.TRIP_UPDATE,
+    PERMISSIONS.TRIP_COMPLETE,
   ],
 
   MAINTENANCE: [
@@ -177,6 +192,8 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.DOCUMENT_MANAGE,
     PERMISSIONS.NOTIFICATION_READ,
     PERMISSIONS.AUDIT_READ,
+    PERMISSIONS.TRIP_READ,
+    PERMISSIONS.TRIP_READ_ALL,
   ],
 
   FINANCE: [
@@ -218,6 +235,8 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.NOTIFICATION_READ,
     PERMISSIONS.AUDIT_READ,
     PERMISSIONS.USER_READ,
+    PERMISSIONS.TRIP_READ,
+    PERMISSIONS.TRIP_READ_ALL,
   ],
 
   // Admin administers access; it does not automatically bypass safety/financial

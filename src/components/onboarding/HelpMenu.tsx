@@ -62,7 +62,7 @@ export function HelpMenu() {
             </p>
           </div>
 
-          <ul className="max-h-[22rem] overflow-y-auto py-1">
+          <ul data-lenis-prevent className="max-h-[22rem] overflow-y-auto py-1">
             {tours.map((tour) => {
               const status = statusFor(tour);
               const isCompleted = status === "Completed";

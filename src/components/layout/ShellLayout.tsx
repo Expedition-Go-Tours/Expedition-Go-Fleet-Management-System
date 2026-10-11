@@ -138,7 +138,11 @@ export function ShellLayout({
 
   function renderNav(innerCollapsed: boolean, onNavigate?: () => void) {
     return (
-      <nav aria-label="Main" className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pt-2 pb-4">
+      <nav
+        aria-label="Main"
+        data-lenis-prevent
+        className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pt-2 pb-4"
+      >
         {groups.map((group) => (
           <div key={group.label}>
             {!innerCollapsed && (
@@ -221,6 +225,7 @@ export function ShellLayout({
           <div
             ref={mobileDrawerRef}
             tabIndex={-1}
+            data-lenis-prevent
             className="bg-panel-1 absolute inset-y-0 left-0 flex w-72 flex-col shadow-[var(--shadow-lg)] outline-none"
           >
             <div className="flex items-center justify-between pr-2">

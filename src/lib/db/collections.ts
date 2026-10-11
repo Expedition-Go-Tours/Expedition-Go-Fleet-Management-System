@@ -24,6 +24,7 @@ export const COLLECTIONS = {
   vehicleDocuments: "vehicleDocuments",
   notifications: "notifications",
   serviceHistory: "serviceHistory", // deprecated alias kept for migration
+  trips: "trips",
   auditLogs: "auditLogs",
   providers: "providers",
   onboarding: "onboarding",
