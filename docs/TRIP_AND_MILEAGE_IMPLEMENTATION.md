@@ -2,7 +2,7 @@
 
 ## Status
 
-**Implemented** — domain model, routing provider abstraction, API routes, driver workspace integration, vehicle profile extension, and comprehensive unit tests.
+**Implemented and verified** — domain model, routing providers, API routes, driver workspace integration, vehicle profile trips tab, map preview, and comprehensive unit + E2E tests.
 
 ## Domain model
 
@@ -49,9 +49,16 @@ estimatedKm = latestVerifiedOdometerKm + SUM(routeDistanceM for eligible trips) 
 
 **Eligible trips**: status=COMPLETED, completedAt > verifiedBaselineAt.
 
+**Distance precedence** per trip:
+1. `actualDistanceKm` when valid start/end odometer readings exist
+2. `manualDistanceKm` when explicitly authorized (`distanceBasis = MANUAL_OVERRIDE`)
+3. `routeDistanceM` as a fallback from the routing provider
+
 **Reconciliation**: When a new verified odometer reading is recorded, `reconcileVehicleEstimatedKm()` recomputes eligible trips from the new baseline.
 
-## Routing provider
+**Incremental update**: `completeTrip()` computes the just-completed trip's contribution from the vehicle snapshot already read in the transaction — no re-query of all trips.
+
+## Routing providers
 
 ### Interface (`src/lib/routing/provider.ts`)
 
@@ -62,14 +69,40 @@ interface RoutingProvider {
 }
 ```
 
-### Implementations
+`RouteResult` includes optional `geometry: GeoJsonLineString` for map rendering.
 
-- **MapboxRoutingProvider** (`src/lib/routing/mapbox.ts`) — Mapbox Directions API, server-side only
-- **MockRoutingProvider** (`src/lib/routing/mock.ts`) — Haversine × 1.3 road factor, for dev/test
+### Implementations (priority order)
+
+| Provider | File | Config | Notes |
+|---|---|---|---|
+| **Geoapify** | `src/lib/routing/geoapify.ts` | `GEOAPIFY_API_KEY` | Free tier: 3,000 req/day. Primary. |
+| **Mapbox** | `src/lib/routing/mapbox.ts` | `MAPBOX_ACCESS_TOKEN` | Secondary fallback. Server-side only. |
+| **Mock** | `src/lib/routing/mock.ts` | — | Haversine × 1.3. Dev/test only; throws in production. |
 
 ### Factory (`src/lib/routing/index.ts`)
 
-Returns Mapbox if `MAPBOX_ACCESS_TOKEN` is set, otherwise Mock with a console warning in production.
+Returns Geoapify if `GEOAPIFY_API_KEY` is set, then Mapbox, then Mock (dev only). Production without a real provider throws `NOT_CONFIGURED`.
+
+## Geocoding
+
+### Photon (`src/lib/routing/photon.ts`)
+
+Free OpenStreetMap-based geocoding via `photon.komoot.io`. Server-side only. Ghana proximity bias when coordinates are provided.
+
+### API: `GET /api/v1/trips/search-places?q=...&lat=...&lng=...`
+
+Requires `trip:read` permission. Debounced on the client (300ms). Returns `{ places: GeocodingResult[] }`.
+
+## Map preview
+
+### MapLibre GL + OpenFreeMap (`src/components/trips/RouteMapPreview.tsx`)
+
+- **MapLibre GL JS**: open-source map renderer, loaded via dynamic import (no SSR issues)
+- **OpenFreeMap tiles**: `tiles.openfreemap.org/styles/liberty` — free, no API key needed
+- Route line in brand accent color (`#f15a24`)
+- Numbered markers with popups showing stop labels
+- Accepts `routeGeometry` prop for accurate route line (falls back to straight-line)
+- Graceful fallback when tiles or JS fail to load
 
 ## API routes
 
@@ -79,73 +112,119 @@ Returns Mapbox if `MAPBOX_ACCESS_TOKEN` is set, otherwise Mock with a console wa
 | `/api/v1/trips/[id]` | GET, PATCH | Get/update draft trip |
 | `/api/v1/trips/[id]/complete` | POST | Complete a trip (idempotent) |
 | `/api/v1/trips/calculate-route` | POST | Calculate route distance |
+| `/api/v1/trips/search-places` | GET | Photon geocoding search |
 | `/api/v1/trips/daily` | GET | Trips for a specific date |
 
-## Permissions
+### Authorization
 
-| Permission | Who has it |
-|---|---|
-| `trip:create` | DRIVER, OPERATIONS, ADMIN |
-| `trip:read` | DRIVER (own), OPERATIONS, MAINTENANCE, MANAGER, ADMIN |
-| `trip:read:all` | OPERATIONS, MAINTENANCE, MANAGER, ADMIN |
-| `trip:update` | DRIVER (own drafts), OPERATIONS, ADMIN |
-| `trip:complete` | DRIVER, OPERATIONS, ADMIN |
+- `calculate-route` with `tripId`: checks ownership (drivers can only update their own drafts), DRAFT-only status, stop fingerprint before saving
+- `POST /trips`: validates vehicle ACTIVE, driver exists, assignment matches
+- `PATCH /trips/[id]`: DRAFT-only, ownership check
+- `complete`: idempotent (returns existing result if already completed)
 
-## Configuration
+### Idempotency
 
-### Mapbox (production)
-
-```
-MAPBOX_ACCESS_TOKEN=pk.xxx  # Server-side routing token
-```
-
-- Waypoint limit: 25 per request (Mapbox Directions)
-- Timeout: 30 seconds
-- Only called when user requests route calculation
-
-### Mock (development/testing)
-
-No configuration needed. Returns Haversine × 1.3 distances.
+- `createTrip` accepts `idempotencyToken` as the Firestore document ID for deterministic dedup
+- `completeTrip` returns existing result for already-completed trips
+- No duplicate audit events (single canonical write in repo)
 
 ## Driver workspace integration
 
-The driver workspace now includes:
-- "Today's trips" card showing trips recorded for the current date (Africa/Accra)
+The driver workspace (`/workspace`) now includes:
+- "Today's trips" card with count and trip list
 - "Record Trip" button opening the multi-stop route builder dialog
-- Pre-fills vehicle and driver from active assignment
+- Pre-fills vehicle from the first ACTIVE vehicle
 
-## Vehicle profile extension
+## Vehicle profile
 
 - `estimatedKm` displayed in the summary strip when > 0
 - `estimatedKmTripCount` shown as context hint
+- **Trips tab** in `VehicleDetailTabs` with paginated history
+- Each row shows: driver, purpose, origin→destination, stop count, route distance, actual distance, distance basis, status
+
+## Record Trip dialog
+
+### Features
+- Vehicle selector (prefilled from active assignment)
+- Trip date, purpose, booking/tour reference
+- **Location search** via Photon geocoding (debounced, Ghana-biased)
+- Manual coordinate fallback (pencil icon)
+- Add/remove/reorder stops
+- Return to origin shortcut
+- Route calculation with distance and duration
+- **Map preview** with MapLibre + OpenFreeMap
+- Per-leg distance display
+- Route-stale warning when stops change
+- Save draft / Complete trip
+- Notes
+
+### Completion flow
+1. Save draft (creates or updates trip) → returns trip ID
+2. If route stale or missing → recalculate
+3. Complete trip (idempotent) → reconciles vehicle estimated km
+4. Server validates: vehicle ACTIVE, driver exists, route not stale
+
+## Configuration
+
+### Environment variables
+
+```
+# Primary routing (free)
+GEOAPIFY_API_KEY=
+
+# Secondary routing (optional)
+MAPBOX_ACCESS_TOKEN=
+
+# Map rendering: OpenFreeMap + MapLibre (no token needed)
+```
+
+### Vercel deployment
+
+- `GEOAPIFY_API_KEY` — server-side only, never exposed in client bundles
+- `MAPBOX_ACCESS_TOKEN` — server-side only (optional fallback)
+- No client-side map token required (OpenFreeMap is free)
+
+### Firestore indexes
+
+Trip queries may need composite indexes at production scale:
+- `trips` where `vehicleId == X` and `status == Y`
+- `trips` where `driverUserId == X` and `tripDate == Y`
+
+## Maintenance integration
+
+The vehicle profile shows:
+- Verified odometer (unchanged by trips)
+- Estimated operational km (from completed trips)
+- Trip count since last reconciliation
+
+The maintenance engine (`computeScheduleStatus`) continues to use `vehicle.odometerKm` as the authoritative reading. Estimated km is displayed as a clearly labeled forecast.
 
 ## Test coverage
 
-### Unit tests (43 new)
+### Unit tests (237 passed)
+- Trip domain: validation, projection, idempotency, staleness, distance
+- Routing: Haversine accuracy, mock provider, Geoapify interface, error codes
 
-- Stop validation (valid, invalid coords, missing label)
-- Trip validation (required fields, stops, manual distance)
-- Completion validation (status gates)
-- Idempotency key generation (deterministic, sorted)
-- Route staleness marking
-- Actual distance computation
-- Origin/destination derivation
-- Estimated projection (baseline, filtering, rounding, multiple trips)
+### E2E tests (`e2e/trips.spec.ts`)
+- 7 tests covering: dialog open, location search, route calculation, save/complete, vehicle page, mobile overflow
+- Self-skipping when credentials not configured
 
-### Routing tests (11 new)
-
-- Haversine distance accuracy
-- Mock provider (2-stop, multi-stop, return journey)
-- Waypoint validation
-- Road factor application
-- Duplicate coordinates
-- RoutingError codes
+### Playwright verification (live)
+- ✅ Photon geocoding returns real Accra/Cape Coast/Kotoka results
+- ✅ Route: 178.7km Accra→Kotoka→Cape Coast (real road distances)
+- ✅ MapLibre map renders with route line and markers
+- ✅ Trip completion: estimated km = 120,328.68 (verified 120,150 + 178.7)
+- ✅ Verified odometer unchanged (120,150)
+- ✅ Idempotent: retry returns same result, no double-count
+- ✅ Vehicle profile shows estimated km and trips tab
+- ✅ Daily trip list and vehicle trips query work
 
 ## Remaining work
 
-- **UI polish**: location search/geocoding integration (currently manual coordinate entry)
-- **Map preview**: Mapbox GL integration for route visualization
-- **Vehicle profile trips tab**: full paginated trip history
-- **Maintenance integration**: use estimatedKm in schedule evaluation with clear "estimated" labels
-- **E2E browser tests**: full trip workflow via Playwright
-- **Firestore composite indexes**: `trips` collection queries may need indexes for production scale
+- **Full interactive map with route editing**: drag-to-reorder on the map itself
+- **Saved company locations**: frequently used origins/destinations
+- **Trip detail page** (`/trips/[id]`): full view with map, legs, correction history
+- **Operations trip register**: `/trips` page with filters, pagination, export
+- **Route chunking**: for trips exceeding provider waypoint limits
+- **Actual odometer reconciliation**: flag route-vs-actual discrepancies
+- **Full E2E workflow**: authenticated end-to-end test with real Firebase
