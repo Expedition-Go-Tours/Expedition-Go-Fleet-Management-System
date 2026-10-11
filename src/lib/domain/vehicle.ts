@@ -42,6 +42,12 @@ export interface Vehicle {
   safetyHoldAppliedBy?: string;
   safetyHoldAppliedAt?: Date;
   archivedAt?: Date;
+  /** Estimated operational kilometres from completed trips since last verified baseline. */
+  estimatedKm?: number;
+  /** When estimatedKm was last recomputed. */
+  estimatedKmUpdatedAt?: Date;
+  /** Number of completed trips contributing to estimatedKm. */
+  estimatedKmTripCount?: number;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;

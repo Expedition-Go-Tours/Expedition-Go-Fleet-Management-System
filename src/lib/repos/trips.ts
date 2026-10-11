@@ -473,6 +473,55 @@ export async function cancelTrip(id: string, actorId: string, reason?: string): 
 // Queries
 // ---------------------------------------------------------------------------
 
+/**
+ * List trips with optional filters. When no filters are provided, returns
+ * the most recent trips. Filters are applied in the order: vehicleId,
+ * driverUserId, tripDate, status. Firestore compound index constraints
+ * mean we apply at most one equality filter in the query and post-filter
+ * the rest in memory (the collection is bounded at 500).
+ */
+export async function listTrips(options?: {
+  vehicleId?: string;
+  driverUserId?: string;
+  tripDate?: string;
+  status?: TripStatus;
+  limit?: number;
+}): Promise<Trip[]> {
+  const limit = Math.min(options?.limit ?? 100, 500);
+  let query: import("firebase-admin/firestore").Query = tripsRef();
+
+  // Apply the most selective equality filter at the query level.
+  if (options?.vehicleId) {
+    query = query.where("vehicleId", "==", options.vehicleId);
+  } else if (options?.driverUserId) {
+    query = query.where("driverUserId", "==", options.driverUserId);
+  } else if (options?.tripDate) {
+    query = query.where("tripDate", "==", options.tripDate);
+  } else if (options?.status) {
+    query = query.where("status", "==", options.status);
+  }
+
+  const snap = await query.limit(500).get();
+  let trips = snap.docs.map((d) => toTrip(d.id, d.data()));
+
+  // Post-filter remaining criteria in memory.
+  if (options?.vehicleId) {
+    // Already filtered by vehicleId in query.
+    if (options.driverUserId) trips = trips.filter((t) => t.driverUserId === options.driverUserId);
+    if (options.tripDate) trips = trips.filter((t) => t.tripDate === options.tripDate);
+    if (options.status) trips = trips.filter((t) => t.status === options.status);
+  } else if (options?.driverUserId) {
+    if (options.tripDate) trips = trips.filter((t) => t.tripDate === options.tripDate);
+    if (options.status) trips = trips.filter((t) => t.status === options.status);
+  } else if (options?.tripDate) {
+    if (options.status) trips = trips.filter((t) => t.status === options.status);
+  }
+
+  return trips
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit);
+}
+
 export async function getTripById(id: string): Promise<Trip | null> {
   const snap = await tripsRef().doc(id).get();
   if (!snap.exists) return null;

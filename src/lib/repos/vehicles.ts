@@ -35,6 +35,10 @@ function toVehicle(id: string, data: DocumentData): Vehicle {
     safetyHoldAppliedBy: data.safetyHoldAppliedBy ? String(data.safetyHoldAppliedBy) : undefined,
     safetyHoldAppliedAt: toDate(data.safetyHoldAppliedAt),
     archivedAt: toDate(data.archivedAt),
+    estimatedKm: typeof data.estimatedKm === "number" ? data.estimatedKm : undefined,
+    estimatedKmUpdatedAt: toDate(data.estimatedKmUpdatedAt),
+    estimatedKmTripCount:
+      typeof data.estimatedKmTripCount === "number" ? data.estimatedKmTripCount : undefined,
     createdAt: toDate(data.createdAt) ?? new Date(0),
     updatedAt: toDate(data.updatedAt) ?? new Date(0),
     createdBy: String(data.createdBy ?? ""),

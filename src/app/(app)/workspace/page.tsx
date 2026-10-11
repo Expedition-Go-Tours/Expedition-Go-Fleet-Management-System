@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 
 import { StartAssignmentDialog } from "@/components/assignments/StartAssignmentDialog";
+import { RecordTripDialog } from "@/components/trips/RecordTripDialog";
+import { TripList } from "@/components/trips/TripList";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -33,6 +35,7 @@ import { listInspections } from "@/lib/repos/inspections";
 import { listNotifications } from "@/lib/repos/notifications";
 import { countIssueTotals, listIssues } from "@/lib/repos/reports";
 import { listVehicles } from "@/lib/repos/vehicles";
+import { listTripsForDriverDate } from "@/lib/repos/trips";
 
 export const metadata = { title: "Driver workspace" };
 
@@ -56,6 +59,7 @@ export default async function WorkspacePage() {
   const canStartAssignment =
     permissions.includes(PERMISSIONS.ASSIGNMENT_START) ||
     permissions.includes(PERMISSIONS.ASSIGNMENT_CREATE);
+  const canCreateTrip = permissions.includes(PERMISSIONS.TRIP_CREATE);
 
   const assignment = await getActiveAssignmentForDriver(context.user.id);
 
@@ -87,6 +91,10 @@ export default async function WorkspacePage() {
         })
       : Promise.resolve([]),
   ]);
+
+  // Today's trips (Africa/Accra default date).
+  const todayDate = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Accra" });
+  const todaysTrips = await listTripsForDriverDate(context.user.id, todayDate);
 
   const vehicle = assignment ? (vehicles.find((v) => v.id === assignment.vehicleId) ?? null) : null;
 
@@ -220,6 +228,28 @@ export default async function WorkspacePage() {
           )}
         </div>
       </Card>
+
+      {/* Daily trips summary */}
+      {canCreateTrip && (
+        <Card
+          title={`Today\'s trips (${todaysTrips.length})`}
+          icon={Route}
+          action={
+            <RecordTripDialog
+              vehicles={vehicleOptions}
+              defaultVehicleId={vehicle?.id}
+              driverUserId={context.user.id}
+              defaultDate={todayDate}
+              assignmentId={assignment?.id}
+            />
+          }
+        >
+          <TripList
+            trips={todaysTrips}
+            emptyMessage="No trips recorded today. Use Record Trip to log your journeys."
+          />
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">

@@ -163,7 +163,7 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
         type="button"
         data-tour="header-search"
         onClick={() => setOpen(true)}
-        className="hover:bg-subtle focus-visible:outline-accent border-hairline text-body-sm text-muted bg-surface flex h-9 w-full items-center gap-2 rounded-md border px-3 whitespace-nowrap transition-colors"
+        className="hover:bg-subtle focus-visible:outline-accent border-hairline text-body-sm text-muted bg-surface flex h-9 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md border px-3 whitespace-nowrap transition-colors"
         aria-haspopup="dialog"
         aria-expanded={open}
       >

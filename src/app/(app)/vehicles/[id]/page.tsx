@@ -24,6 +24,7 @@ import { listSchedules, listServiceRecords } from "@/lib/repos/maintenance";
 import { countReadings, listReadings } from "@/lib/repos/odometers";
 import { countIssueTotals, listIssues } from "@/lib/repos/reports";
 import { listUsers } from "@/lib/repos/users";
+import { listTripsForVehicle } from "@/lib/repos/trips";
 import { getVehicleById } from "@/lib/repos/vehicles";
 import { countWorkOrderTotals, listWorkOrders } from "@/lib/repos/work-orders";
 import type { MaintenanceSchedule } from "@/lib/repos/maintenance";
@@ -82,6 +83,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     listFuelEntries({ vehicleId: vehicle.id, limit: 10 }),
     listDocuments(vehicle.id),
     listUsers(),
+    listTripsForVehicle(vehicle.id, { status: "COMPLETED", limit: 20 }),
   ]);
 
   // Accurate totals via Firestore aggregation — independent of the capped
@@ -273,6 +275,18 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <Card flush>
         <div className="divide-hairline grid grid-cols-2 divide-x md:grid-cols-4">
           <SummaryCell label="Current odometer" value={formatKm(vehicle.odometerKm)} icon={Gauge} />
+          {vehicle.estimatedKm != null && vehicle.estimatedKm > 0 && (
+            <SummaryCell
+              label="Estimated km"
+              value={formatKm(vehicle.estimatedKm)}
+              hint={
+                vehicle.estimatedKmTripCount
+                  ? `${vehicle.estimatedKmTripCount} trips since baseline`
+                  : undefined
+              }
+              icon={Gauge}
+            />
+          )}
           <SummaryCell
             label="Next service"
             value={nextService.value}

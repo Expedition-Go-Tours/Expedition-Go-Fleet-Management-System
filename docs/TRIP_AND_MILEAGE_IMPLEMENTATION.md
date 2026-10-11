@@ -1,200 +1,151 @@
-# Trip and Mileage Implementation Design
+# Trip and Mileage Implementation
 
-> **Application:** Expedition Go Tours Fleet Management System
-> **Date:** 2026-10-10
+## Status
 
----
+**Implemented** — domain model, routing provider abstraction, API routes, driver workspace integration, vehicle profile extension, and comprehensive unit tests.
 
 ## Domain model
 
-### Assignment (existing — no schema change)
+### Collections
 
-An assignment represents a driver's responsibility for a vehicle during a period.
-An assignment can contain multiple trips. The existing `distanceKm` field
-(end odometer − start odometer) remains the authoritative measured distance
-for the assignment period as a whole.
+| Collection | Purpose |
+|---|---|
+| `trips` | Canonical trip records (one journey per doc) |
+| `vehicles` | Extended with `estimatedKm`, `estimatedKmUpdatedAt`, `estimatedKmTripCount` |
+| `odometerReadings` | Unchanged — authoritative verified odometer ledger |
+| `assignments` | Unchanged — driver-vehicle responsibility periods |
 
-### Trip (new: `trips` collection)
-
-One journey within an assignment. A driver may complete several trips against
-the same assignment in one day.
-
-```
-trips/{tripId}
-  id: string
-  vehicleId: string
-  driverUserId: string
-  assignmentId: string | null
-  recordedByUserId: string            // who entered the record
-  tripDate: string                    // ISO date in Africa/Accra
-  purpose: TripPurpose
-  externalReference: string | null    // booking/tour reference
-  notes: string | null
-
-  status: "DRAFT" | "COMPLETED" | "CANCELLED"
-
-  // Route
-  origin: TripStop                    // first stop
-  destination: TripStop               // last stop
-  stops: TripStop[]                   // all stops including origin/destination
-
-  // Route calculation
-  routeDistanceM: number | null       // canonical metres (null = not calculated)
-  routeDistanceKm: number | null      // display km (derived)
-  routeDurationS: number | null       // estimated seconds
-  routingProvider: string | null      // "mapbox" | "mock" | etc.
-  routeCalculatedAt: string | null    // ISO timestamp
-  routeProviderMeta: unknown | null   // audit/debug data
-
-  // Actual odometer (when both readings exist)
-  startOdometerKm: number | null
-  endOdometerKm: number | null
-  actualDistanceKm: number | null     // end - start when both verified
-
-  // Distance basis
-  distanceBasis: "ROUTE_ESTIMATE" | "ACTUAL_ODOMETER" | "MANUAL_OVERRIDE"
-  manualDistanceKm: number | null
-  manualDistanceReason: string | null
-
-  // Staleness
-  routeStale: boolean                 // true when stops changed after calculation
-
-  // Completion
-  startedAt: string | null            // ISO — actual journey start
-  completedAt: string | null          // ISO — when marked complete
-  idempotencyKey: string              // deterministic for dedup
-
-  createdAt: string
-  updatedAt: string
-  createdBy: string
-```
-
-### TripStop
+### Trip lifecycle
 
 ```
-{
-  id: string                          // stable UUID
-  sequence: number                    // 0-based
-  type: "ORIGIN" | "INTERMEDIATE" | "DESTINATION"
-  label: string                       // user-facing name
-  address: string | null
-  latitude: number | null
-  longitude: number | null
-  placeId: string | null              // provider place identifier
-  purpose: string | null              // pickup, drop-off, fuel, etc.
-  notes: string | null
-  arrivedAt: string | null
-  departedAt: string | null
-}
+DRAFT → COMPLETED  (via POST /api/v1/trips/[id]/complete)
+DRAFT → CANCELLED  (via PATCH status)
 ```
 
-### RouteLeg (stored on trip document)
+### Key types
 
-```
-{
-  fromStopId: string
-  toStopId: string
-  sequence: number
-  distanceM: number
-  durationS: number | null
-}
-```
-
-### Vehicle extensions
-
-Add to vehicle document (alongside existing `odometerKm`):
-
-```
-  estimatedKm: number | null          // projection from trips
-  estimatedKmUpdatedAt: string | null
-  lastTripAt: string | null
-  lastReconciledAt: string | null     // when a verified reading reconciled
-  mileageReconciled: boolean          // true if estimated is within threshold
-```
-
-### Projection formula
-
-```
-estimatedKm = latestVerifiedOdometerKm
-            + SUM(routeDistanceKm for completed trips where completedAt > latestVerifiedAt)
-```
-
-When a new verified reading is recorded:
-1. It becomes the new `latestVerifiedOdometerKm` baseline.
-2. Recompute `estimatedKm` using only trips completed after the new reading's effectiveAt.
-3. Historical trips are preserved but not re-counted.
+- **Trip**: vehicleId, driverUserId, assignmentId, tripDate, purpose, stops[], routeDistanceM, actualDistanceKm, distanceBasis, status
+- **TripStop**: id, sequence, type (ORIGIN/INTERMEDIATE/DESTINATION), label, coordinates, purpose
+- **RouteLeg**: fromStopId, toStopId, sequence, distanceM, durationS
 
 ### Distance representation
 
-- Canonical storage: integer metres (`routeDistanceM`)
-- Display: kilometres with 1 decimal (`routeDistanceM / 1000`)
-- Never sum rounded km values — always sum metres, convert at display boundary
-- Actual trip distance from odometer: `endOdometerKm - startOdometerKm` (integer km, matches existing ledger)
+- **Canonical storage**: integer metres (`routeDistanceM`)
+- **Display**: `routeDistanceM / 1000` with 2 decimal places
+- **Distance basis**: `ROUTE_ESTIMATE`, `ACTUAL_ODOMETER`, or `MANUAL_OVERRIDE`
+- Never sum individually rounded km values
 
-### Collections
+## Two separate kilometre metrics
 
-- `trips` — new collection
-- `vehicles` — extend with estimated km fields
-- No changes to `assignments`, `odometerReadings`, `maintenanceSchedules`
+### A. Verified odometer (`vehicle.odometerKm`)
 
-### Routing provider abstraction
+The existing odometer ledger. `max(accepted readings)`. Only advanced by permitted odometer-recording workflows. Never overwritten by route estimates.
+
+### B. Estimated operational kilometres (`vehicle.estimatedKm`)
+
+```
+estimatedKm = latestVerifiedOdometerKm + SUM(routeDistanceM for eligible trips) / 1000
+```
+
+**Eligible trips**: status=COMPLETED, completedAt > verifiedBaselineAt.
+
+**Reconciliation**: When a new verified odometer reading is recorded, `reconcileVehicleEstimatedKm()` recomputes eligible trips from the new baseline.
+
+## Routing provider
+
+### Interface (`src/lib/routing/provider.ts`)
 
 ```typescript
-interface RouteWaypoint {
-  latitude: number;
-  longitude: number;
-  label?: string;
-}
-
-interface RouteLegResult {
-  distanceM: number;
-  durationS: number;
-}
-
-interface RouteResult {
-  totalDistanceM: number;
-  totalDurationS: number;
-  legs: RouteLegResult[];
-  provider: string;
-  calculatedAt: string;
-  providerMeta?: unknown;
-}
-
 interface RoutingProvider {
-  name: string;
+  readonly name: string;
   calculateRoute(waypoints: RouteWaypoint[]): Promise<RouteResult>;
 }
 ```
 
-Implementations:
-- `MapboxRoutingProvider` — Mapbox Directions API (production)
-- `MockRoutingProvider` — deterministic for tests
+### Implementations
 
-### Permissions
+- **MapboxRoutingProvider** (`src/lib/routing/mapbox.ts`) — Mapbox Directions API, server-side only
+- **MockRoutingProvider** (`src/lib/routing/mock.ts`) — Haversine × 1.3 road factor, for dev/test
 
-Reuse existing permissions:
-- `assignment:start` / `assignment:create` — to create trips
-- `assignment:read` — to view trips
-- New: `trip:create`, `trip:read:own`, `trip:read:all`, `trip:update`, `trip:complete`
+### Factory (`src/lib/routing/index.ts`)
 
-Actually, let's keep it simpler and add just:
-- `TRIP_CREATE: "trip:create"` — DRIVER, OPERATIONS, ADMIN
-- `TRIP_READ: "trip:read"` — DRIVER (own), OPERATIONS, MAINTENANCE, MANAGER, ADMIN
-- `TRIP_UPDATE: "trip:update"` — DRIVER (own drafts), OPERATIONS, ADMIN
-- `TRIP_COMPLETE: "trip:complete"` — DRIVER, OPERATIONS, ADMIN
+Returns Mapbox if `MAPBOX_ACCESS_TOKEN` is set, otherwise Mock with a console warning in production.
 
-### Firestore indexes
+## API routes
 
-- `trips` where `vehicleId == X` and `status == Y` (list by vehicle)
-- `trips` where `driverUserId == X` and `tripDate == Y` (daily trips)
-- `trips` where `assignmentId == X` (trips for assignment)
+| Route | Methods | Purpose |
+|---|---|---|
+| `/api/v1/trips` | GET, POST | List/create trips |
+| `/api/v1/trips/[id]` | GET, PATCH | Get/update draft trip |
+| `/api/v1/trips/[id]/complete` | POST | Complete a trip (idempotent) |
+| `/api/v1/trips/calculate-route` | POST | Calculate route distance |
+| `/api/v1/trips/daily` | GET | Trips for a specific date |
 
-### Mileage reconciliation rules
+## Permissions
 
-1. A completed trip's route distance contributes to `estimatedKm` exactly once.
-2. The key is `completedAt > latestVerifiedOdometerEffectiveAt`.
-3. If a trip is completed retroactively (past date) and a newer verified reading exists, the trip is excluded from the current projection.
-4. If a trip is edited/voided, recompute the projection.
-5. If estimated vs verified diverge by more than 10%, flag for reconciliation.
-6. Never overwrite verified odometer with route estimates.
-7. A trip with actual odometer readings has `distanceBasis = "ACTUAL_ODOMETER"` and its `actualDistanceKm` is preserved separately.
+| Permission | Who has it |
+|---|---|
+| `trip:create` | DRIVER, OPERATIONS, ADMIN |
+| `trip:read` | DRIVER (own), OPERATIONS, MAINTENANCE, MANAGER, ADMIN |
+| `trip:read:all` | OPERATIONS, MAINTENANCE, MANAGER, ADMIN |
+| `trip:update` | DRIVER (own drafts), OPERATIONS, ADMIN |
+| `trip:complete` | DRIVER, OPERATIONS, ADMIN |
+
+## Configuration
+
+### Mapbox (production)
+
+```
+MAPBOX_ACCESS_TOKEN=pk.xxx  # Server-side routing token
+```
+
+- Waypoint limit: 25 per request (Mapbox Directions)
+- Timeout: 30 seconds
+- Only called when user requests route calculation
+
+### Mock (development/testing)
+
+No configuration needed. Returns Haversine × 1.3 distances.
+
+## Driver workspace integration
+
+The driver workspace now includes:
+- "Today's trips" card showing trips recorded for the current date (Africa/Accra)
+- "Record Trip" button opening the multi-stop route builder dialog
+- Pre-fills vehicle and driver from active assignment
+
+## Vehicle profile extension
+
+- `estimatedKm` displayed in the summary strip when > 0
+- `estimatedKmTripCount` shown as context hint
+
+## Test coverage
+
+### Unit tests (43 new)
+
+- Stop validation (valid, invalid coords, missing label)
+- Trip validation (required fields, stops, manual distance)
+- Completion validation (status gates)
+- Idempotency key generation (deterministic, sorted)
+- Route staleness marking
+- Actual distance computation
+- Origin/destination derivation
+- Estimated projection (baseline, filtering, rounding, multiple trips)
+
+### Routing tests (11 new)
+
+- Haversine distance accuracy
+- Mock provider (2-stop, multi-stop, return journey)
+- Waypoint validation
+- Road factor application
+- Duplicate coordinates
+- RoutingError codes
+
+## Remaining work
+
+- **UI polish**: location search/geocoding integration (currently manual coordinate entry)
+- **Map preview**: Mapbox GL integration for route visualization
+- **Vehicle profile trips tab**: full paginated trip history
+- **Maintenance integration**: use estimatedKm in schedule evaluation with clear "estimated" labels
+- **E2E browser tests**: full trip workflow via Playwright
+- **Firestore composite indexes**: `trips` collection queries may need indexes for production scale
