@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
+import { getTripDistanceMetres } from "@/lib/domain/trip";
 import { listTripsForDriverDate } from "@/lib/repos/trips";
 
 export const runtime = "nodejs";
@@ -36,16 +37,12 @@ export async function GET(request: NextRequest) {
 
     const trips = await listTripsForDriverDate(driverUserId, date);
 
-    // Compute summary
+    // Compute summary using the same distance precedence as the vehicle
+    // projection: actual odometer > authorized manual > route estimate.
     let totalDistanceM = 0;
     for (const trip of trips) {
-      if (trip.routeDistanceM !== null && trip.routeDistanceM > 0) {
-        totalDistanceM += trip.routeDistanceM;
-      } else if (trip.actualDistanceKm !== null && trip.actualDistanceKm > 0) {
-        totalDistanceM += Math.round(trip.actualDistanceKm * 1000);
-      } else if (trip.manualDistanceKm !== null && trip.manualDistanceKm > 0) {
-        totalDistanceM += Math.round(trip.manualDistanceKm * 1000);
-      }
+      const metres = getTripDistanceMetres(trip);
+      if (metres !== null) totalDistanceM += metres;
     }
 
     return jsonOk({

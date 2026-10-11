@@ -6,6 +6,7 @@ import { MapPin, Route, Clock } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { humanizeEnum } from "@/lib/format";
 import type { Trip } from "@/lib/domain/trip";
+import { getTripDistanceMetres } from "@/lib/domain/trip";
 
 /*
  * Daily trip list: shows all trips recorded for a given date.
@@ -31,10 +32,11 @@ export function TripList({
   return (
     <ul className="divide-hairline divide-y">
       {trips.map((trip) => {
-        const distanceKm =
-          trip.routeDistanceKm ??
-          (trip.actualDistanceKm ? trip.actualDistanceKm : trip.manualDistanceKm);
-        const distanceLabel = distanceKm != null ? `${distanceKm.toFixed(1)} km` : "No distance";
+        // Use the same distance precedence as the vehicle projection:
+        // actual odometer > authorized manual > route estimate.
+        const distanceM = getTripDistanceMetres(trip);
+        const distanceLabel =
+          distanceM != null ? `${(distanceM / 1000).toFixed(1)} km` : "No distance";
         const basisLabel =
           trip.distanceBasis === "ACTUAL_ODOMETER"
             ? "Actual"
@@ -94,13 +96,10 @@ export function TripList({
  */
 export function VehicleTripSummary({ trips }: { trips: Trip[]; vehicleId: string }) {
   const completed = trips.filter((t) => t.status === "COMPLETED");
+  // Use the same distance precedence as the vehicle projection.
   const totalDistanceM = completed.reduce((sum, t) => {
-    if (t.routeDistanceM && t.routeDistanceM > 0) return sum + t.routeDistanceM;
-    if (t.actualDistanceKm && t.actualDistanceKm > 0)
-      return sum + Math.round(t.actualDistanceKm * 1000);
-    if (t.manualDistanceKm && t.manualDistanceKm > 0)
-      return sum + Math.round(t.manualDistanceKm * 1000);
-    return sum;
+    const metres = getTripDistanceMetres(t);
+    return sum + (metres ?? 0);
   }, 0);
   const totalKm = (totalDistanceM / 1000).toFixed(1);
 

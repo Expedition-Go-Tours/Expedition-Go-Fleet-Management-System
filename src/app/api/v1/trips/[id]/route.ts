@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
@@ -7,7 +5,6 @@ import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/li
 import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import { TRIP_PURPOSES, generateStopId } from "@/lib/domain/trip";
 import type { TripStop } from "@/lib/domain/trip";
-import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { TripError, getTripById, updateTrip } from "@/lib/repos/trips";
 
 export const runtime = "nodejs";
@@ -43,7 +40,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
  * Update a draft trip. Requires trip:update. Only DRAFT trips can be edited.
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const requestId = randomUUID();
   try {
     await assertCsrfAndOrigin();
     const context = await requireAuthContext();
@@ -152,16 +148,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const trip = await updateTrip(id, fields, context.user.id);
-
-    await writeAuditEvent({
-      eventType: AUDIT_EVENTS.TRIP_UPDATED,
-      actorId: context.user.id,
-      entityType: "trip",
-      entityId: id,
-      before: { status: existing.status },
-      after: fields,
-      requestId,
-    });
 
     return jsonOk({ trip });
   } catch (error) {
