@@ -34,29 +34,27 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
  * available before first paint.
  */
 
-const motionQuery =
-  typeof window !== "undefined" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-
-function reducedMotionSubscribe(callback: () => void) {
-  const mql = motionQuery;
-  if (!mql) return () => {};
-  mql.addEventListener("change", callback);
-  return () => mql.removeEventListener("change", callback);
-}
-
-function reducedMotionSnapshot(): boolean {
-  return motionQuery?.matches ?? false;
-}
-
 export default function SmoothScroll() {
   const lenisRef = useRef<LenisRef>(null);
 
   // Subscribe to prefers-reduced-motion without triggering cascading renders.
   // useSyncExternalStore handles SSR (returns false) and re-renders only when
-  // the preference actually changes.
+  // the preference actually changes. All media-query state lives inside the
+  // component so HMR and SSR never reference stale module-level values.
   const reducedMotion = useSyncExternalStore(
-    reducedMotionSubscribe,
-    reducedMotionSnapshot,
+    (callback: () => void) => {
+      const mql =
+        typeof window !== "undefined"
+          ? window.matchMedia("(prefers-reduced-motion: reduce)")
+          : null;
+      if (!mql) return () => {};
+      mql.addEventListener("change", callback);
+      return () => mql.removeEventListener("change", callback);
+    },
+    () => {
+      if (typeof window === "undefined") return false;
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    },
     () => false,
   );
 

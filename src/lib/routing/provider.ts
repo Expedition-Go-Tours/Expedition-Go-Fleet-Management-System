@@ -69,7 +69,7 @@ export class RoutingError extends Error {
   static notConfigured(): RoutingError {
     return new RoutingError(
       "NOT_CONFIGURED",
-      "No routing provider is configured. Set MAPBOX_ACCESS_TOKEN to enable route calculations.",
+      "No routing provider is configured. Set GEOAPIFY_API_KEY or MAPBOX_ACCESS_TOKEN.",
     );
   }
 }

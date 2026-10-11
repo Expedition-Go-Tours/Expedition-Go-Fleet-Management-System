@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "../design/tokens.css";
 @import "../../node_modules/lenis/dist/lenis.css";
+@import "../../node_modules/maplibre-gl/dist/maplibre-gl.css";
 
 /* ------------------------------------------------------------------ *
  * Base layer

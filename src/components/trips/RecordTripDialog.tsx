@@ -11,6 +11,7 @@ import { RouteSummary } from "@/components/trips/RouteSummary";
 import { TripStopBuilder } from "@/components/trips/TripStopBuilder";
 import { api } from "@/lib/client/api";
 import { TRIP_PURPOSES, type RouteLeg, type Trip, type TripStop } from "@/lib/domain/trip";
+import type { GeoJsonLineString } from "@/lib/routing/provider";
 
 /*
  * Record Trip dialog: multi-stop route builder with distance calculation,
@@ -60,6 +61,7 @@ export function RecordTripDialog({
   const [routeDurationS, setRouteDurationS] = useState<number | null>(null);
   const [routeProvider, setRouteProvider] = useState<string | null>(null);
   const [routeCalculatedAt, setRouteCalculatedAt] = useState<string | null>(null);
+  const [routeGeometry, setRouteGeometry] = useState<GeoJsonLineString | null>(null);
   const [routeStale, setRouteStale] = useState(false);
   const [savedTripId, setSavedTripId] = useState<string | null>(null);
 
@@ -93,6 +95,7 @@ export function RecordTripDialog({
     setRouteDurationS(null);
     setRouteProvider(null);
     setRouteCalculatedAt(null);
+    setRouteGeometry(null);
     setRouteStale(false);
     setSavedTripId(null);
     prevStopsRef.current = "";
@@ -144,6 +147,7 @@ export function RecordTripDialog({
           legs: Array<{ distanceM: number; durationS: number }>;
           provider: string;
           calculatedAt: string;
+          geometry?: { type: string; coordinates: [number, number][] };
         };
         legs: RouteLeg[];
       }>(endpoint, body);
@@ -153,6 +157,11 @@ export function RecordTripDialog({
       setRouteProvider(result.route.provider);
       setRouteCalculatedAt(result.route.calculatedAt);
       setRouteLegs(result.legs);
+      setRouteGeometry(
+        result.route.geometry && result.route.geometry.type === "LineString"
+          ? { type: "LineString", coordinates: result.route.geometry.coordinates }
+          : null,
+      );
       setRouteStale(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Route calculation failed";
@@ -391,6 +400,7 @@ export function RecordTripDialog({
                 totalDistanceKm={routeDistanceM / 1000}
                 totalDurationS={routeDurationS}
                 provider={routeProvider}
+                routeGeometry={routeGeometry}
               />
               <RouteSummary
                 stops={stops}

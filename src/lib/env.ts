@@ -62,6 +62,9 @@ export const serverEnv = {
   get mapboxAccessToken(): string | undefined {
     return process.env.MAPBOX_ACCESS_TOKEN;
   },
+  get geoapifyApiKey(): string | undefined {
+    return process.env.GEOAPIFY_API_KEY;
+  },
 } as const;
 
 /** True when the app is served over HTTPS (drives the Secure cookie flag). */

@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { MapPin, Route as RouteIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, MapPin, Route as RouteIcon } from "lucide-react";
 import type { TripStop, RouteLeg } from "@/lib/domain/trip";
+import type { GeoJsonLineString } from "@/lib/routing/provider";
 
 /**
- * Route map preview using Mapbox Static Images API.
- * Falls back gracefully when the map token is unavailable or tiles fail.
- * The stop list remains fully usable without the map.
+ * Route map preview using MapLibre GL + OpenFreeMap tiles.
+ *
+ * OpenFreeMap provides free OpenStreetMap-based vector tiles with no API key.
+ * MapLibre GL JS renders the interactive map with route line and markers.
+ * Falls back gracefully when the JS library fails to load.
  */
 export function RouteMapPreview({
   stops,
@@ -15,58 +18,162 @@ export function RouteMapPreview({
   totalDistanceKm,
   totalDurationS,
   provider,
+  routeGeometry,
 }: {
   stops: TripStop[];
   legs: RouteLeg[];
   totalDistanceKm: number | null;
   totalDurationS: number | null;
   provider: string | null;
+  routeGeometry?: GeoJsonLineString | null;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<unknown>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
 
-  // Build Mapbox Static Images URL
-  // Requires NEXT_PUBLIC_MAPBOX_TOKEN to be set
-  const mapboxToken =
-    typeof window !== "undefined" ? process.env.NEXT_PUBLIC_MAPBOX_TOKEN : undefined;
+  const coordStops = stops.filter((s) => s.latitude != null && s.longitude != null);
+  const hasCoords = coordStops.length >= 2;
 
-  const hasCoords = stops.filter((s) => s.latitude != null && s.longitude != null).length >= 2;
+  // Initialize MapLibre GL map
+  useEffect(() => {
+    if (!containerRef.current || !hasCoords || mapFailed) return;
 
-  // Build path for static image: pin markers + path
-  const staticImageUrl = buildStaticMapUrl(stops, mapboxToken);
+    let cancelled = false;
 
-  const showMap = mapboxToken && hasCoords && !imageFailed;
+    async function initMap() {
+      try {
+        const maplibregl = (await import("maplibre-gl")).default;
+
+        if (cancelled || !containerRef.current) return;
+
+        // OpenFreeMap vector tiles — free, no key
+        const map = new maplibregl.Map({
+          container: containerRef.current!,
+          style: "https://tiles.openfreemap.org/styles/liberty",
+          center: [coordStops[0]!.longitude!, coordStops[0]!.latitude!],
+          zoom: 10,
+        });
+
+        map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+        map.on("load", () => {
+          if (cancelled) return;
+
+          // Fit bounds to all stops
+          const bounds = new maplibregl.LngLatBounds();
+          for (const stop of coordStops) {
+            bounds.extend([stop.longitude!, stop.latitude!]);
+          }
+          map.fitBounds(bounds, { padding: 50 });
+
+          // Add route line
+          const lineCoords =
+            routeGeometry?.coordinates ?? coordStops.map((s) => [s.longitude!, s.latitude!]);
+
+          map.addSource("route", {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "LineString",
+                coordinates: lineCoords,
+              },
+            },
+          });
+
+          map.addLayer({
+            id: "route-line",
+            type: "line",
+            source: "route",
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+            },
+            paint: {
+              "line-color": "#f15a24", // Expedition Go Tours accent
+              "line-width": 4,
+              "line-opacity": 0.85,
+            },
+          });
+
+          // Add stop markers
+          coordStops.forEach((stop, i) => {
+            const el = document.createElement("div");
+            el.className = "trip-map-marker";
+            el.style.cssText = `
+              width: 28px; height: 28px; border-radius: 50%;
+              background: ${i === 0 ? "#15803d" : i === coordStops.length - 1 ? "#d92d20" : "#1a1d21"};
+              color: white; display: flex; align-items: center; justify-content: center;
+              font-size: 12px; font-weight: 600; font-family: var(--font-body);
+              border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            `;
+            el.textContent = String(i + 1);
+
+            new maplibregl.Marker({ element: el })
+              .setLngLat([stop.longitude!, stop.latitude!])
+              .setPopup(
+                new maplibregl.Popup({ offset: 20 }).setHTML(
+                  `<strong>${stop.label || `Stop ${i + 1}`}</strong>` +
+                    (stop.purpose ? `<br/><small>${stop.purpose}</small>` : ""),
+                ),
+              )
+              .addTo(map);
+          });
+
+          setMapReady(true);
+        });
+
+        map.on("error", () => {
+          if (!cancelled) setMapFailed(true);
+        });
+
+        mapRef.current = map;
+      } catch {
+        if (!cancelled) setMapFailed(true);
+      }
+    }
+
+    initMap();
+
+    return () => {
+      cancelled = true;
+      if (mapRef.current) {
+        (mapRef.current as { remove(): void }).remove();
+        mapRef.current = null;
+      }
+    };
+  }, [hasCoords, coordStops, routeGeometry, mapFailed]);
 
   return (
     <div className="border-hairline overflow-hidden rounded-md border">
-      {/* Map or fallback */}
-      {showMap ? (
-        <div className="bg-subtle relative aspect-[16/9] w-full">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={staticImageUrl}
-            alt={`Route map showing ${stops.length} stops`}
-            className="h-full w-full object-cover"
-            onError={() => setImageFailed(true)}
-          />
+      {/* Map container */}
+      {hasCoords && !mapFailed ? (
+        <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
+          <div ref={containerRef} className="absolute inset-0" />
+          {!mapReady && (
+            <div className="bg-subtle absolute inset-0 flex items-center justify-center">
+              <Loader2 className="text-muted h-5 w-5 animate-spin" />
+            </div>
+          )}
           {/* Provider attribution */}
-          <span className="text-data-xs bg-surface/80 absolute right-1 bottom-1 rounded px-1 py-0.5">
-            {provider ?? "Map"}
+          <span className="text-data-xs bg-surface/80 absolute right-1 bottom-1 z-10 rounded px-1 py-0.5">
+            {provider ?? "Route"} · OpenFreeMap
           </span>
         </div>
       ) : (
         <div className="bg-subtle flex flex-col items-center gap-2 py-6">
           <MapPin className="text-muted h-5 w-5" />
           <p className="text-body-xs text-muted">
-            {!mapboxToken
-              ? "Map preview requires NEXT_PUBLIC_MAPBOX_TOKEN"
-              : !hasCoords
-                ? "Add coordinates to at least 2 stops to see the route"
-                : "Map preview unavailable"}
+            {!hasCoords
+              ? "Add coordinates to at least 2 stops to see the route"
+              : "Map preview unavailable"}
           </p>
         </div>
       )}
 
-      {/* Route summary below the map */}
+      {/* Route summary */}
       <div className="border-hairline bg-surface flex flex-wrap items-center gap-4 border-t px-4 py-2.5">
         <div className="flex items-center gap-1.5">
           <RouteIcon className="text-accent h-4 w-4" />
@@ -117,28 +224,4 @@ export function RouteMapPreview({
       )}
     </div>
   );
-}
-
-function buildStaticMapUrl(stops: TripStop[], token: string | undefined): string {
-  if (!token) return "";
-  const coords = stops
-    .filter((s) => s.latitude != null && s.longitude != null)
-    .map((s) => `${s.longitude!.toFixed(5)},${s.latitude!.toFixed(5)}`);
-  if (coords.length < 2) return "";
-
-  // Path: red line connecting all stops
-  const path = `path-3+f44-0.7(${coords.join("|")})`;
-
-  // Markers: numbered pins
-  const markers = stops
-    .filter((s) => s.latitude != null && s.longitude != null)
-    .map((s, i) => {
-      const label = i === 0 ? "A" : i === stops.length - 1 ? "B" : String(i);
-      const color = i === 0 ? "00cc66" : i === stops.length - 1 ? "ff3333" : "4488ff";
-      return `pin-s-${label}+${color}(${s.longitude!.toFixed(5)},${s.latitude!.toFixed(5)})`;
-    })
-    .join(",");
-
-  const encoded = encodeURIComponent(`${path},${markers}`);
-  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${encoded}/auto/600x300@2x?access_token=${token}`;
 }

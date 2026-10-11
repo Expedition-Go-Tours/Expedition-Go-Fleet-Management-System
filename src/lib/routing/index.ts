@@ -1,3 +1,4 @@
+import { getGeoapifyProvider } from "./geoapify";
 import { getMapboxProvider } from "./mapbox";
 import { MockRoutingProvider } from "./mock";
 import type { RoutingProvider } from "./provider";
@@ -6,10 +7,15 @@ import { RoutingError } from "./provider";
 /**
  * Get the configured routing provider.
  *
- * In production, a real provider (Mapbox) is mandatory. The mock provider
- * is only allowed in development and test environments.
+ * Priority: Geoapify (free tier) > Mapbox > Mock (dev only).
+ * In production, a real provider is mandatory.
  */
 export function getRoutingProvider(): RoutingProvider {
+  // Try Geoapify first (free, open)
+  const geoapify = getGeoapifyProvider();
+  if (geoapify) return geoapify;
+
+  // Try Mapbox as secondary
   const mapbox = getMapboxProvider();
   if (mapbox) return mapbox;
 
@@ -18,18 +24,17 @@ export function getRoutingProvider(): RoutingProvider {
   }
 
   console.warn(
-    "[routing] MAPBOX_ACCESS_TOKEN is not set; using mock routing provider. " +
-      "Route distances will be approximate Haversine × 1.3 and should NOT be used for billing.",
+    "[routing] No routing provider configured (GEOAPIFY_API_KEY or MAPBOX_ACCESS_TOKEN). " +
+      "Using mock routing provider. Route distances will be approximate Haversine × 1.3.",
   );
   return new MockRoutingProvider();
 }
 
 /**
  * Check whether a real routing provider is configured without throwing.
- * Useful for health checks and UI indicators.
  */
 export function isRoutingConfigured(): boolean {
-  return !!process.env.MAPBOX_ACCESS_TOKEN;
+  return !!(process.env.GEOAPIFY_API_KEY || process.env.MAPBOX_ACCESS_TOKEN);
 }
 
 export type { RouteLegResult, RouteResult, RouteWaypoint, RoutingProvider } from "./provider";

@@ -372,11 +372,12 @@ export async function completeTrip(
   const ref = tripsRef().doc(id);
 
   return db.runTransaction(async (tx) => {
+    // ── All reads first (Firestore transaction rule) ─────────────
     const snap = await tx.get(ref);
     if (!snap.exists) throw new TripError("NOT_FOUND", "Trip not found");
     const trip = toTrip(snap.id, snap.data() ?? {});
 
-    // Idempotency: if already completed with the same key, return as-is
+    // Idempotency: if already completed, return as-is
     if (trip.status === "COMPLETED") {
       return { trip, projectionUpdated: false };
     }
@@ -392,7 +393,16 @@ export async function completeTrip(
       throw new TripError("VALIDATION_FAILED", validation.error);
     }
 
-    // Compute distance basis and actual distance
+    // Read the vehicle document BEFORE any writes (Firestore rule).
+    const vehicleRef = db.collection(COLLECTIONS.vehicles).doc(trip.vehicleId);
+    const vehicleSnap = await tx.get(vehicleRef);
+    if (!vehicleSnap.exists) {
+      throw new TripError("VEHICLE_NOT_FOUND", `Vehicle ${trip.vehicleId} not found`);
+    }
+    const vehicle = vehicleSnap.data() ?? {};
+
+    // ── All writes below ─────────────────────────────────────────
+
     const startOdo = input.startOdometerKm ?? trip.startOdometerKm;
     const endOdo = input.endOdometerKm ?? trip.endOdometerKm;
     const actualDistanceKm = computeActualDistance(startOdo, endOdo);
@@ -407,7 +417,9 @@ export async function completeTrip(
     }
 
     const now = FieldValue.serverTimestamp();
+    const completedAtIso = new Date().toISOString();
 
+    // Write trip completion
     tx.update(ref, {
       status: "COMPLETED",
       completedAt: now,
@@ -419,18 +431,37 @@ export async function completeTrip(
       updatedAt: now,
     });
 
-    // Reconcile vehicle estimated km
-    let projectionUpdated = false;
+    // Compute the incremental projection from the vehicle snapshot we already read.
     const tripDistM = getTripDistanceMetres(tripForValidation);
+    let projectionUpdated = false;
     try {
-      const result = await reconcileVehicleEstimatedKmInTx(
-        tx,
-        trip.vehicleId,
-        tripDistM ?? undefined,
-      );
-      projectionUpdated = result.tripCount > 0;
+      const odometerKm = Number(vehicle.odometerKm ?? 0);
+      const odometerAt = vehicle.odometerAt;
+      const baselineAt = odometerAt
+        ? (toDate(odometerAt)?.toISOString() ?? new Date(0).toISOString())
+        : new Date(0).toISOString();
+      const baselineTime = new Date(baselineAt).getTime();
+
+      // Only include this trip if it completed after the baseline.
+      const eligible = completedAtIso ? new Date(completedAtIso).getTime() > baselineTime : false;
+      const addMetres = eligible ? (tripDistM ?? 0) : 0;
+
+      if (addMetres > 0) {
+        const currentEstimateKm =
+          typeof vehicle.estimatedKm === "number" ? vehicle.estimatedKm : odometerKm;
+        const currentTripCount =
+          typeof vehicle.estimatedKmTripCount === "number" ? vehicle.estimatedKmTripCount : 0;
+        const newEstimateKm = Math.round((currentEstimateKm + addMetres / 1000) * 100) / 100;
+
+        tx.update(vehicleRef, {
+          estimatedKm: newEstimateKm,
+          estimatedKmUpdatedAt: completedAtIso,
+          estimatedKmTripCount: currentTripCount + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        projectionUpdated = true;
+      }
     } catch {
-      // Non-fatal: log but don't fail the completion
       console.error("[trips] failed to reconcile vehicle estimated km for", trip.vehicleId);
     }
 
@@ -442,9 +473,20 @@ export async function completeTrip(
       after: { status: "COMPLETED", distanceBasis, actualDistanceKm },
     });
 
-    // Read back the final state
-    const finalSnap = await tx.get(ref);
-    return { trip: toTrip(finalSnap.id, finalSnap.data() ?? {}), projectionUpdated };
+    // Construct the completed trip from the data we already have (no extra read).
+    const completedTrip: Trip = {
+      ...trip,
+      status: "COMPLETED",
+      completedAt: completedAtIso,
+      startOdometerKm: startOdo ?? null,
+      endOdometerKm: endOdo ?? null,
+      actualDistanceKm,
+      distanceBasis,
+      notes: input.notes ? input.notes.slice(0, 1000) : (trip.notes ?? null),
+      updatedAt: completedAtIso,
+    };
+
+    return { trip: completedTrip, projectionUpdated };
   });
 }
 
