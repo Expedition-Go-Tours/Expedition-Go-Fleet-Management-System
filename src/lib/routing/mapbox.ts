@@ -1,6 +1,7 @@
 import { serverEnv } from "@/lib/env";
 import {
   RoutingError,
+  type GeoJsonLineString,
   type RouteLegResult,
   type RouteResult,
   type RouteWaypoint,
@@ -88,6 +89,7 @@ export class MapboxRoutingProvider implements RoutingProvider {
         distance: number;
         duration: number;
         legs?: Array<{ distance: number; duration: number }>;
+        geometry?: GeoJsonLineString;
       }>;
       code?: string;
       message?: string;
@@ -108,12 +110,15 @@ export class MapboxRoutingProvider implements RoutingProvider {
       durationS: Math.round(leg.duration),
     }));
 
+    const geometry = route.geometry as GeoJsonLineString | undefined;
+
     return {
       totalDistanceM: Math.round(route.distance),
       totalDurationS: Math.round(route.duration),
       legs,
       provider: this.name,
       calculatedAt: new Date().toISOString(),
+      geometry: geometry?.type === "LineString" ? geometry : undefined,
       providerMeta: {
         rawCode: data.code,
       },

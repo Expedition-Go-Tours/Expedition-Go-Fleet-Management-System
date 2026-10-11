@@ -109,6 +109,22 @@ export interface TabDocumentData {
   notes: string | null;
 }
 
+export interface TabTripData {
+  id: string;
+  tripDate: string;
+  driverName: string;
+  purpose: string;
+  externalReference: string | null;
+  originLabel: string;
+  destinationLabel: string;
+  stopCount: number;
+  routeDistanceKm: number | null;
+  actualDistanceKm: number | null;
+  distanceBasis: string;
+  status: string;
+  createdAt: string;
+}
+
 export interface VehicleHistoryCounts {
   readings: number;
   issues: number;
@@ -118,6 +134,7 @@ export interface VehicleHistoryCounts {
   assignments: number;
   fuelEntries: number;
   documents: number;
+  trips: number;
 }
 
 export interface VehicleDetailTabData {
@@ -132,6 +149,7 @@ export interface VehicleDetailTabData {
   assignments: TabAssignmentData[];
   fuelEntries: TabFuelData[];
   documents: TabDocumentData[];
+  trips: TabTripData[];
 }
 
 function Empty({ label }: { label: string }) {
@@ -209,6 +227,12 @@ export function VehicleDetailTabs({ data }: { data: VehicleDetailTabData }) {
       id: "assignments",
       label: "Assignments",
       panel: <AssignmentsPanel assignments={data.assignments} total={data.counts.assignments} />,
+    },
+    {
+      id: "trips",
+      label: "Trips",
+      badge: <CountBadge count={data.counts.trips} />,
+      panel: <TripsPanel trips={data.trips} total={data.counts.trips} />,
     },
     {
       id: "fuel",
@@ -705,6 +729,56 @@ function DocumentsPanel({ documents }: { documents: TabDocumentData[] }) {
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function TripsPanel({ trips, total }: { trips: TabTripData[]; total: number }) {
+  if (trips.length === 0) return <Empty label="No trips recorded for this vehicle." />;
+  return (
+    <div>
+      <PanelHeader>
+        {total} trip{total === 1 ? "" : "s"}
+        {trips.length < total ? ` · showing most recent ${trips.length}` : ""}
+      </PanelHeader>
+      <div className="divide-hairline divide-y">
+        {trips.map((trip) => (
+          <Link
+            key={trip.id}
+            href={`/trips/${trip.id}`}
+            className="hover:bg-subtle flex flex-col gap-1.5 px-5 py-3 transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-data text-ink font-medium">
+                  {trip.originLabel} → {trip.destinationLabel}
+                </p>
+                <p className="text-data-xs text-muted">
+                  {trip.driverName} · {formatStatusLabel(trip.purpose)}
+                  {trip.externalReference ? ` · ${trip.externalReference}` : ""}
+                  {trip.stopCount > 2 ? ` · ${trip.stopCount} stops` : ""}
+                </p>
+              </div>
+              <StatusBadge status={trip.status} />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {trip.routeDistanceKm != null && (
+                <span className="text-data-xs text-muted">
+                  {trip.routeDistanceKm.toFixed(1)} km
+                  <span className="text-faint"> (route)</span>
+                </span>
+              )}
+              {trip.actualDistanceKm != null && (
+                <span className="text-data-xs text-muted">
+                  {trip.actualDistanceKm.toFixed(1)} km
+                  <span className="text-faint"> (actual)</span>
+                </span>
+              )}
+              <span className="text-data-xs text-muted">{trip.tripDate}</span>
+            </div>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

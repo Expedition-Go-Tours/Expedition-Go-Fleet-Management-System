@@ -73,6 +73,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     fuelEntries,
     documents,
     users,
+    trips,
   ] = await Promise.all([
     listReadings(vehicle.id, { limit: 12 }),
     listSchedules(vehicle.id),
@@ -144,6 +145,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       assignments: assignmentCount,
       fuelEntries: fuelCount,
       documents: documents.length,
+      trips: trips.length,
     },
     overview: {
       odometerKm: vehicle.odometerKm,
@@ -216,6 +218,21 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       mandatory: d.mandatory,
       expiryDate: formatIsoDate(d.expiryDate),
       notes: d.notes ?? null,
+    })),
+    trips: trips.map((t) => ({
+      id: t.id,
+      tripDate: t.tripDate,
+      driverName: userNames.get(t.driverUserId) ?? t.driverUserId,
+      purpose: t.purpose,
+      externalReference: t.externalReference ?? null,
+      originLabel: t.origin.label,
+      destinationLabel: t.destination.label,
+      stopCount: t.stops.length,
+      routeDistanceKm: t.routeDistanceKm ?? null,
+      actualDistanceKm: t.actualDistanceKm ?? null,
+      distanceBasis: t.distanceBasis,
+      status: t.status,
+      createdAt: formatDate(t.createdAt),
     })),
   };
 

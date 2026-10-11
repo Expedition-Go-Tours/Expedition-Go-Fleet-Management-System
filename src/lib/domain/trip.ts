@@ -176,6 +176,12 @@ export function validateStop(stop: Partial<TripStop>): TripValidation {
       return { ok: false, error: "Stop longitude must be between -180 and 180" };
     }
   }
+  // Coordinates must be both present or both absent
+  const hasLat = stop.latitude !== null && stop.latitude !== undefined;
+  const hasLng = stop.longitude !== null && stop.longitude !== undefined;
+  if (hasLat !== hasLng) {
+    return { ok: false, error: "Stop must have both latitude and longitude, or neither" };
+  }
   return { ok: true };
 }
 
@@ -210,14 +216,41 @@ export function validateTripForSave(trip: Partial<Trip>): TripValidation {
     if (!v.ok) return v;
   }
 
-  // Must have at least one ORIGIN and one DESTINATION
-  const hasOrigin = trip.stops.some((s) => s.type === "ORIGIN");
-  const hasDestination = trip.stops.some((s) => s.type === "DESTINATION");
-  if (!hasOrigin) {
-    return { ok: false, error: "Trip must have an ORIGIN stop" };
+  // Stop IDs must be unique
+  const stopIds = new Set(trip.stops.map((s) => s.id));
+  if (stopIds.size !== trip.stops.length) {
+    return { ok: false, error: "Stop IDs must be unique within a trip" };
   }
-  if (!hasDestination) {
-    return { ok: false, error: "Trip must have a DESTINATION stop" };
+
+  // Sequence values must be unique and contiguous starting from 0
+  const sequences = trip.stops.map((s) => s.sequence).sort((a, b) => a - b);
+  for (let i = 0; i < sequences.length; i++) {
+    if (sequences[i] !== i) {
+      return {
+        ok: false,
+        error: `Stop sequences must be contiguous starting from 0 (expected ${i}, got ${sequences[i]})`,
+      };
+    }
+  }
+
+  // Origin must be first, destination must be last
+  const originStop = trip.stops.find((s) => s.type === "ORIGIN");
+  const destinationStop = trip.stops.find((s) => s.type === "DESTINATION");
+  if (originStop && originStop.sequence !== 0) {
+    return { ok: false, error: "ORIGIN stop must be first (sequence 0)" };
+  }
+  if (destinationStop && destinationStop.sequence !== trip.stops.length - 1) {
+    return { ok: false, error: "DESTINATION stop must be last" };
+  }
+
+  // Exactly one ORIGIN and one DESTINATION
+  const originCount = trip.stops.filter((s) => s.type === "ORIGIN").length;
+  const destCount = trip.stops.filter((s) => s.type === "DESTINATION").length;
+  if (originCount !== 1) {
+    return { ok: false, error: "Trip must have exactly one ORIGIN stop" };
+  }
+  if (destCount !== 1) {
+    return { ok: false, error: "Trip must have exactly one DESTINATION stop" };
   }
 
   // Manual distance, if set, must be positive
@@ -360,13 +393,8 @@ export interface ProjectionResult {
  *
  * Formula:
  *  - Filter COMPLETED trips whose completedAt > verifiedBaselineAt
- *  - Sum their distance (routeDistanceM, or manualDistanceM, or actualDistanceM)
+ *  - Sum their distance using getTripDistanceMetres (best available)
  *  - estimatedKm = verifiedBaselineKm + (sumMetres / 1000)
- *
- * The function selects the best available distance for each trip:
- *  1. routeDistanceM (from the routing provider)
- *  2. actualDistanceKm * 1000 (from odometer delta)
- *  3. manualDistanceKm * 1000 (manual override)
  */
 export function computeEstimatedProjection(
   verifiedBaselineKm: number,
@@ -382,12 +410,13 @@ export function computeEstimatedProjection(
 
   let totalRouteM = 0;
   for (const trip of eligible) {
-    if (trip.routeDistanceM !== null && trip.routeDistanceM > 0) {
-      totalRouteM += trip.routeDistanceM;
-    } else if (trip.actualDistanceKm !== null && trip.actualDistanceKm > 0) {
-      totalRouteM += Math.round(trip.actualDistanceKm * 1000);
-    } else if (trip.manualDistanceKm !== null && trip.manualDistanceKm > 0) {
-      totalRouteM += Math.round(trip.manualDistanceKm * 1000);
+    // Follow the trip's actual distance basis and data availability:
+    // 1. Prefer ACTUAL_ODOMETER when valid start/end readings exist
+    // 2. Use MANUAL_OVERRIDE when explicitly authorized
+    // 3. Use route estimate as a fallback
+    const distM = getTripDistanceMetres(trip);
+    if (distM !== null) {
+      totalRouteM += distM;
     }
   }
 
@@ -398,4 +427,28 @@ export function computeEstimatedProjection(
     tripCount: eligible.length,
     totalRouteM,
   };
+}
+
+/**
+ * Extract the best available distance for a trip in metres.
+ * Follows the trip's declared distance basis and available data.
+ */
+export function getTripDistanceMetres(trip: Trip): number | null {
+  // Prefer actual measured distance when readings exist
+  if (trip.actualDistanceKm !== null && trip.actualDistanceKm > 0) {
+    return Math.round(trip.actualDistanceKm * 1000);
+  }
+  // Use manual override when explicitly authorized
+  if (
+    trip.distanceBasis === "MANUAL_OVERRIDE" &&
+    trip.manualDistanceKm !== null &&
+    trip.manualDistanceKm > 0
+  ) {
+    return Math.round(trip.manualDistanceKm * 1000);
+  }
+  // Fall back to route estimate
+  if (trip.routeDistanceM !== null && trip.routeDistanceM > 0) {
+    return trip.routeDistanceM;
+  }
+  return null;
 }

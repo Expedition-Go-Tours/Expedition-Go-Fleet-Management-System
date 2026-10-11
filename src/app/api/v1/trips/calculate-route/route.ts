@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import type { RouteLeg } from "@/lib/domain/trip";
 import { getRoutingProvider, RoutingError } from "@/lib/routing/index";
 import type { RouteWaypoint } from "@/lib/routing/provider";
@@ -39,6 +39,15 @@ export async function POST(request: NextRequest) {
       tripId = body.tripId.trim();
       const trip = await getTripById(tripId);
       if (!trip) throw ApiError.notFound("Trip not found");
+
+      // Authorization: drivers can only update their own drafts
+      const canReadAll = rolesHavePermission(context.user.roles, PERMISSIONS.TRIP_READ_ALL);
+      if (!canReadAll && trip.driverUserId !== context.user.id) {
+        throw ApiError.forbidden("You can only calculate routes for your own trips");
+      }
+      if (trip.status !== "DRAFT") {
+        throw ApiError.badRequest(`Cannot calculate route for a ${trip.status} trip`);
+      }
 
       waypoints = trip.stops
         .filter((s) => s.latitude !== null && s.longitude !== null)
@@ -130,6 +139,17 @@ export async function POST(request: NextRequest) {
 
     // Persist on the trip if tripId was provided
     if (tripId) {
+      // Re-check trip is still editable and stops haven't changed
+      const currentTrip = await getTripById(tripId);
+      if (!currentTrip || currentTrip.status !== "DRAFT") {
+        throw ApiError.badRequest("Trip is no longer editable");
+      }
+      // Verify stop order hasn't changed during calculation
+      const currentFingerprint = currentTrip.stops.map((s) => s.id).join(",");
+      const requestedFingerprint = stopIds?.join(",");
+      if (currentFingerprint !== requestedFingerprint) {
+        throw ApiError.badRequest("Stops changed during route calculation — please recalculate");
+      }
       await saveRouteCalculation(tripId, route, legs);
     }
 

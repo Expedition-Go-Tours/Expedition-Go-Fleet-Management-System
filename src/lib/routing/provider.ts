@@ -17,6 +17,11 @@ export interface RouteLegResult {
   durationS: number;
 }
 
+export interface GeoJsonLineString {
+  type: "LineString";
+  coordinates: [number, number][]; // [lng, lat] pairs
+}
+
 export interface RouteResult {
   totalDistanceM: number;
   totalDurationS: number;
@@ -24,6 +29,8 @@ export interface RouteResult {
   provider: string;
   calculatedAt: string;
   providerMeta?: unknown;
+  /** GeoJSON LineString geometry for the route, when available. */
+  geometry?: GeoJsonLineString;
 }
 
 /**

@@ -6,6 +6,7 @@ import { useCallback, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/Modal";
+import { RouteMapPreview } from "@/components/trips/RouteMapPreview";
 import { RouteSummary } from "@/components/trips/RouteSummary";
 import { TripStopBuilder } from "@/components/trips/TripStopBuilder";
 import { api } from "@/lib/client/api";
@@ -162,7 +163,7 @@ export function RecordTripDialog({
   }, [stops, savedTripId]);
 
   // Save as draft.
-  const saveDraft = useCallback(async () => {
+  const saveDraft = useCallback(async (): Promise<string | null> => {
     setBusy(true);
     setError(null);
     try {
@@ -183,16 +184,21 @@ export function RecordTripDialog({
         stops,
       };
 
+      let tripId: string;
       if (savedTripId) {
         await api.patch(`/api/v1/trips/${savedTripId}`, body);
+        tripId = savedTripId;
       } else {
         const result = await api.post<{ trip: Trip }>("/api/v1/trips", body);
-        setSavedTripId(result.trip.id);
+        tripId = result.trip.id;
+        setSavedTripId(tripId);
       }
 
       router.refresh();
+      return tripId;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save trip");
+      return null;
     } finally {
       setBusy(false);
     }
@@ -211,21 +217,27 @@ export function RecordTripDialog({
 
   // Complete the trip.
   const completeTrip = useCallback(async () => {
-    if (!savedTripId) {
-      // Save first, then complete.
-      await saveDraft();
-      if (!savedTripId) return; // save failed
+    let tripId = savedTripId;
+
+    // Save draft first if not yet persisted
+    if (!tripId) {
+      tripId = await saveDraft();
+      if (!tripId) return; // save failed
     }
 
     setBusy(true);
     setError(null);
     try {
-      // If route is stale, try to recalculate first.
+      // Ensure route is calculated before completion
       if (routeStale || routeDistanceM === null) {
         await calculateRoute();
+        // Re-check: if route calculation failed, don't proceed
+        if (routeDistanceM === null && routeStale) {
+          throw new Error("Route must be calculated before completing the trip");
+        }
       }
 
-      await api.post(`/api/v1/trips/${savedTripId}/complete`, {});
+      await api.post(`/api/v1/trips/${tripId}/complete`, {});
       setOpen(false);
       resetForm();
       router.refresh();
@@ -279,7 +291,7 @@ export function RecordTripDialog({
               <Button
                 variant="accent"
                 onClick={completeTrip}
-                disabled={busy || routeStale}
+                disabled={busy || (routeStale && routeDistanceM === null)}
                 isLoading={busy}
               >
                 Complete trip
@@ -372,15 +384,24 @@ export function RecordTripDialog({
 
           {/* Route summary */}
           {routeDistanceM !== null && routeLegs.length > 0 && (
-            <RouteSummary
-              stops={stops}
-              legs={routeLegs}
-              totalDistanceM={routeDistanceM}
-              totalDurationS={routeDurationS}
-              provider={routeProvider}
-              calculatedAt={routeCalculatedAt}
-              stale={routeStale}
-            />
+            <div className="flex flex-col gap-3">
+              <RouteMapPreview
+                stops={stops}
+                legs={routeLegs}
+                totalDistanceKm={routeDistanceM / 1000}
+                totalDurationS={routeDurationS}
+                provider={routeProvider}
+              />
+              <RouteSummary
+                stops={stops}
+                legs={routeLegs}
+                totalDistanceM={routeDistanceM}
+                totalDurationS={routeDurationS}
+                provider={routeProvider}
+                calculatedAt={routeCalculatedAt}
+                stale={routeStale}
+              />
+            </div>
           )}
 
           {/* Notes */}

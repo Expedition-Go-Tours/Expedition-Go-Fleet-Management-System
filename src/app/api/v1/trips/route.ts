@@ -1,12 +1,9 @@
-import { randomUUID } from "node:crypto";
-
 import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import { TRIP_PURPOSES, TRIP_STATUSES } from "@/lib/domain/trip";
-import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { TripError, createTrip, listTrips } from "@/lib/repos/trips";
 import { getVehicleById } from "@/lib/repos/vehicles";
 import { getUserById } from "@/lib/repos/users";
@@ -69,7 +66,6 @@ export async function GET(request: NextRequest) {
  * Create a new draft trip. Requires trip:create.
  */
 export async function POST(request: NextRequest) {
-  const requestId = randomUUID();
   try {
     await assertCsrfAndOrigin();
     const context = await requireAuthContext();
@@ -161,6 +157,9 @@ export async function POST(request: NextRequest) {
         ? body.manualDistanceReason.trim().slice(0, 500)
         : undefined;
 
+    const idempotencyToken =
+      typeof body.idempotencyToken === "string" ? body.idempotencyToken.trim() : undefined;
+
     const trip = await createTrip({
       vehicleId,
       driverUserId,
@@ -173,15 +172,7 @@ export async function POST(request: NextRequest) {
       stops,
       manualDistanceKm,
       manualDistanceReason,
-    });
-
-    await writeAuditEvent({
-      eventType: AUDIT_EVENTS.TRIP_CREATED,
-      actorId: context.user.id,
-      entityType: "trip",
-      entityId: trip.id,
-      after: { vehicleId, driverUserId, purpose, tripDate },
-      requestId,
+      idempotencyToken,
     });
 
     return jsonOk({ trip }, { status: 201 });

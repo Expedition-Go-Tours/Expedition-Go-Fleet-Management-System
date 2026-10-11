@@ -210,6 +210,54 @@ describe("validateTripForSave", () => {
       }).ok,
     ).toBe(true);
   });
+
+  it("rejects stops with only latitude (missing longitude)", () => {
+    expect(validateStop({ ...makeStop(), longitude: null }).ok).toBe(false);
+  });
+
+  it("rejects stops with only longitude (missing latitude)", () => {
+    expect(validateStop({ ...makeStop(), latitude: null }).ok).toBe(false);
+  });
+
+  it("rejects duplicate stop IDs", () => {
+    const trip = makeTrip();
+    trip.stops = [
+      makeStop({ id: "same-id", type: "ORIGIN", sequence: 0 }),
+      makeStop({ id: "same-id", type: "DESTINATION", sequence: 1 }),
+    ];
+    const result = validateTripForSave(trip);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("unique");
+  });
+
+  it("rejects non-contiguous sequence numbers", () => {
+    const trip = makeTrip();
+    trip.stops[0].sequence = 0;
+    trip.stops[1].sequence = 5; // gap
+    const result = validateTripForSave(trip);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("contiguous");
+  });
+
+  it("rejects origin not at sequence 0", () => {
+    const trip = makeTrip();
+    trip.stops[0].type = "DESTINATION";
+    trip.stops[1].type = "ORIGIN";
+    const result = validateTripForSave(trip);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("first");
+  });
+
+  it("rejects multiple origins", () => {
+    const trip = makeTrip();
+    trip.stops = [
+      makeStop({ type: "ORIGIN", sequence: 0 }),
+      makeStop({ id: "s2", type: "ORIGIN", sequence: 1, label: "Another" }),
+    ];
+    const result = validateTripForSave(trip);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("exactly one ORIGIN");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -426,6 +474,7 @@ describe("computeEstimatedProjection", () => {
         routeDistanceM: null,
         actualDistanceKm: null,
         manualDistanceKm: 20,
+        distanceBasis: "MANUAL_OVERRIDE",
       }),
     ];
     const result = computeEstimatedProjection(1000, "2026-10-01T00:00:00.000Z", trips);

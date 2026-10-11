@@ -63,12 +63,16 @@ export class MockRoutingProvider implements RoutingProvider {
 
     const totalDurationS = legs.reduce((sum, leg) => sum + leg.durationS, 0);
 
+    // Build approximate geometry as a straight-line GeoJSON between waypoints
+    const coordinates: [number, number][] = waypoints.map((wp) => [wp.longitude, wp.latitude]);
+
     return {
       totalDistanceM,
       totalDurationS,
       legs,
       provider: this.name,
       calculatedAt: new Date().toISOString(),
+      geometry: { type: "LineString", coordinates },
     };
   }
 }

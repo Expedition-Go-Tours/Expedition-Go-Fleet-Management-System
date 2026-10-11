@@ -13,6 +13,7 @@ import {
   computeEstimatedProjection,
   deriveOriginDestination,
   generateIdempotencyKey,
+  getTripDistanceMetres,
   validateTripCompletion,
   validateTripForSave,
 } from "@/lib/domain/trip";
@@ -127,6 +128,7 @@ export interface CreateTripInput {
   stops: TripStop[];
   manualDistanceKm?: number;
   manualDistanceReason?: string;
+  idempotencyToken?: string;
 }
 
 export interface UpdateTripInput {
@@ -156,7 +158,15 @@ export interface CompleteTripInput {
 
 export async function createTrip(input: CreateTripInput): Promise<Trip> {
   const { FieldValue } = await import("firebase-admin/firestore");
-  const ref = tripsRef().doc();
+  const ref = input.idempotencyToken ? tripsRef().doc(input.idempotencyToken) : tripsRef().doc();
+
+  // Idempotency: if a document with this ID already exists, return it
+  if (input.idempotencyToken) {
+    const existing = await ref.get();
+    if (existing.exists) {
+      return toTrip(existing.id, existing.data() ?? {});
+    }
+  }
 
   const { origin, destination } = deriveOriginDestination(input.stops);
   const idempotencyKey = generateIdempotencyKey(
@@ -411,8 +421,13 @@ export async function completeTrip(
 
     // Reconcile vehicle estimated km
     let projectionUpdated = false;
+    const tripDistM = getTripDistanceMetres(tripForValidation);
     try {
-      const result = await reconcileVehicleEstimatedKmInTx(tx, trip.vehicleId);
+      const result = await reconcileVehicleEstimatedKmInTx(
+        tx,
+        trip.vehicleId,
+        tripDistM ?? undefined,
+      );
       projectionUpdated = result.tripCount > 0;
     } catch {
       // Non-fatal: log but don't fail the completion
@@ -627,10 +642,13 @@ export async function reconcileVehicleEstimatedKm(
 
 /**
  * Internal implementation that runs within an existing transaction.
+ * When justCompletedMetres is provided, it increments the vehicle's estimated km
+ * by that amount rather than re-querying all trips.
  */
 async function reconcileVehicleEstimatedKmInTx(
   tx: import("firebase-admin/firestore").Transaction,
   vehicleId: string,
+  justCompletedMetres?: number,
 ): Promise<{ estimatedKm: number; tripCount: number }> {
   const { FieldValue } = await import("firebase-admin/firestore");
   const db = getAdminDb();
@@ -641,10 +659,27 @@ async function reconcileVehicleEstimatedKmInTx(
   }
 
   const vehicle = vehicleSnap.data() ?? {};
+  const currentEstimatedKm = Number(vehicle.estimatedKm ?? 0);
+  const tripCount = Number(vehicle.estimatedKmTripCount ?? 0);
+
+  // Incremental update: add the just-completed trip's distance
+  if (justCompletedMetres !== undefined && justCompletedMetres > 0) {
+    const addedKm = justCompletedMetres / 1000;
+    const newEstimatedKm = Math.round((currentEstimatedKm + addedKm) * 100) / 100;
+    const nowIso = new Date().toISOString();
+    tx.update(vehicleRef, {
+      estimatedKm: newEstimatedKm,
+      estimatedKmUpdatedAt: nowIso,
+      estimatedKmTripCount: tripCount + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { estimatedKm: newEstimatedKm, tripCount: tripCount + 1 };
+  }
+
+  // Fallback: full recompute (for standalone reconciliation calls)
   const odometerKm = Number(vehicle.odometerKm ?? 0);
   const odometerAt = vehicle.odometerAt;
 
-  // Get all completed trips for this vehicle
   const tripsSnap = await tripsRef()
     .where("vehicleId", "==", vehicleId)
     .where("status", "==", "COMPLETED")
@@ -653,14 +688,12 @@ async function reconcileVehicleEstimatedKmInTx(
 
   const completedTrips = tripsSnap.docs.map((d) => toTrip(d.id, d.data()));
 
-  // Compute projection from baseline
   const baselineAt = odometerAt
     ? (toDate(odometerAt)?.toISOString() ?? new Date(0).toISOString())
     : new Date(0).toISOString();
 
   const projection = computeEstimatedProjection(odometerKm, baselineAt, completedTrips);
 
-  // Update vehicle document
   const nowIso = new Date().toISOString();
   tx.update(vehicleRef, {
     estimatedKm: projection.estimatedKm,
