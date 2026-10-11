@@ -46,11 +46,20 @@
 - TypeScript: ✅ clean
 - ESLint: ✅ 0 errors
 - Prettier: ✅ all files formatted
-- Unit tests: 243/243 passed
-- Build: ✅ successful
+- Unit tests: ✅ 243/243 passed (18 test files)
+- Production build: ✅ successful
 
-### Evidence
-- Trip creation, route calculation, completion, and idempotent retry verified via Playwright in prior session
-- Distance precedence: `getTripDistanceMetres` returns actual > manual > route
-- Vehicle projection increments correctly after completion
-- Verified odometer unchanged by trip completion
+### Live evidence (Playwright)
+
+**Distance precedence:**
+- Trip: Accra Office → Kotoka Airport (route: 8,245m / 8.2km)
+- Completed with actual odometer: 120,200 → 120,215 km (15 km actual)
+- `distanceBasis: "ACTUAL_ODOMETER"`, `actualDistanceKm: 15`
+- Projection uses 15km, not 8.2km — correct
+
+**Idempotency:**
+- Completed trip → retry returns same result, no double-count
+
+**Vehicle projection:**
+- Verified odometer unchanged (120,150)
+- Estimated km increments correctly per completed trip
