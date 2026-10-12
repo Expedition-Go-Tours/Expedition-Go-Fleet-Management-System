@@ -1,8 +1,5 @@
 import Link from "next/link";
-import {
-  Filter,
-  Search,
-} from "lucide-react";
+import { Filter, Search } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -32,7 +29,7 @@ export default async function TripsPage({
 
   // Server-side filters
   const vehicleFilter = params.vehicle ?? undefined;
-  const driverFilter = canReadAll ? params.driver ?? undefined : context.user.id;
+  const driverFilter = canReadAll ? (params.driver ?? undefined) : context.user.id;
   const dateFilter = params.date ?? undefined;
   const statusFilter = params.status ?? undefined;
   const purposeFilter = params.purpose ?? undefined;
@@ -96,10 +93,7 @@ export default async function TripsPage({
       {/* Summary metrics */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <MetricCard label="Total trips" value={totalCount} />
-        <MetricCard
-          label="Total distance"
-          value={`${(totalDistanceM / 1000).toFixed(1)} km`}
-        />
+        <MetricCard label="Total distance" value={`${(totalDistanceM / 1000).toFixed(1)} km`} />
         <MetricCard label="Stale routes" value={staleRoutes} />
         <MetricCard label="Missing distance" value={missingDistance} />
       </div>
@@ -110,7 +104,7 @@ export default async function TripsPage({
           <div className="min-w-[180px] flex-1">
             <label className="field-label mb-1 block">Search</label>
             <div className="relative">
-              <Search className="text-muted absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2" />
+              <Search className="text-muted absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
               <input
                 type="text"
                 name="q"
@@ -186,9 +180,7 @@ export default async function TripsPage({
         <TripList
           trips={pageTrips}
           emptyMessage={
-            totalCount === 0
-              ? "No trips match your filters."
-              : "No trips on this page."
+            totalCount === 0 ? "No trips match your filters." : "No trips on this page."
           }
         />
         {totalPages > 1 && (
@@ -225,10 +217,7 @@ function MetricCard({ label, value }: { label: string; value: string | number })
   );
 }
 
-function buildParams(
-  params: Record<string, string | undefined>,
-  page: number,
-): string {
+function buildParams(params: Record<string, string | undefined>, page: number): string {
   const sp = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value) sp.set(key, value);

@@ -1,9 +1,6 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
-import type {
-  SavedLocation,
-  SavedLocationCategory,
-} from "@/lib/domain/saved-location";
+import type { SavedLocation, SavedLocationCategory } from "@/lib/domain/saved-location";
 import { validateSavedLocation } from "@/lib/domain/saved-location";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -65,9 +62,7 @@ export interface CreateSavedLocationInput {
   createdBy: string;
 }
 
-export async function createSavedLocation(
-  input: CreateSavedLocationInput,
-): Promise<SavedLocation> {
+export async function createSavedLocation(input: CreateSavedLocationInput): Promise<SavedLocation> {
   const { FieldValue } = await import("firebase-admin/firestore");
   const validation = validateSavedLocation({
     label: input.label,
@@ -193,10 +188,7 @@ export async function getSavedLocationById(id: string): Promise<SavedLocation | 
   return toSavedLocation(snap.id, snap.data() ?? {});
 }
 
-export async function deactivateSavedLocation(
-  id: string,
-  actorId: string,
-): Promise<SavedLocation> {
+export async function deactivateSavedLocation(id: string, actorId: string): Promise<SavedLocation> {
   const { FieldValue } = await import("firebase-admin/firestore");
   const db = getAdminDb();
   const ref = locationsRef().doc(id);

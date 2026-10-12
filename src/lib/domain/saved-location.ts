@@ -34,9 +34,7 @@ export interface SavedLocation {
 
 export type SavedLocationValidation = { ok: true } | { ok: false; error: string };
 
-export function validateSavedLocation(
-  input: Partial<SavedLocation>,
-): SavedLocationValidation {
+export function validateSavedLocation(input: Partial<SavedLocation>): SavedLocationValidation {
   if (!input.label || input.label.trim().length === 0) {
     return { ok: false, error: "Label is required" };
   }
@@ -59,18 +57,10 @@ export function validateSavedLocation(
     return { ok: false, error: "Latitude and longitude must both be provided or both be omitted" };
   }
   if (hasLat) {
-    if (
-      typeof input.latitude !== "number" ||
-      input.latitude < -90 ||
-      input.latitude > 90
-    ) {
+    if (typeof input.latitude !== "number" || input.latitude < -90 || input.latitude > 90) {
       return { ok: false, error: "Latitude must be between -90 and 90" };
     }
-    if (
-      typeof input.longitude !== "number" ||
-      input.longitude < -180 ||
-      input.longitude > 180
-    ) {
+    if (typeof input.longitude !== "number" || input.longitude < -180 || input.longitude > 180) {
       return { ok: false, error: "Longitude must be between -180 and 180" };
     }
   }

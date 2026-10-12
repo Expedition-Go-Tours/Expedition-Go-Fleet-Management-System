@@ -169,7 +169,9 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
         aria-expanded={open}
       >
         <Search aria-hidden="true" className="h-4 w-4" />
-        <span className="flex-1 truncate text-left text-[var(--fs-body-xs)]">Search the fleet…</span>
+        <span className="flex-1 truncate text-left text-[var(--fs-body-xs)]">
+          Search the fleet…
+        </span>
         <kbd className="font-ui border-hairline text-faint rounded border px-1.5 py-0.5 text-[10px]">
           ⌘K
         </kbd>

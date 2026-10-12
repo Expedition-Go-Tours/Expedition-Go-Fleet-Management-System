@@ -319,7 +319,8 @@ function OverviewPanel({ data }: { data: VehicleDetailTabData }) {
                       {data.overview.estimatedKm.toLocaleString()} km
                       {data.overview.estimatedKmTripCount != null && (
                         <span className="text-faint">
-                          {" "}({data.overview.estimatedKmTripCount} trips since baseline)
+                          {" "}
+                          ({data.overview.estimatedKmTripCount} trips since baseline)
                         </span>
                       )}
                     </span>,
@@ -804,9 +805,7 @@ function TripsPanel({ trips, total }: { trips: TabTripData[]; total: number }) {
                   status: trip.status as Trip["status"],
                 } as Trip);
                 return recon.severity === "FLAGGED" ? (
-                  <span className="text-data-xs text-warning font-medium">
-                    ⚠ {recon.note}
-                  </span>
+                  <span className="text-data-xs text-warning font-medium">⚠ {recon.note}</span>
                 ) : null;
               })()}
             </div>

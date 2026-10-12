@@ -3,10 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import {
-  SAVED_LOCATION_CATEGORIES,
-  type SavedLocationCategory,
-} from "@/lib/domain/saved-location";
+import { SAVED_LOCATION_CATEGORIES, type SavedLocationCategory } from "@/lib/domain/saved-location";
 import {
   SavedLocationError,
   createSavedLocation,
@@ -27,7 +24,10 @@ export async function GET(request: NextRequest) {
 
     const params = request.nextUrl.searchParams;
     const categoryParam = params.get("category") ?? undefined;
-    if (categoryParam && !(SAVED_LOCATION_CATEGORIES as readonly string[]).includes(categoryParam)) {
+    if (
+      categoryParam &&
+      !(SAVED_LOCATION_CATEGORIES as readonly string[]).includes(categoryParam)
+    ) {
       throw ApiError.badRequest(`category must be one of: ${SAVED_LOCATION_CATEGORIES.join(", ")}`);
     }
     const activeParam = params.get("active");
@@ -79,10 +79,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof SavedLocationError) {
       const status = error.code === "NOT_FOUND" ? 404 : 400;
-      return NextResponse.json(
-        { error: { code: error.code, message: error.message } },
-        { status },
-      );
+      return NextResponse.json({ error: { code: error.code, message: error.message } }, { status });
     }
     return toErrorResponse(error);
   }

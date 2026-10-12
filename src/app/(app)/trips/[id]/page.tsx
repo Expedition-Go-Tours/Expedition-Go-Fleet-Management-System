@@ -1,13 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  Clock,
-  Gauge,
-  MapPin,
-  Navigation,
-  Route,
-} from "lucide-react";
+import { ArrowLeft, Clock, Gauge, MapPin, Navigation, Route } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -16,10 +9,7 @@ import { RouteMapPreview } from "@/components/trips/RouteMapPreview";
 import { RouteSummary } from "@/components/trips/RouteSummary";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
-import {
-  getTripDistanceMetres,
-  type RouteLeg,
-} from "@/lib/domain/trip";
+import { getTripDistanceMetres, type RouteLeg } from "@/lib/domain/trip";
 import type { GeoJsonLineString } from "@/lib/routing/provider";
 import { formatDate, humanizeEnum } from "@/lib/format";
 import { getTripById } from "@/lib/repos/trips";
@@ -34,11 +24,7 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m} min`;
 }
 
-export default async function TripDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function TripDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const context = await requirePagePermission(PERMISSIONS.TRIP_READ);
   const { id } = await params;
 
@@ -81,10 +67,7 @@ export default async function TripDetailPage({
         ]}
         actions={
           <div className="flex items-center gap-2">
-            <Link
-              href="/trips"
-              className="text-body-xs text-link hover:underline"
-            >
+            <Link href="/trips" className="text-body-xs text-link hover:underline">
               <ArrowLeft className="mr-1 inline h-3 w-3" /> Back to trips
             </Link>
           </div>
@@ -101,7 +84,8 @@ export default async function TripDetailPage({
               <p className="text-body-sm text-ink font-semibold">
                 {distanceKm ?? "—"} km
                 <span className="text-body-xs text-muted ml-1">
-                  ({trip.distanceBasis === "ACTUAL_ODOMETER"
+                  (
+                  {trip.distanceBasis === "ACTUAL_ODOMETER"
                     ? "actual"
                     : trip.distanceBasis === "MANUAL_OVERRIDE"
                       ? "manual"
@@ -147,7 +131,7 @@ export default async function TripDetailPage({
       </Card>
 
       {/* Map + route */}
-      {(trip.stops.length >= 2) && (
+      {trip.stops.length >= 2 && (
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
             <h2 className="mb-3 text-lg font-semibold">Route</h2>
@@ -187,10 +171,7 @@ export default async function TripDetailPage({
             label="Vehicle"
             value={
               vehicle ? (
-                <Link
-                  href={`/vehicles/${vehicle.id}`}
-                  className="text-link hover:underline"
-                >
+                <Link href={`/vehicles/${vehicle.id}`} className="text-link hover:underline">
                   {vehicle.regNumber} — {vehicle.make} {vehicle.model}
                 </Link>
               ) : (
@@ -198,15 +179,9 @@ export default async function TripDetailPage({
               )
             }
           />
-          <MetaRow
-            label="Driver"
-            value={driver ? driver.name : trip.driverUserId}
-          />
+          <MetaRow label="Driver" value={driver ? driver.name : trip.driverUserId} />
           {trip.recordedByUserId !== trip.driverUserId && (
-            <MetaRow
-              label="Recorded by"
-              value={recorder ? recorder.name : trip.recordedByUserId}
-            />
+            <MetaRow label="Recorded by" value={recorder ? recorder.name : trip.recordedByUserId} />
           )}
           <MetaRow label="Route provider" value={trip.routingProvider ?? "—"} />
           <MetaRow
@@ -216,9 +191,7 @@ export default async function TripDetailPage({
           <MetaRow
             label="Actual distance"
             value={
-              trip.actualDistanceKm != null
-                ? `${trip.actualDistanceKm.toLocaleString()} km`
-                : "—"
+              trip.actualDistanceKm != null ? `${trip.actualDistanceKm.toLocaleString()} km` : "—"
             }
           />
           <MetaRow
@@ -254,9 +227,7 @@ export default async function TripDetailPage({
                         : "text-muted h-4 w-4"
                   }
                 />
-                {i < trip.stops.length - 1 && (
-                  <div className="border-hairline h-6 w-px border-l" />
-                )}
+                {i < trip.stops.length - 1 && <div className="border-hairline h-6 w-px border-l" />}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-body-sm text-ink font-medium">
@@ -269,20 +240,14 @@ export default async function TripDetailPage({
                         : `Stop ${stop.sequence}`}
                   </span>
                 </p>
-                {stop.address && (
-                  <p className="text-body-xs text-muted">{stop.address}</p>
-                )}
+                {stop.address && <p className="text-body-xs text-muted">{stop.address}</p>}
                 {stop.latitude != null && stop.longitude != null && (
                   <p className="text-data-xs text-muted">
                     {stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}
                   </p>
                 )}
-                {stop.purpose && (
-                  <p className="text-data-xs text-muted">Purpose: {stop.purpose}</p>
-                )}
-                {stop.notes && (
-                  <p className="text-data-xs text-muted">{stop.notes}</p>
-                )}
+                {stop.purpose && <p className="text-data-xs text-muted">Purpose: {stop.purpose}</p>}
+                {stop.notes && <p className="text-data-xs text-muted">{stop.notes}</p>}
               </div>
               {trip.routeLegs[i] && (
                 <div className="text-right">

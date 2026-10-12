@@ -634,8 +634,20 @@ describe("checkReconciliation", () => {
 
   it("findReconciliationFlags returns only flagged trips", () => {
     const trips = [
-      makeTrip({ id: "t1", status: "COMPLETED", routeDistanceM: 100000, actualDistanceKm: 70, distanceBasis: "ACTUAL_ODOMETER" }),
-      makeTrip({ id: "t2", status: "COMPLETED", routeDistanceM: 100000, actualDistanceKm: 95, distanceBasis: "ACTUAL_ODOMETER" }),
+      makeTrip({
+        id: "t1",
+        status: "COMPLETED",
+        routeDistanceM: 100000,
+        actualDistanceKm: 70,
+        distanceBasis: "ACTUAL_ODOMETER",
+      }),
+      makeTrip({
+        id: "t2",
+        status: "COMPLETED",
+        routeDistanceM: 100000,
+        actualDistanceKm: 95,
+        distanceBasis: "ACTUAL_ODOMETER",
+      }),
     ];
     const flags = findReconciliationFlags(trips);
     expect(flags).toHaveLength(1);
