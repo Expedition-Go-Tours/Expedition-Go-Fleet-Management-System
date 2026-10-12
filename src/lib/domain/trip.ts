@@ -280,6 +280,32 @@ export function validateTripCompletion(trip: Trip): TripValidation {
   }
   const saveValidation = validateTripForSave(trip);
   if (!saveValidation.ok) return saveValidation;
+
+  // Must have at least one valid distance basis
+  const hasRoute = trip.routeDistanceM !== null && trip.routeDistanceM > 0 && !trip.routeStale;
+  const hasActual = trip.actualDistanceKm !== null && trip.actualDistanceKm > 0;
+  const hasManual =
+    trip.manualDistanceKm !== null &&
+    trip.manualDistanceKm > 0 &&
+    trip.distanceBasis === "MANUAL_OVERRIDE";
+
+  if (!hasRoute && !hasActual && !hasManual) {
+    return {
+      ok: false,
+      error:
+        "Trip requires a valid distance basis: a persisted route estimate, actual odometer readings, or an authorized manual override.",
+    };
+  }
+
+  // If route is stale and no alternative distance, reject
+  if (trip.routeStale && !hasActual && !hasManual) {
+    return {
+      ok: false,
+      error:
+        "Route calculation is stale. Recalculate the route, or provide actual odometer readings or a manual distance.",
+    };
+  }
+
   return { ok: true };
 }
 
@@ -349,6 +375,52 @@ export function computeActualDistance(startKm: number | null, endKm: number | nu
   if (typeof startKm !== "number" || typeof endKm !== "number") return null;
   if (endKm < startKm) return null;
   return endKm - startKm;
+}
+
+/**
+ * Compute the single validated effective distance in metres for a trip.
+ * This is the authoritative distance used for both the completed trip record
+ * and the vehicle projection. It returns the distance in metres.
+ *
+ * Precedence:
+ *  1. Actual odometer distance (when valid start/end readings exist)
+ *  2. Manual override (when authorized with reason)
+ *  3. Persisted route estimate (when not stale)
+ */
+export function computeEffectiveDistanceM(trip: {
+  actualDistanceKm?: number | null;
+  routeDistanceM?: number | null;
+  routeStale?: boolean;
+  manualDistanceKm?: number | null;
+  distanceBasis?: string;
+}): number | null {
+  // 1. Actual measured distance
+  if (
+    trip.actualDistanceKm !== null &&
+    trip.actualDistanceKm !== undefined &&
+    trip.actualDistanceKm > 0
+  ) {
+    return Math.round(trip.actualDistanceKm * 1000);
+  }
+  // 2. Authorized manual override
+  if (
+    trip.distanceBasis === "MANUAL_OVERRIDE" &&
+    trip.manualDistanceKm !== null &&
+    trip.manualDistanceKm !== undefined &&
+    trip.manualDistanceKm > 0
+  ) {
+    return Math.round(trip.manualDistanceKm * 1000);
+  }
+  // 3. Persisted route estimate (must not be stale)
+  if (
+    trip.routeDistanceM !== null &&
+    trip.routeDistanceM !== undefined &&
+    trip.routeDistanceM > 0 &&
+    !trip.routeStale
+  ) {
+    return trip.routeDistanceM;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

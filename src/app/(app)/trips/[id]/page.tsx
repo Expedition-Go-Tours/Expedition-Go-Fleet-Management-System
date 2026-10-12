@@ -48,7 +48,8 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const distanceM = getTripDistanceMetres(trip);
   const distanceKm = distanceM !== null ? (distanceM / 1000).toFixed(1) : null;
 
-  const routeGeometry: GeoJsonLineString | null = null; // Not stored on trip
+  const routeGeometry: GeoJsonLineString | null =
+    (trip as unknown as { routeGeometry?: GeoJsonLineString | null }).routeGeometry ?? null;
   const legList: RouteLeg[] = trip.routeLegs;
 
   return (

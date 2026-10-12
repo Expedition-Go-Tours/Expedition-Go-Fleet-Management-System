@@ -10,10 +10,10 @@ import type {
 } from "@/lib/domain/trip";
 import {
   computeActualDistance,
+  computeEffectiveDistanceM,
   computeEstimatedProjection,
   deriveOriginDestination,
   generateIdempotencyKey,
-  getTripDistanceMetres,
   validateTripCompletion,
   validateTripForSave,
 } from "@/lib/domain/trip";
@@ -59,7 +59,7 @@ function toIsoString(value: unknown): string | null {
   return d ? d.toISOString() : null;
 }
 
-function toTrip(id: string, data: DocumentData): Trip {
+function toTrip(id: string, data: DocumentData): Trip & { routeGeometry?: unknown } {
   const stops = (data.stops ?? []) as TripStop[];
   const { origin, destination } =
     stops.length >= 2
@@ -102,6 +102,7 @@ function toTrip(id: string, data: DocumentData): Trip {
     manualDistanceReason: data.manualDistanceReason ? String(data.manualDistanceReason) : null,
 
     routeStale: Boolean(data.routeStale),
+    routeGeometry: data.routeGeometry ?? null,
 
     startedAt: toIsoString(data.startedAt),
     completedAt: toIsoString(data.completedAt),
@@ -407,13 +408,31 @@ export async function completeTrip(
     const endOdo = input.endOdometerKm ?? trip.endOdometerKm;
     const actualDistanceKm = computeActualDistance(startOdo, endOdo);
 
+    // Compute the ONE validated effective distance (in metres) from the
+    // trip's authoritative data. This same value is used for both the
+    // completed trip record and the vehicle projection.
+    const effectiveDistanceM = computeEffectiveDistanceM({
+      actualDistanceKm,
+      routeDistanceM: trip.routeDistanceM,
+      routeStale: trip.routeStale,
+      manualDistanceKm: trip.manualDistanceKm,
+      distanceBasis: trip.distanceBasis,
+    });
+
+    if (effectiveDistanceM === null) {
+      throw new TripError(
+        "VALIDATION_FAILED",
+        "Trip requires a valid distance basis: a persisted route estimate, actual odometer readings, or an authorized manual override.",
+      );
+    }
+
     let distanceBasis: DistanceBasis = trip.distanceBasis;
     if (actualDistanceKm !== null) {
       distanceBasis = "ACTUAL_ODOMETER";
+    } else if (trip.manualDistanceKm !== null && trip.distanceBasis === "MANUAL_OVERRIDE") {
+      distanceBasis = "MANUAL_OVERRIDE";
     } else if (trip.routeDistanceM !== null && trip.routeDistanceM > 0) {
       distanceBasis = "ROUTE_ESTIMATE";
-    } else if (trip.manualDistanceKm !== null) {
-      distanceBasis = "MANUAL_OVERRIDE";
     }
 
     const now = FieldValue.serverTimestamp();
@@ -431,8 +450,7 @@ export async function completeTrip(
       updatedAt: now,
     });
 
-    // Compute the incremental projection from the vehicle snapshot we already read.
-    const tripDistM = getTripDistanceMetres(tripForValidation);
+    // Project the vehicle's estimated km using the SAME validated distance.
     let projectionUpdated = false;
     try {
       const odometerKm = Number(vehicle.odometerKm ?? 0);
@@ -442,9 +460,8 @@ export async function completeTrip(
         : new Date(0).toISOString();
       const baselineTime = new Date(baselineAt).getTime();
 
-      // Only include this trip if it completed after the baseline.
       const eligible = completedAtIso ? new Date(completedAtIso).getTime() > baselineTime : false;
-      const addMetres = eligible ? (tripDistM ?? 0) : 0;
+      const addMetres = eligible ? effectiveDistanceM : 0;
 
       if (addMetres > 0) {
         const currentEstimateKm =
@@ -473,7 +490,6 @@ export async function completeTrip(
       after: { status: "COMPLETED", distanceBasis, actualDistanceKm },
     });
 
-    // Construct the completed trip from the data we already have (no extra read).
     const completedTrip: Trip = {
       ...trip,
       status: "COMPLETED",
@@ -646,6 +662,7 @@ export async function saveRouteCalculation(
     routeCalculatedAt: route.calculatedAt,
     routeProviderMeta: route.providerMeta ?? null,
     routeLegs: legs,
+    routeGeometry: route.geometry ?? null,
     routeStale: false,
     updatedAt: FieldValue.serverTimestamp(),
   });

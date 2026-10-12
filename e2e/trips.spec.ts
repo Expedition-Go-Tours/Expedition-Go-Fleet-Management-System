@@ -227,14 +227,14 @@ test.describe("trip management", () => {
       await completeBtn.click();
       await page.waitForTimeout(3_000);
 
-      // Verify completion or error
+      // Verify completion: dialog must close OR a success toast must appear.
+      // Errors do NOT count as passing — completion must succeed.
       const dialogAfter = page.getByRole("dialog", { name: /record trip/i });
       const dialogClosed = (await dialogAfter.count()) === 0;
       const completionToast = page.locator("text=/complete|saved|success/i").first();
       const toastVisible = (await completionToast.count()) > 0;
 
-      // Either dialog closed (success) or toast appeared
-      expect(dialogClosed || toastVisible || hasError).toBeTruthy();
+      expect(dialogClosed || toastVisible).toBeTruthy();
     }
   });
 

@@ -226,46 +226,72 @@ export function RecordTripDialog({
     router,
   ]);
 
-  // Complete the trip.
+  // Complete the trip — handles first-time save, draft edits, and route
+  // persistence as a single coherent sequence.
   const completeTrip = useCallback(async () => {
-    let tripId = savedTripId;
-
-    // Save draft first if not yet persisted
-    if (!tripId) {
-      tripId = await saveDraft();
-      if (!tripId) return; // save failed
-    }
-
     setBusy(true);
     setError(null);
     try {
-      // Ensure route is calculated before completion.
-      // Use the returned result directly — React state from calculateRoute()
-      // may not have propagated yet (stale-closure bug).
-      let routeValid = routeDistanceM !== null && !routeStale;
-      if (!routeValid) {
-        const calcResult = await calculateRoute();
-        routeValid = calcResult.distanceM !== null && !calcResult.stale;
-        if (!routeValid) {
-          throw new Error("Route must be calculated before completing the trip");
-        }
+      // Step 1: Always save the latest form state first. This ensures both
+      // new trips and edited drafts are persisted before route calculation.
+      const origin = stops.find((s) => s.type === "ORIGIN");
+      const destination = stops.find((s) => s.type === "DESTINATION");
+      if (!origin?.label || !destination?.label) {
+        throw new Error("Origin and destination are required.");
       }
 
-      // Verify the server agrees the route is persisted before completing
+      const saveBody = {
+        vehicleId,
+        driverUserId,
+        assignmentId: assignmentId || undefined,
+        tripDate,
+        purpose,
+        externalReference: externalReference || undefined,
+        notes: notes || undefined,
+        stops,
+      };
+
+      let tripId: string;
+      if (savedTripId) {
+        await api.patch(`/api/v1/trips/${savedTripId}`, saveBody);
+        tripId = savedTripId;
+      } else {
+        const result = await api.post<{ trip: Trip }>("/api/v1/trips", saveBody);
+        tripId = result.trip.id;
+        setSavedTripId(tripId);
+      }
+
+      // Step 2: Calculate route against the saved trip (server persists it).
+      // Always recalculate — the saved stops must match the route.
+      const calcResult = await api.post<{
+        route: { totalDistanceM: number };
+        legs: RouteLeg[];
+      }>("/api/v1/trips/calculate-route", { tripId });
+
+      if (!calcResult.route.totalDistanceM || calcResult.route.totalDistanceM <= 0) {
+        throw new Error("Route calculation returned no usable distance");
+      }
+
+      setRouteDistanceM(calcResult.route.totalDistanceM);
+      setRouteLegs(calcResult.legs);
+      setRouteStale(false);
+
+      // Step 3: Verify the server has a valid persisted distance.
       const tripCheck = await api.get<{ trip: Trip }>(`/api/v1/trips/${tripId}`);
       if (tripCheck.trip.routeStale) {
         throw new Error("Route is stale on the server — please recalculate");
       }
-      if (
-        !tripCheck.trip.routeDistanceM &&
-        !tripCheck.trip.manualDistanceKm &&
-        !tripCheck.trip.actualDistanceKm
-      ) {
+      const hasValidBasis =
+        (tripCheck.trip.routeDistanceM && tripCheck.trip.routeDistanceM > 0) ||
+        (tripCheck.trip.manualDistanceKm && tripCheck.trip.manualDistanceKm > 0) ||
+        (tripCheck.trip.actualDistanceKm && tripCheck.trip.actualDistanceKm > 0);
+      if (!hasValidBasis) {
         throw new Error(
           "Trip has no valid distance basis — calculate a route or provide a manual distance",
         );
       }
 
+      // Step 4: Complete the trip.
       await api.post(`/api/v1/trips/${tripId}/complete`, {});
       setOpen(false);
       resetForm();
@@ -275,7 +301,19 @@ export function RecordTripDialog({
     } finally {
       setBusy(false);
     }
-  }, [savedTripId, saveDraft, routeStale, routeDistanceM, calculateRoute, resetForm, router]);
+  }, [
+    savedTripId,
+    stops,
+    vehicleId,
+    driverUserId,
+    assignmentId,
+    tripDate,
+    purpose,
+    externalReference,
+    notes,
+    resetForm,
+    router,
+  ]);
 
   const totalKm = routeDistanceM ? (routeDistanceM / 1000).toFixed(1) : null;
 

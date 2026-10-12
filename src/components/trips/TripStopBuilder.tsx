@@ -79,7 +79,7 @@ function PlaceSearch({
   ariaLabel,
 }: {
   value: string;
-  onSelect: (place: PlaceResult) => void;
+  onSelect: (place: PlaceResult | null) => void;
   placeholder?: string;
   ariaLabel?: string;
 }) {
@@ -142,6 +142,13 @@ function PlaceSearch({
     onSelect(place);
   }
 
+  // When the user types text that differs from the selected place label,
+  // clear the selected coordinates so they must explicitly choose a result.
+  function handleInput(value: string) {
+    setQuery(value);
+    search(value);
+  }
+
   return (
     <div ref={containerRef} className="relative">
       <div className="relative">
@@ -150,8 +157,9 @@ function PlaceSearch({
           type="text"
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value);
-            search(e.target.value);
+            handleInput(e.target.value);
+            // Clear stale coordinates when user types without selecting a result.
+            onSelect(null as unknown as PlaceResult);
           }}
           onFocus={() => {
             if (results.length > 0) setOpen(true);
@@ -442,14 +450,23 @@ export function TripStopBuilder({
                   {/* Location search — replaces manual coordinate entry */}
                   <PlaceSearch
                     value={stop.label}
-                    onSelect={(place) =>
-                      updateStop(index, {
-                        label: place.label,
-                        latitude: place.latitude,
-                        longitude: place.longitude,
-                        placeId: place.placeId ?? null,
-                      })
-                    }
+                    onSelect={(place) => {
+                      if (place) {
+                        updateStop(index, {
+                          label: place.label,
+                          latitude: place.latitude,
+                          longitude: place.longitude,
+                          placeId: place.placeId ?? null,
+                        });
+                      } else {
+                        // Clear stale coordinates when user types without selecting
+                        updateStop(index, {
+                          latitude: null,
+                          longitude: null,
+                          placeId: null,
+                        });
+                      }
+                    }}
                     placeholder={
                       isFirst
                         ? "Starting point (e.g. Accra Office)"

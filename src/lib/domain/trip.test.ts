@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkReconciliation,
   computeActualDistance,
+  computeEffectiveDistanceM,
   computeEstimatedProjection,
   findReconciliationFlags,
   deriveOriginDestination,
@@ -268,8 +269,10 @@ describe("validateTripForSave", () => {
 // ---------------------------------------------------------------------------
 
 describe("validateTripCompletion", () => {
-  it("allows completing a DRAFT trip", () => {
-    expect(validateTripCompletion(makeTrip())).toEqual({ ok: true });
+  it("allows completing a DRAFT trip with a valid route distance", () => {
+    expect(
+      validateTripCompletion(makeTrip({ routeDistanceM: 50000, routeDistanceKm: 50 })),
+    ).toEqual({ ok: true });
   });
 
   it("rejects completing a COMPLETED trip", () => {
@@ -652,5 +655,110 @@ describe("checkReconciliation", () => {
     const flags = findReconciliationFlags(trips);
     expect(flags).toHaveLength(1);
     expect(flags[0].tripId).toBe("t1");
+  });
+});
+
+describe("computeEffectiveDistanceM", () => {
+  it("prefers actual odometer over route estimate", () => {
+    expect(
+      computeEffectiveDistanceM({
+        actualDistanceKm: 50,
+        routeDistanceM: 80000,
+        routeStale: false,
+        manualDistanceKm: null,
+        distanceBasis: "ROUTE_ESTIMATE",
+      }),
+    ).toBe(50000);
+  });
+
+  it("uses manual override when set", () => {
+    expect(
+      computeEffectiveDistanceM({
+        actualDistanceKm: null,
+        routeDistanceM: null,
+        routeStale: false,
+        manualDistanceKm: 42,
+        distanceBasis: "MANUAL_OVERRIDE",
+      }),
+    ).toBe(42000);
+  });
+
+  it("uses route estimate when not stale", () => {
+    expect(
+      computeEffectiveDistanceM({
+        actualDistanceKm: null,
+        routeDistanceM: 75000,
+        routeStale: false,
+        manualDistanceKm: null,
+        distanceBasis: "ROUTE_ESTIMATE",
+      }),
+    ).toBe(75000);
+  });
+
+  it("rejects stale route estimate", () => {
+    expect(
+      computeEffectiveDistanceM({
+        actualDistanceKm: null,
+        routeDistanceM: 75000,
+        routeStale: true,
+        manualDistanceKm: null,
+        distanceBasis: "ROUTE_ESTIMATE",
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null when no basis is available", () => {
+    expect(
+      computeEffectiveDistanceM({
+        actualDistanceKm: null,
+        routeDistanceM: null,
+        routeStale: false,
+        manualDistanceKm: null,
+        distanceBasis: "ROUTE_ESTIMATE",
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("validateTripCompletion — distance basis requirement", () => {
+  it("rejects completion without any distance basis", () => {
+    const trip = makeTrip({ routeDistanceM: null, routeDistanceKm: null });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects completion with stale route and no alternative", () => {
+    const trip = makeTrip({
+      routeDistanceM: 50000,
+      routeDistanceKm: 50,
+      routeStale: true,
+      actualDistanceKm: null,
+      manualDistanceKm: null,
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(false);
+  });
+
+  it("allows completion with stale route when actual odometer exists", () => {
+    const trip = makeTrip({
+      routeDistanceM: 50000,
+      routeDistanceKm: 50,
+      routeStale: true,
+      actualDistanceKm: 48,
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(true);
+  });
+
+  it("allows completion with manual override", () => {
+    const trip = makeTrip({
+      routeDistanceM: null,
+      routeDistanceKm: null,
+      manualDistanceKm: 55,
+      manualDistanceReason: "Authorized by supervisor",
+      distanceBasis: "MANUAL_OVERRIDE",
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(true);
   });
 });
