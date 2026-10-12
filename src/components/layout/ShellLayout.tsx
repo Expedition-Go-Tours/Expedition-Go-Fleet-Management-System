@@ -294,7 +294,7 @@ export function ShellLayout({
             <Menu aria-hidden="true" className="h-5 w-5" />
           </button>
 
-          <div className="hidden max-w-md flex-1 md:block">
+          <div className="hidden min-w-0 max-w-md flex-1 md:block">
             <GlobalSearch />
           </div>
           <div className="flex-1 md:hidden" />

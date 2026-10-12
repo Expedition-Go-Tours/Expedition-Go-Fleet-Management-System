@@ -164,11 +164,12 @@ export function GlobalSearch({ enableHotkey = true }: { enableHotkey?: boolean }
         data-tour="header-search"
         onClick={() => setOpen(true)}
         className="hover:bg-subtle focus-visible:outline-accent border-hairline text-body-sm text-muted bg-surface flex h-9 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md border px-3 whitespace-nowrap transition-colors"
+        style={{ minWidth: 0 }}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
         <Search aria-hidden="true" className="h-4 w-4" />
-        <span className="flex-1 text-left text-[var(--fs-body-xs)]">Search the fleet…</span>
+        <span className="flex-1 truncate text-left text-[var(--fs-body-xs)]">Search the fleet…</span>
         <kbd className="font-ui border-hairline text-faint rounded border px-1.5 py-0.5 text-[10px]">
           ⌘K
         </kbd>
