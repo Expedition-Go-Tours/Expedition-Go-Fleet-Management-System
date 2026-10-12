@@ -32,7 +32,9 @@ export interface ReminderCandidate {
     | "MAINTENANCE_DUE"
     | "MAINTENANCE_OVERDUE"
     | "DOCUMENT_EXPIRING"
-    | "DOCUMENT_EXPIRED";
+    | "DOCUMENT_EXPIRED"
+    | "MILEAGE_RECONCILIATION"
+    | "MILEAGE_STALE";
   title: string;
   body: string;
   linkUrl: string;
@@ -156,3 +158,54 @@ export function deriveDocumentReminders(input: {
 }
 
 export { computeScheduleStatus };
+
+/** Pure: mileage reconciliation warning reminders. */
+export function deriveMileageReminders(input: {
+  vehicleId: string;
+  regNumber: string;
+  estimatedKm: number | null;
+  odometerKm: number;
+  lastOdometerAt: Date | null;
+  now: Date;
+  staleDaysThreshold?: number;
+}): ReminderCandidate[] {
+  const link = `/vehicles/${input.vehicleId}`;
+  const base = `vehicle:${input.vehicleId}:mileage`;
+  const candidates: ReminderCandidate[] = [];
+  const staleDays = input.staleDaysThreshold ?? 30;
+
+  // Stale odometer warning: hasn't had a verified reading in N days
+  if (input.lastOdometerAt) {
+    const daysSinceReading = Math.floor(
+      (input.now.getTime() - input.lastOdometerAt.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    if (daysSinceReading >= staleDays) {
+      candidates.push({
+        type: "MILEAGE_STALE",
+        title: `Stale odometer: ${input.regNumber}`,
+        body: `No verified odometer reading in ${daysSinceReading} days. Estimated km may be drifting from actual.`,
+        linkUrl: link,
+        entityId: input.vehicleId,
+        dedupeKey: `${base}:STALE:${dayBucket(input.now)}`,
+      });
+    }
+  }
+
+  // Large estimated-vs-verified discrepancy warning
+  if (input.estimatedKm !== null && input.odometerKm > 0) {
+    const diffKm = input.estimatedKm - input.odometerKm;
+    const diffPct = (Math.abs(diffKm) / input.odometerKm) * 100;
+    if (Math.abs(diffKm) > 500 && diffPct > 5) {
+      candidates.push({
+        type: "MILEAGE_RECONCILIATION",
+        title: `Mileage reconciliation needed: ${input.regNumber}`,
+        body: `Estimated km (${input.estimatedKm.toLocaleString()}) differs from verified odometer (${input.odometerKm.toLocaleString()}) by ${Math.round(Math.abs(diffKm))} km.`,
+        linkUrl: link,
+        entityId: input.vehicleId,
+        dedupeKey: `${base}:RECONCILE:${dayBucket(input.now)}`,
+      });
+    }
+  }
+
+  return candidates;
+}

@@ -27,6 +27,7 @@ export const COLLECTIONS = {
   trips: "trips",
   auditLogs: "auditLogs",
   providers: "providers",
+  savedLocations: "savedLocations",
   onboarding: "onboarding",
 } as const;
 

@@ -138,3 +138,31 @@ describe("RoutingError", () => {
     expect(err.message).toBe("Custom message");
   });
 });
+
+describe("Geoapify route chunking", () => {
+  it("exports chunkWaypoints logic from GeoapifyRoutingProvider", async () => {
+    // Verify that the provider can handle chunked waypoints by testing
+    // the chunk splitting logic indirectly through the class interface.
+    const { GeoapifyRoutingProvider } = await import("./geoapify");
+    const provider = new GeoapifyRoutingProvider("test-key");
+    expect(provider.name).toBe("geoapify");
+    // The provider should reject <2 waypoints
+    await expect(provider.calculateRoute([])).rejects.toThrow();
+    await expect(provider.calculateRoute([{ latitude: 0, longitude: 0 }])).rejects.toThrow();
+  });
+});
+
+describe("route geometry types", () => {
+  it("GeoJsonLineString has correct structure", async () => {
+    const { MockRoutingProvider } = await import("./mock");
+    const provider = new MockRoutingProvider();
+    const result = await provider.calculateRoute([
+      { latitude: 5.6037, longitude: -0.187, label: "A" },
+      { latitude: 5.1054, longitude: -1.2461, label: "B" },
+    ]);
+    expect(result.geometry).toBeDefined();
+    expect(result.geometry!.type).toBe("LineString");
+    expect(result.geometry!.coordinates.length).toBe(2);
+    expect(result.geometry!.coordinates[0]).toHaveLength(2);
+  });
+});

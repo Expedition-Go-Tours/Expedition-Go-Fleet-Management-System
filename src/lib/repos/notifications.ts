@@ -14,6 +14,8 @@ import { toDate } from "@/lib/repos/timestamps";
 
 export const NOTIFICATION_TYPES = [
   "MAINTENANCE_DUE_SOON_KM",
+  "MILEAGE_RECONCILIATION",
+  "MILEAGE_STALE",
   "MAINTENANCE_DUE_SOON_DATE",
   "MAINTENANCE_DUE",
   "MAINTENANCE_OVERDUE",

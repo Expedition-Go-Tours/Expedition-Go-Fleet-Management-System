@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkReconciliation,
   computeActualDistance,
   computeEstimatedProjection,
+  findReconciliationFlags,
   deriveOriginDestination,
   generateIdempotencyKey,
   generateStopId,
@@ -570,5 +572,73 @@ describe("getTripDistanceMetres", () => {
   it("ignores zero or negative values", () => {
     const trip = makeTrip({ routeDistanceM: 0, actualDistanceKm: 0, manualDistanceKm: 0 });
     expect(getTripDistanceMetres(trip)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reconciliation flagging
+// ---------------------------------------------------------------------------
+
+describe("checkReconciliation", () => {
+  it("flags a trip with >20% discrepancy between route and actual", () => {
+    const trip = makeTrip({
+      routeDistanceM: 100000,
+      actualDistanceKm: 70,
+      distanceBasis: "ACTUAL_ODOMETER",
+    });
+    const flag = checkReconciliation(trip);
+    expect(flag.severity).toBe("FLAGGED");
+    expect(flag.discrepancyPct).toBeGreaterThan(20);
+  });
+
+  it("does not flag a trip with <20% discrepancy", () => {
+    const trip = makeTrip({
+      routeDistanceM: 100000,
+      actualDistanceKm: 95,
+      distanceBasis: "ACTUAL_ODOMETER",
+    });
+    const flag = checkReconciliation(trip);
+    expect(flag.severity).toBe("OK");
+  });
+
+  it("does not flag a very short trip below minimum distance", () => {
+    const trip = makeTrip({
+      routeDistanceM: 300,
+      actualDistanceKm: 0.2,
+      distanceBasis: "ACTUAL_ODOMETER",
+    });
+    const flag = checkReconciliation(trip);
+    expect(flag.severity).toBe("OK");
+    expect(flag.note).toContain("Short trip");
+  });
+
+  it("handles missing actual distance gracefully", () => {
+    const trip = makeTrip({
+      routeDistanceM: 100000,
+      actualDistanceKm: null,
+    });
+    const flag = checkReconciliation(trip);
+    expect(flag.severity).toBe("OK");
+    expect(flag.note).toContain("No actual odometer reading");
+  });
+
+  it("handles missing route estimate gracefully", () => {
+    const trip = makeTrip({
+      routeDistanceM: null,
+      actualDistanceKm: 50,
+    });
+    const flag = checkReconciliation(trip);
+    expect(flag.severity).toBe("OK");
+    expect(flag.note).toContain("No route estimate");
+  });
+
+  it("findReconciliationFlags returns only flagged trips", () => {
+    const trips = [
+      makeTrip({ id: "t1", status: "COMPLETED", routeDistanceM: 100000, actualDistanceKm: 70, distanceBasis: "ACTUAL_ODOMETER" }),
+      makeTrip({ id: "t2", status: "COMPLETED", routeDistanceM: 100000, actualDistanceKm: 95, distanceBasis: "ACTUAL_ODOMETER" }),
+    ];
+    const flags = findReconciliationFlags(trips);
+    expect(flags).toHaveLength(1);
+    expect(flags[0].tripId).toBe("t1");
   });
 });

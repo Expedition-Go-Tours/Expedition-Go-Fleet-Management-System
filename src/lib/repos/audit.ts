@@ -56,6 +56,8 @@ export const AUDIT_EVENTS = {
   TRIP_COMPLETED: "trip.completed",
   TRIP_CANCELLED: "trip.cancelled",
   TRIP_ROUTE_CALCULATED: "trip.route.calculated",
+  SAVED_LOCATION_CREATED: "savedLocation.created",
+  SAVED_LOCATION_UPDATED: "savedLocation.updated",
   INSPECTION_SUBMITTED: "inspection.submitted",
   DOCUMENT_UPLOADED: "document.uploaded",
   DOCUMENT_UPDATED: "document.updated",

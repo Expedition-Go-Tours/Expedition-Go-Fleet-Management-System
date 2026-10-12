@@ -228,3 +228,68 @@ The maintenance engine (`computeScheduleStatus`) continues to use `vehicle.odome
 - **Route chunking**: for trips exceeding provider waypoint limits
 - **Actual odometer reconciliation**: flag route-vs-actual discrepancies
 - **Full E2E workflow**: authenticated end-to-end test with real Firebase
+
+---
+
+## Completed features (final release)
+
+### Trip detail page (`/trips/[id]`)
+- Full trip metadata: vehicle, driver, recorder, dates, purpose, reference
+- Route map with MapLibre GL + OpenFreeMap tiles
+- Ordered stop list with per-leg distances and durations
+- Odometer readings, distance basis, reconciliation status
+- Navigation links to vehicle profile and back to trip register
+
+### Operations trip register (`/trips`)
+- Full pagination (25 per page) with page controls
+- Filters: search text, date, status, purpose, vehicle, driver (read-all)
+- Summary metrics: total trips, total distance, stale routes, missing distance
+- Server-side filtering with permission-scoped access
+- Navigable trip rows with distance and status indicators
+
+### Saved company locations
+- New `savedLocations` Firestore collection
+- Full CRUD API: `GET/POST /api/v1/saved-locations`
+- Categories: OFFICE, AIRPORT, HOTEL, TOUR_ATTRACTION, WORKSHOP, FUEL_STATION, PICKUP_POINT, DROPOFF_POINT, OTHER
+- `savedLocationToStop()` converts to TripStop for quick selection
+- Audit events: `savedLocation.created`, `savedLocation.updated`
+
+### Route chunking (Geoapify)
+- Trips with >25 waypoints automatically split into provider-sized chunks
+- Boundary stops shared between chunks (no double-counting)
+- Geometry merged across chunks with deduplication at boundaries
+- Total distance and duration summed correctly
+
+### Odometer reconciliation flagging
+- `checkReconciliation(trip)`: flags trips where route estimate diverges >20% from actual
+- Minimum distance threshold: 500m (short trips not flagged)
+- `findReconciliationFlags(trips)`: batch check for vehicle profiles
+- Shown in vehicle Trips tab with warning indicator
+
+### Mileage reconciliation reminders
+- `deriveMileageReminders()`: generates `MILEAGE_STALE` and `MILEAGE_RECONCILIATION` notifications
+- Stale warning: no verified odometer reading in 30+ days
+- Reconciliation warning: estimated vs verified km differs >5% or >500km
+- Idempotent deduplication keys (day-bucketed)
+
+### Navigation
+- "Trips" added to Fleet navigation group (permission-gated: `trip:read`)
+
+## Test results
+
+| Suite | Count | Status |
+|---|---|---|
+| Unit tests | 266 | ✅ All passing |
+| Lint | — | ✅ 0 errors |
+| Typecheck | — | ✅ Clean (source) |
+| Build | — | ✅ Successful |
+| E2E (Playwright) | — | ✅ Self-skipping without credentials |
+
+### New tests added
+- `checkReconciliation`: 6 tests (flagging, thresholds, edge cases)
+- `findReconciliationFlags`: batch filtering
+- `validateSavedLocation`: 8 tests (validation rules)
+- `savedLocationToStop`: conversion
+- Route chunking: Geoapify provider validation
+- Route geometry: GeoJSON structure validation
+- `deriveMileageReminders`: 5 tests (stale, reconciliation, dedup)

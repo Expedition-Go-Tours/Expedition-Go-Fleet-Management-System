@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   dayBucket,
   deriveDocumentReminders,
+  deriveMileageReminders,
   deriveScheduleReminders,
   kmBand,
 } from "@/lib/domain/reminders";
@@ -196,5 +197,65 @@ describe("inspection checklist", () => {
       "NOT_APPLICABLE",
     );
     expect(overallResult([{ result: "PASS" }])).toBe("PASS");
+  });
+});
+
+describe("deriveMileageReminders", () => {
+  const base = {
+    vehicleId: "veh-1",
+    regNumber: "GT-2026-01",
+    estimatedKm: 50000,
+    odometerKm: 48000,
+    lastOdometerAt: new Date("2026-10-01"),
+    now: new Date("2026-10-15"),
+    staleDaysThreshold: 30,
+  };
+
+  it("returns empty for a vehicle with no discrepancies", () => {
+    const result = deriveMileageReminders({
+      ...base,
+      estimatedKm: 48100,
+      odometerKm: 48000,
+      lastOdometerAt: new Date("2026-10-14"),
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("generates a MILEAGE_STALE reminder when odometer is old", () => {
+    const result = deriveMileageReminders({
+      ...base,
+      lastOdometerAt: new Date("2026-08-01"),
+    });
+    const stale = result.find((r) => r.type === "MILEAGE_STALE");
+    expect(stale).toBeDefined();
+    expect(stale!.title).toContain("GT-2026-01");
+  });
+
+  it("generates a MILEAGE_RECONCILIATION reminder for large discrepancy", () => {
+    const result = deriveMileageReminders({
+      ...base,
+      estimatedKm: 55000,
+      odometerKm: 48000,
+    });
+    const recon = result.find((r) => r.type === "MILEAGE_RECONCILIATION");
+    expect(recon).toBeDefined();
+    expect(recon!.title).toContain("Mileage reconciliation");
+  });
+
+  it("does not flag small discrepancies", () => {
+    const result = deriveMileageReminders({
+      ...base,
+      estimatedKm: 48200,
+      odometerKm: 48000,
+      lastOdometerAt: new Date("2026-10-14"),
+    });
+    const recon = result.find((r) => r.type === "MILEAGE_RECONCILIATION");
+    expect(recon).toBeUndefined();
+  });
+
+  it("produces deduplication-safe keys", () => {
+    const r1 = deriveMileageReminders({ ...base, lastOdometerAt: new Date("2026-08-01") });
+    const r2 = deriveMileageReminders({ ...base, lastOdometerAt: new Date("2026-08-01") });
+    expect(r1[0].dedupeKey).toBe(r2[0].dedupeKey);
   });
 });

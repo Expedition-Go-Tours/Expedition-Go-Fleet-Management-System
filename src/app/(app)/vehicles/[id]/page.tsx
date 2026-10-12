@@ -155,6 +155,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       archivedAt: formatDate(vehicle.archivedAt),
       safetyHoldReason: vehicle.safetyHoldReason ?? null,
       safetyHoldAppliedAt: formatDate(vehicle.safetyHoldAppliedAt),
+      estimatedKm: vehicle.estimatedKm ?? null,
+      estimatedKmTripCount: vehicle.estimatedKmTripCount ?? null,
     },
     readings: readings.map((r) => ({
       id: r.id,
@@ -233,6 +235,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       distanceBasis: t.distanceBasis,
       status: t.status,
       createdAt: formatDate(t.createdAt),
+      routeDistanceM: t.routeDistanceM ?? null,
     })),
   };
 

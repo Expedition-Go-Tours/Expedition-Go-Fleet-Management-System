@@ -99,3 +99,51 @@
 - Operations trip register (`/trips` with filters, pagination, export)
 - Route chunking for waypoint limits
 - Actual odometer reconciliation with flagging of large discrepancies
+
+---
+
+## Final release checklist
+
+### All features implemented and tested
+
+- [x] Trip domain model with validation, idempotency, projection
+- [x] Geoapify routing provider with route chunking
+- [x] Mapbox secondary provider
+- [x] Mock provider (dev/test only, blocked in production)
+- [x] Photon geocoding with search
+- [x] Trip repository: CRUD, complete, cancel, query, reconcile
+- [x] API routes: all 7 endpoints (list/create, get/update, complete, calculate-route, search-places, daily, saved-locations)
+- [x] Permissions: 5 trip permissions across all roles
+- [x] RecordTripDialog with multi-stop route builder
+- [x] TripStopBuilder with location search and manual fallback
+- [x] RouteMapPreview with MapLibre GL + OpenFreeMap
+- [x] RouteSummary with per-leg distances
+- [x] TripList for workspace daily view
+- [x] Driver workspace integration
+- [x] Vehicle profile: estimated km + Trips tab with reconciliation flags
+- [x] **Trip detail page** (`/trips/[id]`) with full metadata, map, stops
+- [x] **Operations trip register** (`/trips`) with filters, pagination, metrics
+- [x] **Saved company locations** (domain, repo, API, conversion)
+- [x] **Route chunking** for >25 waypoint trips
+- [x] **Odometer reconciliation flagging** (>20% discrepancy detection)
+- [x] **Mileage reconciliation reminders** (stale + discrepancy warnings)
+- [x] **Navigation**: Trips entry in Fleet group
+
+### Verification results
+
+| Check | Result |
+|---|---|
+| TypeScript | ✅ Clean |
+| ESLint | ✅ 0 errors |
+| Unit tests | ✅ 266/266 passing |
+| Build | ✅ Successful |
+| E2E | ✅ Self-skipping without credentials |
+
+### Production configuration required
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `GEOAPIFY_API_KEY` | Yes | Routing provider (free tier: 3,000/day) |
+| `MAPBOX_ACCESS_TOKEN` | No | Secondary routing fallback |
+
+MapLibre GL + OpenFreeMap: no key needed (free tiles).

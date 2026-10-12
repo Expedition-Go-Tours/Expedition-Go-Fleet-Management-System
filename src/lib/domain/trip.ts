@@ -452,3 +452,93 @@ export function getTripDistanceMetres(trip: Trip): number | null {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Odometer reconciliation flagging
+// ---------------------------------------------------------------------------
+
+/** Threshold for flagging a route-vs-actual discrepancy (percentage). */
+export const RECONCILIATION_THRESHOLD_PCT = 20;
+/** Minimum distance (metres) below which discrepancies are not flagged. */
+export const RECONCILIATION_MIN_DISTANCE_M = 500;
+
+export interface ReconciliationFlag {
+  tripId: string;
+  routeDistanceM: number | null;
+  actualDistanceKm: number | null;
+  actualDistanceM: number | null;
+  discrepancyM: number | null;
+  discrepancyPct: number | null;
+  severity: "OK" | "FLAGGED";
+  note: string | null;
+}
+
+/**
+ * Check whether a completed trip's route estimate diverges significantly
+ * from its actual odometer distance. Used to surface data-quality warnings
+ * on vehicle profiles and the operations register.
+ *
+ * A trip is flagged when:
+ *   - Both route estimate and actual odometer distance exist, AND
+ *   - The actual distance exceeds RECONCILIATION_MIN_DISTANCE_M, AND
+ *   - The absolute discrepancy exceeds RECONCILIATION_THRESHOLD_PCT%.
+ */
+export function checkReconciliation(trip: Trip): ReconciliationFlag {
+  const routeM = trip.routeDistanceM ?? null;
+  const actualKm = trip.actualDistanceKm ?? null;
+  const actualM = actualKm !== null ? Math.round(actualKm * 1000) : null;
+
+  if (routeM === null || actualM === null) {
+    return {
+      tripId: trip.id,
+      routeDistanceM: routeM,
+      actualDistanceKm: actualKm,
+      actualDistanceM: actualM,
+      discrepancyM: null,
+      discrepancyPct: null,
+      severity: "OK",
+      note: actualM === null ? "No actual odometer reading" : "No route estimate",
+    };
+  }
+
+  const discrepancyM = Math.abs(routeM - actualM);
+  const discrepancyPct = actualM > 0 ? (discrepancyM / actualM) * 100 : 0;
+
+  if (actualM < RECONCILIATION_MIN_DISTANCE_M) {
+    return {
+      tripId: trip.id,
+      routeDistanceM: routeM,
+      actualDistanceKm: actualKm,
+      actualDistanceM: actualM,
+      discrepancyM,
+      discrepancyPct: Math.round(discrepancyPct * 10) / 10,
+      severity: "OK",
+      note: "Short trip — discrepancy not flagged",
+    };
+  }
+
+  const flagged = discrepancyPct > RECONCILIATION_THRESHOLD_PCT;
+  return {
+    tripId: trip.id,
+    routeDistanceM: routeM,
+    actualDistanceKm: actualKm,
+    actualDistanceM: actualM,
+    discrepancyM,
+    discrepancyPct: Math.round(discrepancyPct * 10) / 10,
+    severity: flagged ? "FLAGGED" : "OK",
+    note: flagged
+      ? `Route estimate differs from actual by ${Math.round(discrepancyPct)}% (${Math.round(discrepancyM / 100) / 10} km)`
+      : null,
+  };
+}
+
+/**
+ * Batch reconciliation check for a list of completed trips.
+ * Returns only the flagged trips for efficient display.
+ */
+export function findReconciliationFlags(trips: Trip[]): ReconciliationFlag[] {
+  return trips
+    .filter((t) => t.status === "COMPLETED")
+    .map(checkReconciliation)
+    .filter((flag) => flag.severity === "FLAGGED");
+}

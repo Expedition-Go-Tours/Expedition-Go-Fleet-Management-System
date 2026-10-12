@@ -6,6 +6,7 @@ import { FileWarning, Wrench } from "lucide-react";
 import { StatusBadge, StatusDot, formatStatusLabel } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
 import { formatMoney } from "@/lib/format";
+import { checkReconciliation, type Trip } from "@/lib/domain/trip";
 
 /*
  * Tabbed vehicle profile. The server page pre-fetches and pre-formats every
@@ -22,6 +23,8 @@ export interface TabOverviewData {
   archivedAt: string;
   safetyHoldReason: string | null | undefined;
   safetyHoldAppliedAt: string;
+  estimatedKm: number | null;
+  estimatedKmTripCount: number | null;
 }
 
 export interface TabReadingData {
@@ -123,6 +126,7 @@ export interface TabTripData {
   distanceBasis: string;
   status: string;
   createdAt: string;
+  routeDistanceM: number | null;
 }
 
 export interface VehicleHistoryCounts {
@@ -307,6 +311,21 @@ function OverviewPanel({ data }: { data: VehicleDetailTabData }) {
         <KeyValueList
           items={[
             ["Current odometer", `${data.overview.odometerKm.toLocaleString()} km`],
+            ...(data.overview.estimatedKm != null
+              ? [
+                  [
+                    "Estimated operational km",
+                    <span key="est">
+                      {data.overview.estimatedKm.toLocaleString()} km
+                      {data.overview.estimatedKmTripCount != null && (
+                        <span className="text-faint">
+                          {" "}({data.overview.estimatedKmTripCount} trips since baseline)
+                        </span>
+                      )}
+                    </span>,
+                  ] as [string, React.ReactNode],
+                ]
+              : []),
             ["Last reading at", data.overview.odometerAt],
             ["Held since", data.overview.safetyHoldAppliedAt],
             ["Archived at", data.overview.archivedAt],
@@ -775,6 +794,21 @@ function TripsPanel({ trips, total }: { trips: TabTripData[]; total: number }) {
                 </span>
               )}
               <span className="text-data-xs text-muted">{trip.tripDate}</span>
+              {(() => {
+                const recon = checkReconciliation({
+                  id: trip.id,
+                  routeDistanceM: trip.routeDistanceM,
+                  actualDistanceKm: trip.actualDistanceKm,
+                  distanceBasis: trip.distanceBasis as Trip["distanceBasis"],
+                  manualDistanceKm: null,
+                  status: trip.status as Trip["status"],
+                } as Trip);
+                return recon.severity === "FLAGGED" ? (
+                  <span className="text-data-xs text-warning font-medium">
+                    ⚠ {recon.note}
+                  </span>
+                ) : null;
+              })()}
             </div>
           </Link>
         ))}
