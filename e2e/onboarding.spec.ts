@@ -190,6 +190,8 @@ test.describe("tour target validation", () => {
       { route: "/notifications", target: "notifications-centre" },
     ];
 
+    const missingTargets: string[] = [];
+
     for (const { route, target } of requiredTargets) {
       await page.goto(route);
       await page.waitForTimeout(2_000);
@@ -198,12 +200,18 @@ test.describe("tour target validation", () => {
       const count = await element.count();
 
       if (count === 0) {
-        // Check if it's a responsive fallback situation
-        console.warn(`Target "${target}" not found on ${route} — may be viewport-dependent`);
+        missingTargets.push(`${target} (on ${route})`);
       }
-
-      // At minimum, verify the page loads without errors
-      expect(page.url()).toContain(route === "/" ? "" : route);
     }
+
+    // FAIL if any required target is missing
+    if (missingTargets.length > 0) {
+      throw new Error(
+        `Missing required tour targets:\n${missingTargets.map((t) => `  - ${t}`).join("\n")}`,
+      );
+    }
+
+    // All targets found
+    expect(missingTargets).toHaveLength(0);
   });
 });

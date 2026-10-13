@@ -359,8 +359,9 @@ export async function updateTrip(
       after: updateData,
     });
 
-    const updatedSnap = await tx.get(ref);
-    return toTrip(updatedSnap.id, updatedSnap.data() ?? {});
+    // Build the return value from the original snapshot + applied changes.
+    // Firestore requires all reads BEFORE writes in a transaction.
+    return toTrip(id, { ...existing, ...updateData });
   });
 }
 
@@ -393,18 +394,33 @@ export async function completeTrip(
     const startOdoForValidation = input.startOdometerKm ?? trip.startOdometerKm;
     const endOdoForValidation = input.endOdometerKm ?? trip.endOdometerKm;
 
-    // If both odometer readings are supplied, they must be valid.
-    // Reject anomalous readings instead of silently falling back to route estimate.
+    // Validate each supplied odometer reading independently.
+    if (startOdoForValidation !== null && startOdoForValidation < 0) {
+      throw new TripError("VALIDATION_FAILED", "Start odometer reading cannot be negative");
+    }
+    if (endOdoForValidation !== null && endOdoForValidation < 0) {
+      throw new TripError("VALIDATION_FAILED", "End odometer reading cannot be negative");
+    }
+
+    // If both readings are supplied, they must form a valid pair.
     if (startOdoForValidation !== null && endOdoForValidation !== null) {
-      if (startOdoForValidation < 0 || endOdoForValidation < 0) {
-        throw new TripError("VALIDATION_FAILED", "Odometer readings cannot be negative");
-      }
       if (endOdoForValidation < startOdoForValidation) {
         throw new TripError(
           "VALIDATION_FAILED",
           `End odometer (${endOdoForValidation} km) cannot be less than start odometer (${startOdoForValidation} km). Correct the readings before completing.`,
         );
       }
+    }
+
+    // If only one reading is supplied, require the other for actual-distance basis.
+    if (
+      (startOdoForValidation !== null && endOdoForValidation === null) ||
+      (startOdoForValidation === null && endOdoForValidation !== null)
+    ) {
+      throw new TripError(
+        "VALIDATION_FAILED",
+        "Both start and end odometer readings are required for actual-distance completion. Provide both readings or use a route estimate.",
+      );
     }
 
     const recomputedActualKm = computeActualDistance(startOdoForValidation, endOdoForValidation);
@@ -578,8 +594,12 @@ export async function cancelTrip(id: string, actorId: string, reason?: string): 
       reason,
     });
 
-    const updatedSnap = await tx.get(ref);
-    return toTrip(updatedSnap.id, updatedSnap.data() ?? {});
+    // Build return value from original snapshot + changes (reads must precede writes).
+    return toTrip(id, {
+      ...(snap.data() ?? {}),
+      status: "CANCELLED",
+      notes: reason ? reason.slice(0, 1000) : (trip.notes ?? null),
+    });
   });
 }
 

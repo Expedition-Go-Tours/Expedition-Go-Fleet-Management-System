@@ -38,7 +38,7 @@ export const ROLE_TOUR: Record<RoleKey, TourId> = {
 export const TOURS: readonly TourDefinition[] = [
   {
     id: "driver",
-    version: 1,
+    version: 2,
     title: "Driver tour",
     summary: "Trips, odometer readings, inspections and reporting from the driver workspace.",
     roles: ["DRIVER"],
@@ -107,7 +107,7 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "operations",
-    version: 1,
+    version: 2,
     title: "Operations tour",
     summary: "Run the dashboard, assign drivers, check availability and triage driver reports.",
     roles: ["OPERATIONS"],
@@ -165,7 +165,7 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "maintenance",
-    version: 1,
+    version: 2,
     title: "Maintenance tour",
     summary: "Reminders, open issues, work orders and recording repairs correctly.",
     roles: ["MAINTENANCE"],
@@ -284,7 +284,7 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "admin",
-    version: 1,
+    version: 2,
     title: "Admin & manager tour",
     summary: "The fleet dashboard, vehicle history, employee accounts, audit records and reports.",
     roles: ["ADMIN", "MANAGER"],
@@ -339,6 +339,15 @@ export const TOURS: readonly TourDefinition[] = [
         title: "Incident review",
         description:
           "Breakdowns, accidents and security events. Open an incident to review details, start a review, record the outcome and verify the final status.",
+        side: "bottom",
+        required: true,
+      },
+      {
+        route: "/trips",
+        target: "trips-register",
+        title: "Trips register and distance tracking",
+        description:
+          "Every recorded journey across the fleet. Filter by vehicle, driver, status and date. Open a trip to see its stops, route and distance basis — route estimate, actual odometer or manual override.",
         side: "bottom",
         required: true,
       },

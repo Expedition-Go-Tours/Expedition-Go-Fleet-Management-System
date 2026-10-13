@@ -1,8 +1,8 @@
 # Guided Onboarding Tours — Implementation Report
 
 > **Application:** Expedition Go Tours Fleet Management System
-> **Date:** 2026-10-10
-> **Commit:** `92e259a` on `main`
+> **Date:** 2026-10-13
+> **Commit:** `1fffdfa` on `main`
 
 ---
 
@@ -13,13 +13,26 @@
 Five role-specific interactive tours powered by **Driver.js v1.9.0**, styled with
 the Expedition Go Tours design tokens:
 
-| Tour | Role(s) | Steps | Routes covered |
-|---|---|---|---|
-| Driver | DRIVER | 6 | `/workspace` |
-| Operations | OPERATIONS | 5 | `/`, `/vehicles`, `/reports` |
-| Maintenance | MAINTENANCE | 6 | `/`, `/maintenance`, `/work-orders`, `/vehicles` |
-| Finance | FINANCE | 5 | `/expenses`, `/fuel`, `/work-orders` |
-| Admin & manager | ADMIN, MANAGER | 6 | `/`, `/vehicles`, `/users`, `/audit` |
+| Tour | Role(s) | Version | Steps | Routes covered |
+|---|---|---|---|---|
+| Driver | DRIVER | 2 | 7 | `/workspace` |
+| Operations | OPERATIONS | 2 | 6 | `/`, `/vehicles`, `/reports`, `/trips` |
+| Maintenance | MAINTENANCE | 2 | 6 | `/`, `/maintenance`, `/work-orders`, `/vehicles` |
+| Finance | FINANCE | 1 | 5 | `/expenses`, `/fuel`, `/work-orders` |
+| Admin & manager | ADMIN, MANAGER | 2 | 8 | `/`, `/vehicles`, `/users`, `/audit`, `/incidents`, `/trips`, `/notifications` |
+
+### Route coverage (12 sidebar destinations)
+
+All 12 sidebar destinations now have at least one tour step:
+`/`, `/vehicles`, `/trips`, `/reports`, `/incidents`, `/work-orders`,
+`/maintenance`, `/expenses`, `/fuel`, `/users`, `/audit`, `/notifications`.
+
+### Required steps
+
+Critical steps are marked `required: true`. If a required step's target is not
+found, the tour reports "stalled" instead of "completed" and logs which steps
+were skipped. This prevents a missing control from silently counting as a
+successful walkthrough.
 
 ### Welcome experience
 
