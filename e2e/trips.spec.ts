@@ -221,24 +221,20 @@ test.describe("trip management", () => {
       console.log("Draft save result:", errorContent);
     }
 
-    // Try to complete trip
+    // Complete trip — the button MUST exist for this test to be meaningful
     const completeBtn = page.getByRole("button", { name: /complete trip/i });
-    if ((await completeBtn.count()) > 0) {
-      await completeBtn.click();
-      await page.waitForTimeout(3_000);
+    await expect(completeBtn).toBeVisible({ timeout: 5_000 });
+    await completeBtn.click();
 
-      // Verify completion: dialog MUST close (indicates success).
-      // The "Complete trip" button label itself matches "complete", so we
-      // cannot rely on text matching. The dialog closing is the reliable signal.
-      const dialogAfter = page.getByRole("dialog", { name: /record trip/i });
-      await expect(dialogAfter).not.toBeVisible({ timeout: 10_000 });
+    // Verify completion: dialog must close (indicates success).
+    const dialogAfter = page.getByRole("dialog", { name: /record trip/i });
+    await expect(dialogAfter).not.toBeVisible({ timeout: 15_000 });
 
-      // Verify the trip was persisted as COMPLETED by checking the trips register
-      await page.goto("/trips?status=COMPLETED");
-      await page.waitForTimeout(2_000);
-      const completedRows = page.locator("text=/COMPLETED/i");
-      expect(await completedRows.count()).toBeGreaterThan(0);
-    }
+    // Verify a COMPLETED trip exists in the register
+    await page.goto("/trips?status=COMPLETED");
+    await page.waitForTimeout(2_000);
+    const completedRows = page.locator("text=/COMPLETED/i");
+    expect(await completedRows.count()).toBeGreaterThan(0);
   });
 
   test("vehicles page loads without errors", async ({ page }) => {

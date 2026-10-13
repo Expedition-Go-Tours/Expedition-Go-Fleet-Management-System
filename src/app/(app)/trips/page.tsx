@@ -36,13 +36,15 @@ export default async function TripsPage({
   const searchQuery = params.q?.trim().toLowerCase() ?? "";
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
-  // Fetch trips with server-side pagination + lookups
+  // Fetch trips with server-side pagination + all filters applied
   const [tripResult, vehicles, users] = await Promise.all([
     listTripsPaginated({
       vehicleId: vehicleFilter,
       driverUserId: driverFilter,
       tripDate: dateFilter,
       status: statusFilter as Trip["status"] | undefined,
+      purpose: purposeFilter,
+      search: searchQuery || undefined,
       page,
       pageSize: PAGE_SIZE,
     }),
@@ -50,21 +52,7 @@ export default async function TripsPage({
     canReadAll ? listUsers() : Promise.resolve([]),
   ]);
 
-  // Apply client-side filters (purpose, text search) on the current page
-  let pageTrips = tripResult.trips;
-  if (purposeFilter) {
-    pageTrips = pageTrips.filter((t) => t.purpose === purposeFilter);
-  }
-  if (searchQuery) {
-    pageTrips = pageTrips.filter(
-      (t) =>
-        t.origin.label.toLowerCase().includes(searchQuery) ||
-        t.destination.label.toLowerCase().includes(searchQuery) ||
-        (t.externalReference ?? "").toLowerCase().includes(searchQuery) ||
-        (t.notes ?? "").toLowerCase().includes(searchQuery),
-    );
-  }
-
+  const pageTrips = tripResult.trips;
   const totalCount = tripResult.total;
   const totalPages = tripResult.totalPages;
 

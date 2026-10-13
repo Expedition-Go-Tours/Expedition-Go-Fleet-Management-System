@@ -445,17 +445,46 @@ describe("computeEstimatedProjection", () => {
     expect(result.tripCount).toBe(0);
   });
 
-  it("does not count trips completed before the baseline", () => {
+  it("does not count trips with journey date before the baseline", () => {
     const trips = [
       makeTrip({
         status: "COMPLETED",
-        completedAt: "2026-09-28T12:00:00.000Z",
+        tripDate: "2026-09-28",
+        completedAt: "2026-10-12T12:00:00.000Z", // recorded later
         routeDistanceM: 25000,
       }),
     ];
     const result = computeEstimatedProjection(1000, "2026-10-01T00:00:00.000Z", trips);
     expect(result.estimatedKm).toBe(1000);
     expect(result.tripCount).toBe(0);
+  });
+
+  it("does not count trips on the same date as the baseline", () => {
+    const trips = [
+      makeTrip({
+        status: "COMPLETED",
+        tripDate: "2026-10-01", // same date as baseline
+        completedAt: "2026-10-12T12:00:00.000Z",
+        routeDistanceM: 25000,
+      }),
+    ];
+    const result = computeEstimatedProjection(1000, "2026-10-01T00:00:00.000Z", trips);
+    expect(result.estimatedKm).toBe(1000);
+    expect(result.tripCount).toBe(0);
+  });
+
+  it("counts trips with journey date after the baseline regardless of when recorded", () => {
+    const trips = [
+      makeTrip({
+        status: "COMPLETED",
+        tripDate: "2026-10-05", // journey after baseline
+        completedAt: "2026-10-12T12:00:00.000Z", // recorded later
+        routeDistanceM: 25000,
+      }),
+    ];
+    const result = computeEstimatedProjection(1000, "2026-10-01T00:00:00.000Z", trips);
+    expect(result.estimatedKm).toBe(1025);
+    expect(result.tripCount).toBe(1);
   });
 
   it("uses actual distance when route distance is missing", () => {

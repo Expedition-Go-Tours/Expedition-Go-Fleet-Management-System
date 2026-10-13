@@ -468,22 +468,22 @@ export async function completeTrip(
     });
 
     // Project the vehicle's estimated km using the SAME validated distance.
+    // Projection updates are MANDATORY: if this fails, the entire transaction
+    // fails so trip and vehicle state remain consistent. No silent swallowing.
     let projectionUpdated = false;
-    try {
+    {
       const odometerKm = Number(vehicle.odometerKm ?? 0);
       const odometerAt = vehicle.odometerAt;
       const baselineAt = odometerAt
         ? (toDate(odometerAt)?.toISOString() ?? new Date(0).toISOString())
         : new Date(0).toISOString();
-      const baselineTime = new Date(baselineAt).getTime();
 
-      // Use the journey date (startedAt or tripDate) for projection eligibility,
-      // NOT completedAt (when the record was entered). A trip recorded on Oct 12
-      // for a journey on Oct 8 should NOT be projected if the baseline is Oct 10
-      // (the Oct 10 reading already includes the Oct 8 journey).
-      const journeyDate = trip.startedAt ?? trip.tripDate;
-      const journeyTime = journeyDate ? new Date(journeyDate).getTime() : null;
-      const eligible = journeyTime !== null && journeyTime > baselineTime;
+      // Use tripDate (the actual journey date) for projection eligibility,
+      // NOT completedAt or startedAt (record creation time).
+      // Policy: trips with tripDate strictly AFTER the baseline date are eligible.
+      // Same-date trips are excluded (the verified reading includes them).
+      const baselineDateStr = baselineAt.slice(0, 10); // YYYY-MM-DD
+      const eligible = trip.tripDate > baselineDateStr;
       const addMetres = eligible ? effectiveDistanceM : 0;
 
       if (addMetres > 0) {
@@ -501,8 +501,6 @@ export async function completeTrip(
         });
         projectionUpdated = true;
       }
-    } catch {
-      console.error("[trips] failed to reconcile vehicle estimated km for", trip.vehicleId);
     }
 
     await writeAuditEvent({
@@ -650,25 +648,55 @@ export async function listTripsPaginated(options?: {
   driverUserId?: string;
   status?: TripStatus;
   tripDate?: string;
+  purpose?: string;
+  search?: string;
   page?: number;
   pageSize?: number;
 }): Promise<{ trips: Trip[]; total: number; page: number; pageSize: number; totalPages: number }> {
   const page = Math.max(1, options?.page ?? 1);
   const pageSize = Math.min(Math.max(1, options?.pageSize ?? 25), 100);
-  const offset = (page - 1) * pageSize;
 
+  // Build base query with server-side filters
   let query = tripsRef().orderBy("tripDate", "desc").orderBy("createdAt", "desc");
 
   if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
   if (options?.driverUserId) query = query.where("driverUserId", "==", options.driverUserId);
   if (options?.status) query = query.where("status", "==", options.status);
   if (options?.tripDate) query = query.where("tripDate", "==", options.tripDate);
+  if (options?.purpose) query = query.where("purpose", "==", options.purpose);
 
-  // Get total count
+  // For text search, we need to fetch and filter in memory (Firestore lacks
+  // full-text search). But we fetch ALL matching records, not just one page.
+  if (options?.search) {
+    const searchLower = options.search.toLowerCase();
+    const allSnap = await query.get();
+    const allTrips = allSnap.docs
+      .map((d) => toTrip(d.id, d.data()))
+      .filter(
+        (t) =>
+          t.origin.label.toLowerCase().includes(searchLower) ||
+          t.destination.label.toLowerCase().includes(searchLower) ||
+          (t.externalReference ?? "").toLowerCase().includes(searchLower) ||
+          (t.notes ?? "").toLowerCase().includes(searchLower),
+      );
+    const total = allTrips.length;
+    const offset = (page - 1) * pageSize;
+    const trips = allTrips.slice(offset, offset + pageSize);
+    return {
+      trips,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  // Get total count for the filtered query
   const countSnap = await query.count().get();
   const total = countSnap.data().count;
 
-  // Get paginated results
+  // Get paginated results using offset
+  const offset = (page - 1) * pageSize;
   const snap = await query.offset(offset).limit(pageSize).get();
   const trips = snap.docs.map((d) => toTrip(d.id, d.data()));
 

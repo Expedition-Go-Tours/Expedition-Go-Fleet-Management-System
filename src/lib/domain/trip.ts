@@ -475,12 +475,21 @@ export function computeEstimatedProjection(
   verifiedBaselineAt: string,
   completedTrips: Trip[],
 ): ProjectionResult {
-  const baselineTime = new Date(verifiedBaselineAt).getTime();
-
-  const eligible = completedTrips.filter(
-    (t) =>
-      t.status === "COMPLETED" && t.completedAt && new Date(t.completedAt).getTime() > baselineTime,
-  );
+  // Use tripDate (the actual journey date) for projection eligibility,
+  // NOT completedAt (when the record was entered) or startedAt (draft creation).
+  // A trip recorded Oct 12 for a journey on Oct 8 must NOT be projected if the
+  // baseline is Oct 10 — the Oct 10 verified reading already includes that journey.
+  //
+  // Policy: trips with tripDate strictly AFTER the baseline date are eligible.
+  // Trips on the same date as the baseline are EXCLUDED (the verified reading
+  // is assumed to include all journeys up to and including that date).
+  const baselineDateStr = verifiedBaselineAt.slice(0, 10); // YYYY-MM-DD
+  const eligible = completedTrips.filter((t) => {
+    if (t.status !== "COMPLETED") return false;
+    if (!t.tripDate) return false;
+    // Compare date strings (YYYY-MM-DD format is lexicographically ordered)
+    return t.tripDate > baselineDateStr;
+  });
 
   let totalRouteM = 0;
   for (const trip of eligible) {

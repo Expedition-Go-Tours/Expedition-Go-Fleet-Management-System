@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     let waypoints: RouteWaypoint[];
     let tripId: string | undefined;
     let stopIds: string[] | undefined;
+    let stopFingerprint: string | undefined;
 
     if (typeof body.tripId === "string" && body.tripId.trim()) {
       // Use existing trip's stops as waypoints
@@ -67,6 +68,13 @@ export async function POST(request: NextRequest) {
         }));
 
       stopIds = trip.stops.sort((a, b) => a.sequence - b.sequence).map((s) => s.id);
+
+      // Capture the stop fingerprint BEFORE calculation for later comparison.
+      // Includes ID, sequence, latitude, longitude to detect coordinate changes.
+      stopFingerprint = trip.stops
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((s) => `${s.id}:${s.sequence}:${s.latitude}:${s.longitude}`)
+        .join("|");
 
       if (waypoints.length < 2) {
         throw ApiError.badRequest("Trip needs at least 2 stops with coordinates");
@@ -147,11 +155,16 @@ export async function POST(request: NextRequest) {
       if (!currentTrip || currentTrip.status !== "DRAFT") {
         throw ApiError.badRequest("Trip is no longer editable");
       }
-      // Verify stop order hasn't changed during calculation
-      const currentFingerprint = currentTrip.stops.map((s) => s.id).join(",");
-      const requestedFingerprint = stopIds?.join(",");
-      if (currentFingerprint !== requestedFingerprint) {
-        throw ApiError.badRequest("Stops changed during route calculation — please recalculate");
+      // Verify stop order AND coordinates haven't changed during calculation.
+      // Compare the fingerprint captured BEFORE calculation against the current state.
+      const currentFingerprint = currentTrip.stops
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((s) => `${s.id}:${s.sequence}:${s.latitude}:${s.longitude}`)
+        .join("|");
+      if (stopFingerprint && currentFingerprint !== stopFingerprint) {
+        throw ApiError.badRequest(
+          "Stop coordinates or order changed during route calculation — please recalculate",
+        );
       }
       await saveRouteCalculation(tripId, route, legs);
     }
