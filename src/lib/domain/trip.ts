@@ -283,6 +283,21 @@ export function validateTripCompletion(trip: Trip): TripValidation {
   const saveValidation = validateTripForSave(trip);
   if (!saveValidation.ok) return saveValidation;
 
+  // If both odometer readings are supplied, they must be consistent.
+  // Reject anomalous readings (end < start) instead of silently falling back
+  // to a route estimate or manual override.
+  if (trip.startOdometerKm !== null && trip.endOdometerKm !== null) {
+    if (trip.startOdometerKm < 0 || trip.endOdometerKm < 0) {
+      return { ok: false, error: "Odometer readings cannot be negative" };
+    }
+    if (trip.endOdometerKm < trip.startOdometerKm) {
+      return {
+        ok: false,
+        error: `End odometer (${trip.endOdometerKm} km) cannot be less than start odometer (${trip.startOdometerKm} km). Correct the readings before completing.`,
+      };
+    }
+  }
+
   // Must have at least one valid distance basis
   const hasRoute = trip.routeDistanceM !== null && trip.routeDistanceM > 0 && !trip.routeStale;
   const hasActual = trip.actualDistanceKm !== null && trip.actualDistanceKm > 0;

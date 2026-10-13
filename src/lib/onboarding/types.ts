@@ -68,6 +68,12 @@ export interface TourStep {
   align?: TourAlign;
   /** Skip this step unless the user holds at least one of these permissions. */
   requires?: PermissionKey[];
+  /**
+   * Mark this step as required for the tour to be considered fully completed.
+   * If a required step is skipped (target not found), the tour completion is
+   * flagged as incomplete rather than silently succeeding.
+   */
+  required?: boolean;
 }
 
 export interface TourDefinition {

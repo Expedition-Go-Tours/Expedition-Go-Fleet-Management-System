@@ -234,6 +234,7 @@ export default async function WorkspacePage() {
         <Card
           title={`Today\'s trips (${todaysTrips.length})`}
           icon={Route}
+          dataTour="driver-record-trip"
           action={
             <RecordTripDialog
               vehicles={vehicleOptions}

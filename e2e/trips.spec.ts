@@ -206,19 +206,24 @@ test.describe("trip management", () => {
     await calcBtn.click();
     await page.waitForTimeout(5_000);
 
-    // Save draft
+    // Set a unique external reference to identify this test's trip
+    const uniqueRef = `E2E-TEST-${Date.now()}`;
+    const refInput = page.getByLabel(/external reference/i).or(page.getByPlaceholder(/reference/i));
+    if ((await refInput.count()) > 0) {
+      await refInput.first().fill(uniqueRef);
+    }
+
+    // Save draft — fail immediately on error
     const draftBtn = page.getByRole("button", { name: /save draft/i });
     await draftBtn.click();
     await page.waitForTimeout(3_000);
 
-    // Check for success (dialog might close or show confirmation)
+    // Check for errors — this MUST fail the test if present
     const errorText = page.locator("[role='alert']").first();
     const hasError = (await errorText.count()) > 0;
-
     if (hasError) {
       const errorContent = await errorText.textContent();
-      // Log but don't fail — might be authorization issue
-      console.log("Draft save result:", errorContent);
+      throw new Error(`Draft save failed: ${errorContent}`);
     }
 
     // Complete trip — the button MUST exist for this test to be meaningful
@@ -230,11 +235,15 @@ test.describe("trip management", () => {
     const dialogAfter = page.getByRole("dialog", { name: /record trip/i });
     await expect(dialogAfter).not.toBeVisible({ timeout: 15_000 });
 
-    // Verify a COMPLETED trip exists in the register
-    await page.goto("/trips?status=COMPLETED");
+    // Verify the EXACT trip was persisted as COMPLETED
+    await page.goto(`/trips?q=${uniqueRef}`);
     await page.waitForTimeout(2_000);
-    const completedRows = page.locator("text=/COMPLETED/i");
-    expect(await completedRows.count()).toBeGreaterThan(0);
+    const tripRow = page.locator(`text=${uniqueRef}`).first();
+    await expect(tripRow).toBeVisible({ timeout: 5_000 });
+
+    // Verify it shows COMPLETED status
+    const completedBadge = page.locator("text=/COMPLETED/i").first();
+    await expect(completedBadge).toBeVisible({ timeout: 5_000 });
   });
 
   test("vehicles page loads without errors", async ({ page }) => {

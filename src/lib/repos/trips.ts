@@ -19,7 +19,7 @@ import {
 } from "@/lib/domain/trip";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { AUDIT_EVENTS, writeAuditEvent, writeAuditEventInTx } from "@/lib/repos/audit";
+import { AUDIT_EVENTS, writeAuditEventInTx } from "@/lib/repos/audit";
 import { toDate } from "@/lib/repos/timestamps";
 import type { RouteResult } from "@/lib/routing/provider";
 
@@ -195,53 +195,56 @@ export async function createTrip(input: CreateTripInput): Promise<Trip> {
   const now = FieldValue.serverTimestamp();
   const nowIso = new Date().toISOString();
 
-  await ref.set({
-    vehicleId: input.vehicleId,
-    driverUserId: input.driverUserId,
-    assignmentId: input.assignmentId ?? null,
-    recordedByUserId: input.recordedByUserId,
-    tripDate: input.tripDate,
-    purpose: input.purpose,
-    externalReference: input.externalReference ?? null,
-    notes: input.notes ?? null,
-    status: "DRAFT",
+  const db = getAdminDb();
+  await db.runTransaction(async (tx) => {
+    tx.set(ref, {
+      vehicleId: input.vehicleId,
+      driverUserId: input.driverUserId,
+      assignmentId: input.assignmentId ?? null,
+      recordedByUserId: input.recordedByUserId,
+      tripDate: input.tripDate,
+      purpose: input.purpose,
+      externalReference: input.externalReference ?? null,
+      notes: input.notes ?? null,
+      status: "DRAFT",
 
-    origin,
-    destination,
-    stops: input.stops,
+      origin,
+      destination,
+      stops: input.stops,
 
-    routeDistanceM: null,
-    routeDistanceKm: null,
-    routeDurationS: null,
-    routingProvider: null,
-    routeCalculatedAt: null,
-    routeProviderMeta: null,
-    routeLegs: [],
+      routeDistanceM: null,
+      routeDistanceKm: null,
+      routeDurationS: null,
+      routingProvider: null,
+      routeCalculatedAt: null,
+      routeProviderMeta: null,
+      routeLegs: [],
 
-    startOdometerKm: null,
-    endOdometerKm: null,
-    actualDistanceKm: null,
+      startOdometerKm: null,
+      endOdometerKm: null,
+      actualDistanceKm: null,
 
-    distanceBasis: input.manualDistanceKm ? "MANUAL_OVERRIDE" : "ROUTE_ESTIMATE",
-    manualDistanceKm: input.manualDistanceKm ?? null,
-    manualDistanceReason: input.manualDistanceReason ?? null,
+      distanceBasis: input.manualDistanceKm ? "MANUAL_OVERRIDE" : "ROUTE_ESTIMATE",
+      manualDistanceKm: input.manualDistanceKm ?? null,
+      manualDistanceReason: input.manualDistanceReason ?? null,
 
-    routeStale: false,
+      routeStale: false,
 
-    startedAt: now,
-    completedAt: null,
-    idempotencyKey,
-    createdAt: now,
-    updatedAt: now,
-    createdBy: input.recordedByUserId,
-  });
+      startedAt: now,
+      completedAt: null,
+      idempotencyKey,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: input.recordedByUserId,
+    });
 
-  await writeAuditEvent({
-    eventType: AUDIT_EVENTS.TRIP_CREATED,
-    actorId: input.recordedByUserId,
-    entityType: "trip",
-    entityId: ref.id,
-    after: { vehicleId: input.vehicleId, purpose: input.purpose },
+    writeAuditEventInTx(tx, {
+      eventType: AUDIT_EVENTS.TRIP_CREATED,
+      actorId: input.recordedByUserId,
+      entityType: "trip",
+      entityId: ref.id,
+      after: { vehicleId: input.vehicleId, purpose: input.purpose },
+    });
   });
 
   // Return the trip with approximate timestamps (server-side will be slightly
@@ -346,7 +349,7 @@ export async function updateTrip(
 
     tx.update(ref, updateData);
 
-    await writeAuditEvent({
+    writeAuditEventInTx(tx, {
       eventType: AUDIT_EVENTS.TRIP_UPDATED,
       actorId,
       entityType: "trip",
@@ -566,7 +569,7 @@ export async function cancelTrip(id: string, actorId: string, reason?: string): 
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    await writeAuditEvent({
+    writeAuditEventInTx(tx, {
       eventType: AUDIT_EVENTS.TRIP_CANCELLED,
       actorId,
       entityType: "trip",

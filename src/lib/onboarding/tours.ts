@@ -63,6 +63,15 @@ export const TOURS: readonly TourDefinition[] = [
       },
       {
         route: "/workspace",
+        target: "driver-record-trip",
+        title: "Record a trip with multiple stops",
+        description:
+          "Tap Record Trip to log a journey. Add your stops in order, search for locations, calculate the route distance, then complete with your odometer readings. The system tracks both estimated and actual distance separately.",
+        side: "top",
+        required: true,
+      },
+      {
+        route: "/workspace",
         target: "driver-inspections",
         title: "Pre-trip and return checks",
         description:
@@ -132,6 +141,7 @@ export const TOURS: readonly TourDefinition[] = [
         description:
           "Open a vehicle to see its status, open issues and safety holds — a vehicle on hold cannot be assigned. From the profile, choose “Assign driver” to start a trip for an active driver.",
         side: "top",
+        required: true,
       },
       {
         route: "/reports",

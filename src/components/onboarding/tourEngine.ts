@@ -33,7 +33,7 @@ export interface TourControllerHooks {
   /** Navigate with the application's real router. */
   navigate: (route: string) => void;
   /** Called exactly once when the tour ends, for any reason. */
-  onEnd: (reason: TourEndReason) => void;
+  onEnd: (reason: TourEndReason, skippedRequired?: string[]) => void;
 }
 
 /** Strip anything that could break out of the attribute selector. */
@@ -69,8 +69,14 @@ export class TourController {
   private ending = false;
   private pendingIndex: number | null = null;
   private navTimer: ReturnType<typeof setTimeout> | null = null;
+  private skippedRequiredSteps: string[] = [];
 
   constructor(private readonly hooks: TourControllerHooks) {}
+
+  /** Names of required steps that were skipped (target not found). */
+  get skippedRequired(): string[] {
+    return [...this.skippedRequiredSteps];
+  }
 
   get active(): boolean {
     return this.steps.length > 0;
@@ -99,8 +105,16 @@ export class TourController {
     this.pendingIndex = null;
     this.clearNavTimer();
     this.destroyDriver();
+    // Log skipped required steps before clearing
+    if (this.skippedRequiredSteps.length > 0) {
+      console.warn(
+        `[tour] Tour ended with ${this.skippedRequiredSteps.length} required step(s) skipped:`,
+        this.skippedRequiredSteps,
+      );
+    }
     this.steps = [];
-    this.hooks.onEnd(reason);
+    this.hooks.onEnd(reason, this.skippedRequiredSteps);
+    this.skippedRequiredSteps = [];
   }
 
   /** Exit without reporting — used when the host component unmounts. */
@@ -163,6 +177,14 @@ export class TourController {
     if (!found) {
       // Target missing (role-restricted, still loading, or a layout this
       // viewport does not show). Skip it rather than spotlight a dead hole.
+      // But track required steps that are skipped so the tour completion
+      // can be flagged as incomplete.
+      if (step.required) {
+        this.skippedRequiredSteps.push(step.title);
+        console.warn(
+          `[tour] Required step skipped (target not found): ${step.target} — ${step.title}`,
+        );
+      }
       await this.show(safeIndex + 1, token);
       return;
     }

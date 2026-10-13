@@ -791,3 +791,61 @@ describe("validateTripCompletion — distance basis requirement", () => {
     expect(result.ok).toBe(true);
   });
 });
+describe("validateTripCompletion — odometer validation", () => {
+  it("rejects completion when end odometer is below start odometer", () => {
+    const trip = makeTrip({
+      startOdometerKm: 85000,
+      endOdometerKm: 84900,
+      routeDistanceM: 50000,
+      routeDistanceKm: 50,
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("cannot be less than start odometer");
+  });
+
+  it("rejects completion when end odometer is below start even with route estimate", () => {
+    const trip = makeTrip({
+      startOdometerKm: 85000,
+      endOdometerKm: 84900,
+      routeDistanceM: 50000,
+      routeDistanceKm: 50,
+      actualDistanceKm: null,
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects negative odometer readings", () => {
+    const trip = makeTrip({
+      startOdometerKm: -100,
+      endOdometerKm: 50,
+      routeDistanceM: 50000,
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("negative");
+  });
+
+  it("allows completion when end equals start (zero distance)", () => {
+    const trip = makeTrip({
+      startOdometerKm: 85000,
+      endOdometerKm: 85000,
+      routeDistanceM: 50000,
+      routeDistanceKm: 50,
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(true);
+  });
+
+  it("allows completion with valid odometer readings", () => {
+    const trip = makeTrip({
+      startOdometerKm: 85000,
+      endOdometerKm: 85050,
+      routeDistanceM: 50000,
+      routeDistanceKm: 50,
+    });
+    const result = validateTripCompletion(trip);
+    expect(result.ok).toBe(true);
+  });
+});
