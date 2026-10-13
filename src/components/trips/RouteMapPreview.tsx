@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MapPin, Route as RouteIcon } from "lucide-react";
 import type { TripStop, RouteLeg } from "@/lib/domain/trip";
 import type { GeoJsonLineString } from "@/lib/routing/provider";
@@ -32,7 +32,10 @@ export function RouteMapPreview({
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
 
-  const coordStops = stops.filter((s) => s.latitude != null && s.longitude != null);
+  const coordStops = useMemo(
+    () => stops.filter((s) => s.latitude != null && s.longitude != null),
+    [stops],
+  );
   const hasCoords = coordStops.length >= 2;
 
   // Initialize MapLibre GL map

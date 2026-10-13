@@ -117,6 +117,8 @@ export interface Trip {
 
   // Staleness
   routeStale: boolean;
+  /** GeoJSON LineString of the road route, when available. */
+  routeGeometry?: { type: string; coordinates: [number, number][] } | null;
 
   // Timestamps
   startedAt: string | null;

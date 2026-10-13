@@ -112,67 +112,6 @@ export function RecordTripDialog({
     setError(null);
   }, [busy]);
 
-  // Calculate route — returns the result so callers can use it without waiting
-  // for React state to propagate (avoids stale-closure bugs in async flows).
-  const calculateRoute = useCallback(async (): Promise<{
-    distanceM: number | null;
-    stale: boolean;
-  }> => {
-    setCalculating(true);
-    setCalcError(null);
-    setError(null);
-
-    const waypoints = stops
-      .filter((s) => s.latitude != null && s.longitude != null)
-      .map((s) => ({
-        latitude: s.latitude!,
-        longitude: s.longitude!,
-        label: s.label || undefined,
-      }));
-
-    if (waypoints.length < 2) {
-      setCalcError("Add coordinates to at least 2 stops to calculate a route.");
-      setCalculating(false);
-      return { distanceM: null, stale: true };
-    }
-
-    try {
-      const endpoint = "/api/v1/trips/calculate-route";
-      const body = savedTripId ? { tripId: savedTripId } : { waypoints };
-
-      const result = await api.post<{
-        route: {
-          totalDistanceM: number;
-          totalDurationS: number;
-          legs: Array<{ distanceM: number; durationS: number }>;
-          provider: string;
-          calculatedAt: string;
-          geometry?: { type: string; coordinates: [number, number][] };
-        };
-        legs: RouteLeg[];
-      }>(endpoint, body);
-
-      setRouteDistanceM(result.route.totalDistanceM);
-      setRouteDurationS(result.route.totalDurationS);
-      setRouteProvider(result.route.provider);
-      setRouteCalculatedAt(result.route.calculatedAt);
-      setRouteLegs(result.legs);
-      setRouteGeometry(
-        result.route.geometry && result.route.geometry.type === "LineString"
-          ? { type: "LineString", coordinates: result.route.geometry.coordinates }
-          : null,
-      );
-      setRouteStale(false);
-      return { distanceM: result.route.totalDistanceM, stale: false };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Route calculation failed";
-      setCalcError(msg);
-      return { distanceM: null, stale: true };
-    } finally {
-      setCalculating(false);
-    }
-  }, [stops, savedTripId]);
-
   // Save as draft.
   const saveDraft = useCallback(async (): Promise<string | null> => {
     setBusy(true);
@@ -225,6 +164,69 @@ export function RecordTripDialog({
     savedTripId,
     router,
   ]);
+
+  // Calculate route — returns the result so callers can use it without waiting
+  // for React state to propagate (avoids stale-closure bugs in async flows).
+  const calculateRoute = useCallback(async (): Promise<{
+    distanceM: number | null;
+    stale: boolean;
+  }> => {
+    setCalculating(true);
+    setCalcError(null);
+    setError(null);
+
+    // Validate stops have coordinates before saving
+    const coordStops = stops.filter((s) => s.latitude != null && s.longitude != null);
+    if (coordStops.length < 2) {
+      setCalcError("Add coordinates to at least 2 stops to calculate a route.");
+      setCalculating(false);
+      return { distanceM: null, stale: true };
+    }
+
+    // Always save first so the server calculates against persisted stops.
+    // This ensures the calculated route matches exactly what will be completed.
+    // For new trips this creates the draft; for edited drafts it persists changes.
+    const tripId = await saveDraft();
+    if (!tripId) {
+      setCalcError("Save the trip before calculating the route.");
+      setCalculating(false);
+      return { distanceM: null, stale: true };
+    }
+
+    try {
+      // Always use tripId so the server persists the route against the trip.
+      const result = await api.post<{
+        route: {
+          totalDistanceM: number;
+          totalDurationS: number;
+          legs: Array<{ distanceM: number; durationS: number }>;
+          provider: string;
+          calculatedAt: string;
+          geometry?: { type: string; coordinates: [number, number][] };
+        };
+        legs: RouteLeg[];
+      }>("/api/v1/trips/calculate-route", { tripId });
+
+      setRouteDistanceM(result.route.totalDistanceM);
+      setRouteDurationS(result.route.totalDurationS);
+      setRouteProvider(result.route.provider);
+      setRouteCalculatedAt(result.route.calculatedAt);
+      setRouteLegs(result.legs);
+      setRouteGeometry(
+        result.route.geometry && result.route.geometry.type === "LineString"
+          ? { type: "LineString", coordinates: result.route.geometry.coordinates }
+          : null,
+      );
+      setRouteStale(false);
+      return { distanceM: result.route.totalDistanceM, stale: false };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Route calculation failed";
+      setCalcError(msg);
+      return { distanceM: null, stale: true };
+    } finally {
+      setCalculating(false);
+    }
+  }, [stops, saveDraft]);
 
   // Complete the trip — handles first-time save, draft edits, and route
   // persistence as a single coherent sequence.

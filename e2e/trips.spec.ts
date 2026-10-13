@@ -227,14 +227,17 @@ test.describe("trip management", () => {
       await completeBtn.click();
       await page.waitForTimeout(3_000);
 
-      // Verify completion: dialog must close OR a success toast must appear.
-      // Errors do NOT count as passing — completion must succeed.
+      // Verify completion: dialog MUST close (indicates success).
+      // The "Complete trip" button label itself matches "complete", so we
+      // cannot rely on text matching. The dialog closing is the reliable signal.
       const dialogAfter = page.getByRole("dialog", { name: /record trip/i });
-      const dialogClosed = (await dialogAfter.count()) === 0;
-      const completionToast = page.locator("text=/complete|saved|success/i").first();
-      const toastVisible = (await completionToast.count()) > 0;
+      await expect(dialogAfter).not.toBeVisible({ timeout: 10_000 });
 
-      expect(dialogClosed || toastVisible).toBeTruthy();
+      // Verify the trip was persisted as COMPLETED by checking the trips register
+      await page.goto("/trips?status=COMPLETED");
+      await page.waitForTimeout(2_000);
+      const completedRows = page.locator("text=/COMPLETED/i");
+      expect(await completedRows.count()).toBeGreaterThan(0);
     }
   });
 

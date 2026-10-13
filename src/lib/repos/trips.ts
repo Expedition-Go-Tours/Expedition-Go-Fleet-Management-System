@@ -383,11 +383,17 @@ export async function completeTrip(
       return { trip, projectionUpdated: false };
     }
 
-    // Merge completion inputs for validation
+    // Merge completion inputs and recompute actualDistanceKm before validation.
+    // This ensures the validator sees the odometer delta from the request,
+    // not the stale actualDistanceKm from the stored draft.
+    const startOdoForValidation = input.startOdometerKm ?? trip.startOdometerKm;
+    const endOdoForValidation = input.endOdometerKm ?? trip.endOdometerKm;
+    const recomputedActualKm = computeActualDistance(startOdoForValidation, endOdoForValidation);
     const tripForValidation: Trip = {
       ...trip,
-      startOdometerKm: input.startOdometerKm ?? trip.startOdometerKm,
-      endOdometerKm: input.endOdometerKm ?? trip.endOdometerKm,
+      startOdometerKm: startOdoForValidation,
+      endOdometerKm: endOdoForValidation,
+      actualDistanceKm: recomputedActualKm,
     };
     const validation = validateTripCompletion(tripForValidation);
     if (!validation.ok) {
@@ -426,13 +432,24 @@ export async function completeTrip(
       );
     }
 
-    let distanceBasis: DistanceBasis = trip.distanceBasis;
-    if (actualDistanceKm !== null) {
+    // Determine the distance basis that MATCHES the effective distance used.
+    // Zero-distance readings (start == end) are not a valid basis on their own.
+    let distanceBasis: DistanceBasis;
+    if (actualDistanceKm !== null && actualDistanceKm > 0) {
       distanceBasis = "ACTUAL_ODOMETER";
-    } else if (trip.manualDistanceKm !== null && trip.distanceBasis === "MANUAL_OVERRIDE") {
+    } else if (
+      trip.manualDistanceKm !== null &&
+      trip.manualDistanceKm > 0 &&
+      trip.distanceBasis === "MANUAL_OVERRIDE"
+    ) {
       distanceBasis = "MANUAL_OVERRIDE";
-    } else if (trip.routeDistanceM !== null && trip.routeDistanceM > 0) {
+    } else if (trip.routeDistanceM !== null && trip.routeDistanceM > 0 && !trip.routeStale) {
       distanceBasis = "ROUTE_ESTIMATE";
+    } else {
+      throw new TripError(
+        "VALIDATION_FAILED",
+        "Cannot determine a valid distance basis. Check odometer readings, manual override, or route calculation.",
+      );
     }
 
     const now = FieldValue.serverTimestamp();
@@ -460,7 +477,13 @@ export async function completeTrip(
         : new Date(0).toISOString();
       const baselineTime = new Date(baselineAt).getTime();
 
-      const eligible = completedAtIso ? new Date(completedAtIso).getTime() > baselineTime : false;
+      // Use the journey date (startedAt or tripDate) for projection eligibility,
+      // NOT completedAt (when the record was entered). A trip recorded on Oct 12
+      // for a journey on Oct 8 should NOT be projected if the baseline is Oct 10
+      // (the Oct 10 reading already includes the Oct 8 journey).
+      const journeyDate = trip.startedAt ?? trip.tripDate;
+      const journeyTime = journeyDate ? new Date(journeyDate).getTime() : null;
+      const eligible = journeyTime !== null && journeyTime > baselineTime;
       const addMetres = eligible ? effectiveDistanceM : 0;
 
       if (addMetres > 0) {
@@ -616,6 +639,46 @@ export async function listTripsForVehicle(
     .map((d) => toTrip(d.id, d.data()))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, options?.limit ?? 100);
+}
+
+/**
+ * List trips with proper server-side pagination and accurate totals.
+ * Uses Firestore offset/limit for pagination and count() for totals.
+ */
+export async function listTripsPaginated(options?: {
+  vehicleId?: string;
+  driverUserId?: string;
+  status?: TripStatus;
+  tripDate?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ trips: Trip[]; total: number; page: number; pageSize: number; totalPages: number }> {
+  const page = Math.max(1, options?.page ?? 1);
+  const pageSize = Math.min(Math.max(1, options?.pageSize ?? 25), 100);
+  const offset = (page - 1) * pageSize;
+
+  let query = tripsRef().orderBy("tripDate", "desc").orderBy("createdAt", "desc");
+
+  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
+  if (options?.driverUserId) query = query.where("driverUserId", "==", options.driverUserId);
+  if (options?.status) query = query.where("status", "==", options.status);
+  if (options?.tripDate) query = query.where("tripDate", "==", options.tripDate);
+
+  // Get total count
+  const countSnap = await query.count().get();
+  const total = countSnap.data().count;
+
+  // Get paginated results
+  const snap = await query.offset(offset).limit(pageSize).get();
+  const trips = snap.docs.map((d) => toTrip(d.id, d.data()));
+
+  return {
+    trips,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
 }
 
 export async function listTripsForDriverDate(
