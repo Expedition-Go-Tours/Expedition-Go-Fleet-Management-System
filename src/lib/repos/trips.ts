@@ -14,6 +14,7 @@ import {
   computeEstimatedProjection,
   deriveOriginDestination,
   generateIdempotencyKey,
+  getTripDistanceMetres,
   validateTripCompletion,
   validateTripForSave,
 } from "@/lib/domain/trip";
@@ -656,6 +657,65 @@ export async function listTripsForVehicle(
     .map((d) => toTrip(d.id, d.data()))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, options?.limit ?? 100);
+}
+
+/**
+ * Get aggregate metrics across ALL trips matching the filters (not just one page).
+ * Used for the trip register summary cards.
+ */
+export async function getTripAggregateMetrics(options?: {
+  vehicleId?: string;
+  driverUserId?: string;
+  status?: TripStatus;
+  tripDate?: string;
+  purpose?: string;
+}): Promise<{
+  totalCount: number;
+  completedCount: number;
+  draftCount: number;
+  totalDistanceM: number;
+  staleRouteCount: number;
+  missingDistanceCount: number;
+}> {
+  let query: import("firebase-admin/firestore").Query = tripsRef();
+  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
+  if (options?.driverUserId) query = query.where("driverUserId", "==", options.driverUserId);
+  if (options?.status) query = query.where("status", "==", options.status);
+  if (options?.tripDate) query = query.where("tripDate", "==", options.tripDate);
+  if (options?.purpose) query = query.where("purpose", "==", options.purpose);
+
+  const snap = await query.get();
+  const trips = snap.docs.map((d) => toTrip(d.id, d.data()));
+
+  let totalDistanceM = 0;
+  let staleRouteCount = 0;
+  let missingDistanceCount = 0;
+  let completedCount = 0;
+  let draftCount = 0;
+
+  for (const t of trips) {
+    if (t.status === "COMPLETED") {
+      completedCount++;
+      const distM = getTripDistanceMetres(t);
+      if (distM !== null) {
+        totalDistanceM += distM;
+      } else {
+        missingDistanceCount++;
+      }
+    } else if (t.status === "DRAFT") {
+      draftCount++;
+    }
+    if (t.routeStale) staleRouteCount++;
+  }
+
+  return {
+    totalCount: trips.length,
+    completedCount,
+    draftCount,
+    totalDistanceM,
+    staleRouteCount,
+    missingDistanceCount,
+  };
 }
 
 /**

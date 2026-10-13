@@ -79,7 +79,7 @@ export default async function IncidentsPage({
   };
 
   return (
-    <Container className="flex flex-col gap-8 py-10">
+    <Container className="flex flex-col gap-8 py-10" data-tour="incidents-board">
       <PageHeader
         title={canReadAll ? "Incidents" : "My incidents"}
         description={`Breakdown / accident / passenger / security events. Restricted to${canReadAll ? " those with incident:read:all" : " your own reports"}.`}

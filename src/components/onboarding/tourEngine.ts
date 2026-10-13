@@ -105,15 +105,19 @@ export class TourController {
     this.pendingIndex = null;
     this.clearNavTimer();
     this.destroyDriver();
-    // Log skipped required steps before clearing
-    if (this.skippedRequiredSteps.length > 0) {
+    // If required steps were skipped, the tour did NOT complete successfully.
+    // Report as "stalled" so the UI can show the user what was missed.
+    const hadSkippedRequired = this.skippedRequiredSteps.length > 0;
+    const effectiveReason: TourEndReason =
+      hadSkippedRequired && reason === "completed" ? "stalled" : reason;
+    if (hadSkippedRequired) {
       console.warn(
         `[tour] Tour ended with ${this.skippedRequiredSteps.length} required step(s) skipped:`,
         this.skippedRequiredSteps,
       );
     }
     this.steps = [];
-    this.hooks.onEnd(reason, this.skippedRequiredSteps);
+    this.hooks.onEnd(effectiveReason, this.skippedRequiredSteps);
     this.skippedRequiredSteps = [];
   }
 

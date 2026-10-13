@@ -6,10 +6,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { TripList } from "@/components/trips/TripList";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
-import { TRIP_STATUSES, TRIP_PURPOSES, getTripDistanceMetres } from "@/lib/domain/trip";
+import { TRIP_STATUSES, TRIP_PURPOSES } from "@/lib/domain/trip";
 import type { Trip } from "@/lib/domain/trip";
 import { humanizeEnum } from "@/lib/format";
-import { listTripsPaginated } from "@/lib/repos/trips";
+import { getTripAggregateMetrics, listTripsPaginated } from "@/lib/repos/trips";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { listUsers } from "@/lib/repos/users";
 
@@ -56,22 +56,23 @@ export default async function TripsPage({
   const totalCount = tripResult.total;
   const totalPages = tripResult.totalPages;
 
-  // Summary metrics for the current page
-  const completedTrips = pageTrips.filter((t) => t.status === "COMPLETED");
-  const totalDistanceM = completedTrips.reduce((sum, t) => {
-    const m = getTripDistanceMetres(t);
-    return sum + (m ?? 0);
-  }, 0);
-  const staleRoutes = pageTrips.filter((t) => t.routeStale).length;
-  const missingDistance = pageTrips.filter(
-    (t) => t.status === "COMPLETED" && getTripDistanceMetres(t) === null,
-  ).length;
+  // Summary metrics across the FULL filtered set (not just current page)
+  const metrics = await getTripAggregateMetrics({
+    vehicleId: vehicleFilter,
+    driverUserId: driverFilter,
+    tripDate: dateFilter,
+    status: statusFilter as Trip["status"] | undefined,
+    purpose: purposeFilter,
+  });
+  const totalDistanceM = metrics.totalDistanceM;
+  const staleRoutes = metrics.staleRouteCount;
+  const missingDistance = metrics.missingDistanceCount;
 
   const vehicleOptions = vehicles.map((v) => ({ id: v.id, label: v.regNumber }));
   const driverOptions = users.map((u) => ({ id: u.id, label: u.name }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" data-tour="trips-register">
       <PageHeader
         title="Trips"
         description="Operations trip register — all recorded journeys across the fleet."

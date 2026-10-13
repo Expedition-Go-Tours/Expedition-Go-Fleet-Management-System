@@ -334,6 +334,23 @@ export const TOURS: readonly TourDefinition[] = [
         requires: [PERMISSIONS.AUDIT_READ],
       },
       {
+        route: "/incidents",
+        target: "incidents-board",
+        title: "Incident review",
+        description:
+          "Breakdowns, accidents and security events. Open an incident to review details, start a review, record the outcome and verify the final status.",
+        side: "bottom",
+        required: true,
+      },
+      {
+        route: "/notifications",
+        target: "notifications-centre",
+        title: "Notification centre",
+        description:
+          "Workflow alerts and system notifications addressed to your roles. Mark items read and jump straight to the records they reference.",
+        side: "bottom",
+      },
+      {
         route: "/",
         target: "nav-work-orders",
         fallbacks: ["nav-mobile-menu"],

@@ -40,7 +40,7 @@ export default async function NotificationsPage() {
     }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" data-tour="notifications-centre">
       <PageHeader
         title="Notifications"
         description="Workflow and system alerts addressed to your roles."
