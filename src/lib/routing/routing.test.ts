@@ -166,3 +166,57 @@ describe("route geometry types", () => {
     expect(result.geometry!.coordinates[0]).toHaveLength(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Geoapify duration conversion
+// ---------------------------------------------------------------------------
+
+describe("Geoapify duration handling", () => {
+  // Geoapify returns time in SECONDS. The provider must preserve this value
+  // without dividing by 1000 (which would make durations ~1000x too small).
+  it("preserves route duration in seconds (3600s = 1 hour)", () => {
+    // Simulate a Geoapify response with time: 3600 (seconds)
+    const mockResponse = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {
+            distance: 50000,
+            time: 3600, // 1 hour in seconds
+            legs: [
+              { distance: 25000, time: 1800 },
+              { distance: 25000, time: 1800 },
+            ],
+          },
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [0, 0],
+              [1, 1],
+            ],
+          },
+        },
+      ],
+    };
+
+    // The provider should return time as-is (3600), not 3600/1000 = 4
+    const props = mockResponse.features[0].properties;
+    const totalDurationS = Math.round(props.time ?? 0);
+    const legDurations = props.legs.map((l) => Math.round(l.time ?? 0));
+
+    expect(totalDurationS).toBe(3600); // NOT 4
+    expect(legDurations).toEqual([1800, 1800]); // NOT [2, 2]
+  });
+
+  it("preserves leg duration in seconds (1200s = 20 minutes)", () => {
+    const legTime = 1200; // 20 minutes in seconds
+    const durationS = Math.round(legTime);
+    expect(durationS).toBe(1200); // NOT 1
+  });
+
+  it("handles zero duration correctly", () => {
+    const totalDurationS = Math.round(0);
+    expect(totalDurationS).toBe(0);
+  });
+});

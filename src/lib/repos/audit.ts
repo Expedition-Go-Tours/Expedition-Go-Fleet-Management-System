@@ -85,6 +85,41 @@ function sanitize(value: string | undefined): string | undefined {
   return value?.replace(/[\r\n]+/g, " ").slice(0, 500);
 }
 
+/**
+ * Write an audit event within an existing Firestore transaction.
+ * This ensures the audit event is atomic with the business changes:
+ * if the transaction retries, the audit event is not duplicated;
+ * if the transaction fails, the audit event is rolled back.
+ *
+ * Use this for all transactional business events (trip completion,
+ * vehicle updates, etc.) where audit integrity is critical.
+ */
+export function writeAuditEventInTx(
+  tx: import("firebase-admin/firestore").Transaction,
+  event: AuditEventInput,
+): void {
+  const db = getAdminDb();
+  const ref = db.collection(COLLECTIONS.auditLogs).doc(); // auto-generated ID
+  tx.set(ref, {
+    eventType: event.eventType,
+    actorId: event.actorId ?? null,
+    entityType: sanitize(event.entityType) ?? null,
+    entityId: sanitize(event.entityId) ?? null,
+    before: event.before ?? null,
+    after: event.after ?? null,
+    reason: sanitize(event.reason) ?? null,
+    requestId: sanitize(event.requestId) ?? null,
+    outcome: event.outcome ?? "SUCCESS",
+    createdAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Write an audit event outside a transaction (best-effort).
+ * Use this ONLY for events where losing the event is explicitly acceptable
+ * (e.g., sign-in attempts, authorization denials).
+ * For business-critical events, use writeAuditEventInTx within the transaction.
+ */
 export async function writeAuditEvent(event: AuditEventInput): Promise<void> {
   const { FieldValue } = await import("firebase-admin/firestore");
   try {

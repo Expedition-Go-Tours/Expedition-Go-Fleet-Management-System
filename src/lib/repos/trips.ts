@@ -19,7 +19,7 @@ import {
 } from "@/lib/domain/trip";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
+import { AUDIT_EVENTS, writeAuditEvent, writeAuditEventInTx } from "@/lib/repos/audit";
 import { toDate } from "@/lib/repos/timestamps";
 import type { RouteResult } from "@/lib/routing/provider";
 
@@ -388,6 +388,21 @@ export async function completeTrip(
     // not the stale actualDistanceKm from the stored draft.
     const startOdoForValidation = input.startOdometerKm ?? trip.startOdometerKm;
     const endOdoForValidation = input.endOdometerKm ?? trip.endOdometerKm;
+
+    // If both odometer readings are supplied, they must be valid.
+    // Reject anomalous readings instead of silently falling back to route estimate.
+    if (startOdoForValidation !== null && endOdoForValidation !== null) {
+      if (startOdoForValidation < 0 || endOdoForValidation < 0) {
+        throw new TripError("VALIDATION_FAILED", "Odometer readings cannot be negative");
+      }
+      if (endOdoForValidation < startOdoForValidation) {
+        throw new TripError(
+          "VALIDATION_FAILED",
+          `End odometer (${endOdoForValidation} km) cannot be less than start odometer (${startOdoForValidation} km). Correct the readings before completing.`,
+        );
+      }
+    }
+
     const recomputedActualKm = computeActualDistance(startOdoForValidation, endOdoForValidation);
     const tripForValidation: Trip = {
       ...trip,
@@ -503,7 +518,8 @@ export async function completeTrip(
       }
     }
 
-    await writeAuditEvent({
+    // Write audit event atomically with the business changes.
+    writeAuditEventInTx(tx, {
       eventType: AUDIT_EVENTS.TRIP_COMPLETED,
       actorId: input.actorId,
       entityType: "trip",
@@ -734,43 +750,71 @@ export async function listTripsForAssignment(assignmentId: string): Promise<Trip
 // Route calculation
 // ---------------------------------------------------------------------------
 
+/**
+ * Atomically save a route calculation to a trip.
+ * Re-reads the trip in a transaction, verifies it is still editable and the
+ * stop fingerprint hasn't changed, then writes the route fields.
+ */
 export async function saveRouteCalculation(
   tripId: string,
   route: RouteResult,
   legs: RouteLeg[],
+  expectedFingerprint?: string,
 ): Promise<Trip> {
   const { FieldValue } = await import("firebase-admin/firestore");
+  const db = getAdminDb();
   const ref = tripsRef().doc(tripId);
 
-  const snap = await ref.get();
-  if (!snap.exists) throw new TripError("NOT_FOUND", "Trip not found");
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new TripError("NOT_FOUND", "Trip not found");
+    const trip = toTrip(snap.id, snap.data() ?? {});
 
-  await ref.update({
-    routeDistanceM: route.totalDistanceM,
-    routeDistanceKm: Math.round((route.totalDistanceM / 1000) * 100) / 100,
-    routeDurationS: route.totalDurationS,
-    routingProvider: route.provider,
-    routeCalculatedAt: route.calculatedAt,
-    routeProviderMeta: route.providerMeta ?? null,
-    routeLegs: legs,
-    routeGeometry: route.geometry ?? null,
-    routeStale: false,
-    updatedAt: FieldValue.serverTimestamp(),
+    if (trip.status !== "DRAFT") {
+      throw new TripError("INVALID_STATUS", `Cannot save route to a ${trip.status} trip`);
+    }
+
+    // Verify stop fingerprint hasn't changed since the route was calculated.
+    if (expectedFingerprint) {
+      const currentFingerprint = trip.stops
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((s) => `${s.id}:${s.sequence}:${s.latitude}:${s.longitude}`)
+        .join("|");
+      if (currentFingerprint !== expectedFingerprint) {
+        throw new TripError(
+          "VALIDATION_FAILED",
+          "Stop coordinates or order changed during route calculation \u2014 please recalculate",
+        );
+      }
+    }
+
+    tx.update(ref, {
+      routeDistanceM: route.totalDistanceM,
+      routeDistanceKm: Math.round((route.totalDistanceM / 1000) * 100) / 100,
+      routeDurationS: route.totalDurationS,
+      routingProvider: route.provider,
+      routeCalculatedAt: route.calculatedAt,
+      routeProviderMeta: route.providerMeta ?? null,
+      routeLegs: legs,
+      routeGeometry: route.geometry ?? null,
+      routeStale: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    writeAuditEventInTx(tx, {
+      eventType: AUDIT_EVENTS.TRIP_ROUTE_CALCULATED,
+      entityType: "trip",
+      entityId: tripId,
+      after: {
+        provider: route.provider,
+        distanceM: route.totalDistanceM,
+        durationS: route.totalDurationS,
+        legs: legs.length,
+      },
+    });
+
+    return trip;
   });
-
-  await writeAuditEvent({
-    eventType: AUDIT_EVENTS.TRIP_ROUTE_CALCULATED,
-    entityType: "trip",
-    entityId: tripId,
-    after: {
-      provider: route.provider,
-      distanceM: route.totalDistanceM,
-      durationS: route.totalDurationS,
-    },
-  });
-
-  const updated = await ref.get();
-  return toTrip(updated.id, updated.data() ?? {});
 }
 
 // ---------------------------------------------------------------------------

@@ -25,7 +25,8 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // Next.js requires inline scripts and eval for hydration
+      // Next.js requires inline scripts for hydration; eval needed for dev tools
+      // TODO: migrate to nonce-based script authorization for production
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       // MapLibre GL injects inline styles for map rendering
       "style-src 'self' 'unsafe-inline'",
@@ -36,6 +37,9 @@ const securityHeaders = [
       // MapLibre GL uses blob workers
       "worker-src 'self' blob:",
       "font-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
   },

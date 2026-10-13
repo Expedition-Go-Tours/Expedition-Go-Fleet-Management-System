@@ -150,23 +150,10 @@ export async function POST(request: NextRequest) {
 
     // Persist on the trip if tripId was provided
     if (tripId) {
-      // Re-check trip is still editable and stops haven't changed
-      const currentTrip = await getTripById(tripId);
-      if (!currentTrip || currentTrip.status !== "DRAFT") {
-        throw ApiError.badRequest("Trip is no longer editable");
-      }
-      // Verify stop order AND coordinates haven't changed during calculation.
-      // Compare the fingerprint captured BEFORE calculation against the current state.
-      const currentFingerprint = currentTrip.stops
-        .sort((a, b) => a.sequence - b.sequence)
-        .map((s) => `${s.id}:${s.sequence}:${s.latitude}:${s.longitude}`)
-        .join("|");
-      if (stopFingerprint && currentFingerprint !== stopFingerprint) {
-        throw ApiError.badRequest(
-          "Stop coordinates or order changed during route calculation — please recalculate",
-        );
-      }
-      await saveRouteCalculation(tripId, route, legs);
+      // Save route atomically with fingerprint validation.
+      // saveRouteCalculation re-reads the trip in a transaction, verifies the
+      // fingerprint matches, and writes the route fields atomically.
+      await saveRouteCalculation(tripId, route, legs, stopFingerprint);
     }
 
     return jsonOk({ route, legs });
