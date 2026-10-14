@@ -360,13 +360,52 @@ export const TOURS: readonly TourDefinition[] = [
         side: "bottom",
       },
       {
-        route: "/",
-        target: "nav-work-orders",
-        fallbacks: ["nav-mobile-menu"],
-        title: "Operational and maintenance reports",
+        route: "/workspace",
+        target: "driver-welcome",
+        title: "Driver workspace",
         description:
-          "Work orders, Maintenance, Expenses and Fuel in the sidebar are the operational and maintenance reports.",
-        side: "right",
+          "The driver's daily view: active assignment, trip recording, inspections and reporting.",
+        side: "bottom",
+      },
+      {
+        route: "/reports",
+        target: "reports-board",
+        title: "Issues and reports",
+        description:
+          "Driver-reported problems and defects. Triage, link to work orders and track through to resolution.",
+        side: "top",
+      },
+      {
+        route: "/work-orders",
+        target: "work-orders-board",
+        title: "Work orders",
+        description:
+          "Active repairs and maintenance tasks. Track status, waiting reasons and completion evidence.",
+        side: "top",
+      },
+      {
+        route: "/maintenance",
+        target: "maintenance-kpis",
+        title: "Maintenance schedules",
+        description:
+          "Preventive maintenance reminders based on odometer and time intervals.",
+        side: "bottom",
+      },
+      {
+        route: "/expenses",
+        target: "expense-ledger",
+        title: "Expense tracking",
+        description:
+          "Record and approve vehicle expenses. Export to CSV for accounting.",
+        side: "top",
+      },
+      {
+        route: "/fuel",
+        target: "fuel-ledger",
+        title: "Fuel records",
+        description:
+          "Track fuel consumption and costs across the fleet.",
+        side: "top",
       },
     ],
   },
