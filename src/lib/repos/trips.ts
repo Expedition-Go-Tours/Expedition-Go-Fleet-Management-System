@@ -15,6 +15,7 @@ import {
   deriveOriginDestination,
   generateIdempotencyKey,
   getTripDistanceMetres,
+  resolveOriginDestination,
   validateTripCompletion,
   validateTripForSave,
 } from "@/lib/domain/trip";
@@ -62,9 +63,15 @@ function toIsoString(value: unknown): string | null {
 
 function toTrip(id: string, data: DocumentData): Trip & { routeGeometry?: unknown } {
   const stops = (data.stops ?? []) as TripStop[];
+  // Read path: use the NON-throwing resolver. A legacy or hand-edited
+  // document whose stops predate the `type` field (or lost their ORIGIN /
+  // DESTINATION markers) must not throw here — this mapper runs over every
+  // row in list/aggregate queries, so one bad document used to 500 an entire
+  // page (e.g. /trips). We degrade to positional first/last instead. The
+  // strict `deriveOriginDestination` still guards the write path.
   const { origin, destination } =
     stops.length >= 2
-      ? deriveOriginDestination(stops)
+      ? resolveOriginDestination(stops)
       : {
           origin: data.origin ?? stops[0] ?? ({} as TripStop),
           destination: data.destination ?? stops[stops.length - 1] ?? ({} as TripStop),

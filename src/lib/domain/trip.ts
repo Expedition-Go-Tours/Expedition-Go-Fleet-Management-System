@@ -466,6 +466,47 @@ export function deriveOriginDestination(stops: TripStop[]): {
   return { origin, destination };
 }
 
+/**
+ * Read-path resolver: derive origin/destination WITHOUT throwing.
+ *
+ * `deriveOriginDestination` is strict and is the right guard on the write
+ * path (create/update), where a trip missing its ORIGIN/DESTINATION markers
+ * is corrupt input we must reject. The read path is different: `toTrip` maps
+ * every stored document, and one legacy or hand-edited row without the
+ * markers used to throw and 500 an entire list page (e.g. /trips reads every
+ * trip through this mapper). Documents predating the stop-`type` field carry
+ * no markers at all, so a throw here punishes the whole collection for one
+ * old row.
+ *
+ * Instead we fall back to positional semantics — first stop by sequence is
+ * the origin, last is the destination — which matches how the markers are
+ * assigned (index 0 = ORIGIN, last = DESTINATION) and keeps a malformed row
+ * rendering (with a possibly imprecise origin/destination) rather than
+ * crashing the page.
+ */
+export function resolveOriginDestination(stops: TripStop[]): {
+  origin: TripStop;
+  destination: TripStop;
+} {
+  const byTypeOrigin = stops.find((s) => s.type === "ORIGIN");
+  const byTypeDestination = stops.find((s) => s.type === "DESTINATION");
+
+  if (byTypeOrigin && byTypeDestination) {
+    return { origin: byTypeOrigin, destination: byTypeDestination };
+  }
+
+  // Fall back to positional first/last (sorted by sequence) when markers are
+  // missing. Guard the empty/degenerate case so we never index undefined.
+  const sorted = [...stops].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const empty = {} as TripStop;
+  return {
+    origin: byTypeOrigin ?? first ?? empty,
+    destination: byTypeDestination ?? last ?? empty,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Estimated projection
 // ---------------------------------------------------------------------------

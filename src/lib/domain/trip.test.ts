@@ -7,6 +7,7 @@ import {
   computeEstimatedProjection,
   findReconciliationFlags,
   deriveOriginDestination,
+  resolveOriginDestination,
   generateIdempotencyKey,
   generateStopId,
   getTripDistanceMetres,
@@ -390,6 +391,63 @@ describe("deriveOriginDestination", () => {
   it("throws when no DESTINATION is present", () => {
     const origin = makeStop({ type: "ORIGIN" });
     expect(() => deriveOriginDestination([origin])).toThrow("No DESTINATION");
+  });
+});
+
+describe("resolveOriginDestination (read path — never throws)", () => {
+  // Regression guard for the /trips 500. `toTrip` maps every stored document;
+  // a legacy row predating the stop-`type` field (or a hand-edited doc that
+  // lost its ORIGIN/DESTINATION markers) has ≥2 stops but no markers. The
+  // strict `deriveOriginDestination` threw and 500'd the whole list page. The
+  // read path must degrade to positional first/last instead.
+  it("returns the marked stops when both markers are present", () => {
+    const origin = makeStop({ type: "ORIGIN", sequence: 0 });
+    const intermediate = makeStop({ id: "s2", type: "INTERMEDIATE", sequence: 1 });
+    const dest = makeStop({ id: "s3", type: "DESTINATION", sequence: 2 });
+    const { origin: o, destination: d } = resolveOriginDestination([origin, intermediate, dest]);
+    expect(o.id).toBe(origin.id);
+    expect(d.id).toBe(dest.id);
+  });
+
+  it("falls back to positional first/last when NO markers exist (legacy doc)", () => {
+    // A pre-`type` document: every stop is effectively untyped.
+    const stops = [
+      makeStop({ type: "INTERMEDIATE" as TripStop["type"], sequence: 0, label: "Start" }),
+      makeStop({ id: "s2", type: "INTERMEDIATE" as TripStop["type"], sequence: 1, label: "Mid" }),
+      makeStop({ id: "s3", type: "INTERMEDIATE" as TripStop["type"], sequence: 2, label: "End" }),
+    ];
+    const { origin, destination } = resolveOriginDestination(stops);
+    // Does not throw…
+    expect(origin.label).toBe("Start");
+    expect(destination.label).toBe("End");
+  });
+
+  it("respects sequence order, not array order, when falling back", () => {
+    const stops = [
+      makeStop({ id: "late", type: "INTERMEDIATE" as TripStop["type"], sequence: 2, label: "End" }),
+      makeStop({ id: "early", type: "INTERMEDIATE" as TripStop["type"], sequence: 0, label: "Start" }),
+    ];
+    const { origin, destination } = resolveOriginDestination(stops);
+    expect(origin.id).toBe("early");
+    expect(destination.id).toBe("late");
+  });
+
+  it("uses a present marker over position when only one marker exists", () => {
+    const untypedFirst = makeStop({ type: "INTERMEDIATE" as TripStop["type"], sequence: 0, label: "First" });
+    const markedDest = makeStop({ id: "s9", type: "DESTINATION", sequence: 1, label: "Marked end" });
+    const { origin, destination } = resolveOriginDestination([untypedFirst, markedDest]);
+    // Origin has no marker → positional first.
+    expect(origin.label).toBe("First");
+    // Destination marker wins over the positional last.
+    expect(destination.id).toBe(markedDest.id);
+  });
+
+  it("returns empty placeholders for a degenerate single/empty stop list", () => {
+    // Never index undefined; callers get a renderable (if empty) object.
+    const single = [makeStop({ type: "INTERMEDIATE" as TripStop["type"], sequence: 0 })];
+    const one = resolveOriginDestination(single);
+    expect(one.origin.id).toBe(single[0]?.id);
+    expect(one.destination.id).toBe(single[0]?.id);
   });
 });
 
