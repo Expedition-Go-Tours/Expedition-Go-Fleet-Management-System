@@ -46,6 +46,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["jose", "jwks-rsa"],
   turbopack: {
     rules: {
       "*.css": {
