@@ -5,8 +5,9 @@
  *   npm run dev &
  *   node scripts/e2e-accountability.mjs
  *
- * Covers the mandated acceptance scenarios that can run without MFA-gated
- * roles (DRIVER/OPERATIONS/MAINTENANCE):
+ * Covers the mandated acceptance scenarios that can run with the two non-admin
+ * roles (DRIVER/OPERATIONS). OPERATIONS is now privileged, so this expects the
+ * development MFA bypass (REQUIRE_MFA=false):
  *  - Odometer ledger: monotonicity, idempotent retries, decrease rejection,
  *    corrections with reason.
  *  - Preventive maintenance: schedule config, live status computation, and the
@@ -14,7 +15,7 @@
  *  - Work-order completion: evidence required, service record created once,
  *    only named schedules reset, unrelated schedule untouched.
  *  - Issue → safety hold: critical issue holds the vehicle; completion does
- *    not release it; release permission missing for MAINTENANCE.
+ *    not release it; release permission missing for DRIVER.
  *  - Expense model: RECORDED→VOID only, no approval states anywhere.
  */
 import { readFileSync } from "node:fs";
@@ -174,10 +175,13 @@ try {
   console.log(`\nFleet accountability e2e @ ${BASE_URL}\n`);
 
   const driver = await createUser(`drv.${EMAIL_SUFFIX}@e2e.local`, ["DRIVER"]);
-  const maint = await createUser(`mnt.${EMAIL_SUFFIX}@e2e.local`, ["MAINTENANCE"]);
+  // Drivers now own the workshop workflow (odometer corrections, schedules,
+  // work orders, service records).
+  const workshop = await createUser(`wrk.${EMAIL_SUFFIX}@e2e.local`, ["DRIVER"]);
   const ops = await createUser(`op.${EMAIL_SUFFIX}@e2e.local`, ["OPERATIONS"]);
-  const finance = await createUser(`fin.${EMAIL_SUFFIX}@e2e.local`, ["FINANCE"]);
-  created.users.push(driver, maint, ops, finance);
+  // A second OPERATIONS user stands in for the old finance desk (money).
+  const money = await createUser(`fin.${EMAIL_SUFFIX}@e2e.local`, ["OPERATIONS"]);
+  created.users.push(driver, workshop, ops, money);
 
   // Vehicle with a large initial odometer via the audited registration path
   // is ADMIN-only, so seed the doc + one baseline reading via Admin SDK.
@@ -210,11 +214,11 @@ try {
   });
   created.docIds.push(["odometerReadings", `e2e-base-${EMAIL_SUFFIX}`]);
 
-  const [dCookies, mCookies, oCookies, fCookies] = await Promise.all([
+  const [dCookies, wCookies, oCookies, moneyCookies] = await Promise.all([
     login(driver.email),
-    login(maint.email),
+    login(workshop.email),
     login(ops.email),
-    login(finance.email),
+    login(money.email),
   ]);
   console.log("  (users + vehicle ready)\n");
 
@@ -273,7 +277,7 @@ try {
     );
 
     // PATCH mileage editing is gone — the requirement forbids it.
-    const patch = await send("PATCH", `/api/v1/vehicles/${vehRef.id}`, mCookies, {
+    const patch = await send("PATCH", `/api/v1/vehicles/${vehRef.id}`, wCookies, {
       mileage: 99999,
     });
     check(
@@ -282,15 +286,15 @@ try {
       JSON.stringify(patch.body).slice(0, 200),
     );
 
-    // Correction by MAINTENANCE (odometer:correct).
-    const ledger = await get(`/api/v1/vehicles/${vehRef.id}/odometer`, mCookies);
+    // Correction by WORKSHOP (odometer:correct).
+    const ledger = await get(`/api/v1/vehicles/${vehRef.id}/odometer`, wCookies);
     const readingId = ledger.body.readings?.[0]?.id;
-    const correct = await send("POST", `/api/v1/odometer/${readingId}/correct`, mCookies, {
+    const correct = await send("POST", `/api/v1/odometer/${readingId}/correct`, wCookies, {
       correctedKm: 80100,
       reason: "Driver misread by 100 km — verified against fuel receipt",
     });
     check(
-      "MAINTENANCE corrects a reading (200, original superseded, reason recorded)",
+      "WORKSHOP corrects a reading (200, original superseded, reason recorded)",
       correct.status === 200 &&
         correct.body.original.status === "SUPERSEDED" &&
         correct.body.replacement.supersedesReadingId === readingId,
@@ -300,7 +304,7 @@ try {
     const noReason = await send(
       "POST",
       `/api/v1/odometer/${correct.body.replacement.id}/correct`,
-      mCookies,
+      wCookies,
       { correctedKm: 80200, reason: "" },
     );
     check(
@@ -313,7 +317,7 @@ try {
   /* ── B. Maintenance schedule — mandated oil-change example ───────────── */
   {
     // Vehicle projection is 80,100 after the correction above.
-    const createdSchedule = await send("POST", "/api/v1/maintenance/schedules", mCookies, {
+    const createdSchedule = await send("POST", "/api/v1/maintenance/schedules", wCookies, {
       vehicleId: vehRef.id,
       taskName: "Engine oil change",
       category: "OIL",
@@ -326,7 +330,7 @@ try {
       source: "Company policy (initial)",
     });
     check(
-      "MAINTENANCE configures an oil-change schedule (201)",
+      "WORKSHOP configures an oil-change schedule (201)",
       createdSchedule.status === 201 && createdSchedule.body.schedule?.id,
       JSON.stringify(createdSchedule.body).slice(0, 250),
     );
@@ -334,7 +338,7 @@ try {
     if (scheduleId) created.docIds.push(["maintenanceSchedules", scheduleId]);
 
     // Live status: projection 80,100 vs due 84,250 → OK, 4,150 km remaining.
-    const status = await get(`/api/v1/maintenance/schedules?vehicleId=${vehRef.id}`, mCookies);
+    const status = await get(`/api/v1/maintenance/schedules?vehicleId=${vehRef.id}`, wCookies);
     const oil = (status.body.schedules ?? []).find((s) => s.taskName === "Engine oil change");
     check(
       "schedule computes OK at 80,100 (next due 84,250)",
@@ -343,7 +347,7 @@ try {
     );
 
     // Drive to 83,900 → DUE_SOON (within 500 km of 84,250).
-    const drive = await send("POST", `/api/v1/vehicles/${vehRef.id}/odometer`, mCookies, {
+    const drive = await send("POST", `/api/v1/vehicles/${vehRef.id}/odometer`, wCookies, {
       km: 83900,
       source: "TRIP_END",
       clientToken: `e2e-drive-${EMAIL_SUFFIX}`,
@@ -353,7 +357,7 @@ try {
       drive.status === 201 && drive.body.currentOdometerKm === 83900,
       JSON.stringify(drive.body).slice(0, 200),
     );
-    const soon = await get(`/api/v1/maintenance/schedules?vehicleId=${vehRef.id}`, mCookies);
+    const soon = await get(`/api/v1/maintenance/schedules?vehicleId=${vehRef.id}`, wCookies);
     const oilSoon = (soon.body.schedules ?? []).find((s) => s.taskName === "Engine oil change");
     check(
       "oil change is DUE_SOON at 83,900 (350 km remaining)",
@@ -362,7 +366,7 @@ try {
     );
 
     // A second, unrelated schedule must not be affected by oil resets later.
-    const brakes = await send("POST", "/api/v1/maintenance/schedules", mCookies, {
+    const brakes = await send("POST", "/api/v1/maintenance/schedules", wCookies, {
       vehicleId: vehRef.id,
       taskName: "Brake inspection",
       category: "BRAKES",
@@ -414,11 +418,11 @@ try {
       JSON.stringify(retry.body).slice(0, 200),
     );
 
-    const wo = await send("POST", `/api/v1/reports/${issueId}/work-order`, mCookies, {
+    const wo = await send("POST", `/api/v1/reports/${issueId}/work-order`, wCookies, {
       priority: "HIGH",
     });
     check(
-      "MAINTENANCE creates a work order from the issue (201, linked both ways)",
+      "WORKSHOP creates a work order from the issue (201, linked both ways)",
       wo.status === 201 &&
         wo.body.workOrder?.number?.startsWith("WO-") &&
         wo.body.workOrder?.issueIds?.includes(issueId),
@@ -428,10 +432,10 @@ try {
     if (workOrderId) created.docIds.push(["workOrders", workOrderId]);
 
     // Start, then attempt completion WITHOUT evidence → rejected.
-    await send("POST", `/api/v1/work-orders/${workOrderId}/status`, mCookies, {
+    await send("POST", `/api/v1/work-orders/${workOrderId}/status`, wCookies, {
       action: "start",
     });
-    const noEvidence = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, mCookies, {
+    const noEvidence = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, wCookies, {
       odometerKm: 83950,
     });
     check(
@@ -440,7 +444,7 @@ try {
       JSON.stringify(noEvidence.body).slice(0, 200),
     );
 
-    const noOdometer = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, mCookies, {
+    const noOdometer = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, wCookies, {
       workPerformed: "Replaced sump gasket",
     });
     check(
@@ -449,7 +453,7 @@ try {
       JSON.stringify(noOdometer.body).slice(0, 200),
     );
 
-    const complete = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, mCookies, {
+    const complete = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, wCookies, {
       completedAt: new Date().toISOString(),
       odometerKm: 83950,
       workPerformed: "Replaced sump gasket, refilled 4.5L oil, checked for leaks.",
@@ -466,7 +470,7 @@ try {
     );
 
     // Replay → idempotent.
-    const replay = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, mCookies, {
+    const replay = await send("POST", `/api/v1/work-orders/${workOrderId}/complete`, wCookies, {
       odometerKm: 83950,
       workPerformed: "Replayed request",
     });
@@ -476,14 +480,14 @@ try {
       JSON.stringify(replay.body).slice(0, 200),
     );
 
-    const history = await get(`/api/v1/service-records?vehicleId=${vehRef.id}`, mCookies);
+    const history = await get(`/api/v1/service-records?vehicleId=${vehRef.id}`, wCookies);
     check(
       "service history shows the record exactly once",
       history.status === 200 && history.body.serviceRecords?.length === 1,
       JSON.stringify(history.body).slice(0, 200),
     );
 
-    const issueAfter = await get(`/api/v1/reports/${issueId}`, mCookies);
+    const issueAfter = await get(`/api/v1/reports/${issueId}`, wCookies);
     check(
       "resolved issue is CLOSED with a resolution",
       issueAfter.status === 200 &&
@@ -493,7 +497,7 @@ try {
     );
 
     // Work order shows the service record link.
-    const woAfter = await get(`/api/v1/work-orders?vehicleId=${vehRef.id}`, mCookies);
+    const woAfter = await get(`/api/v1/work-orders?vehicleId=${vehRef.id}`, wCookies);
     const woRecord = (woAfter.body.workOrders ?? []).find((w) => w.id === workOrderId);
     check(
       "work order links to its service record",
@@ -507,7 +511,7 @@ try {
   {
     // Record a service completion that names only the brake-inspection
     // schedule → oil-change baseline must stay at 79,250.
-    const woBrakes = await send("POST", "/api/v1/work-orders", mCookies, {
+    const woBrakes = await send("POST", "/api/v1/work-orders", wCookies, {
       vehicleId: vehRef.id,
       title: "Brake inspection (scheduled)",
       description: "Routine inspection",
@@ -525,8 +529,8 @@ try {
         .get()
     ).docs[0]?.id;
 
-    await send("POST", `/api/v1/work-orders/${woBrakesId}/status`, mCookies, { action: "start" });
-    const done = await send("POST", `/api/v1/work-orders/${woBrakesId}/complete`, mCookies, {
+    await send("POST", `/api/v1/work-orders/${woBrakesId}/status`, wCookies, { action: "start" });
+    const done = await send("POST", `/api/v1/work-orders/${woBrakesId}/complete`, wCookies, {
       odometerKm: 83950,
       workPerformed: "Inspected pads and discs; adjusted handbrake.",
       scheduleIds: [brakesScheduleId],
@@ -538,7 +542,7 @@ try {
       JSON.stringify(done.body).slice(0, 250),
     );
 
-    const schedules = await get(`/api/v1/maintenance/schedules?vehicleId=${vehRef.id}`, mCookies);
+    const schedules = await get(`/api/v1/maintenance/schedules?vehicleId=${vehRef.id}`, wCookies);
     const oil = (schedules.body.schedules ?? []).find((s) => s.taskName === "Engine oil change");
     const brakes = (schedules.body.schedules ?? []).find((s) => s.taskName === "Brake inspection");
     check(
@@ -581,13 +585,13 @@ try {
     );
 
     // Fix via a work order; completion must NOT release the hold.
-    const woFix = await send("POST", `/api/v1/reports/${criticalId}/work-order`, mCookies, {
+    const woFix = await send("POST", `/api/v1/reports/${criticalId}/work-order`, wCookies, {
       priority: "URGENT",
     });
     const fixId = woFix.body.workOrder?.id;
     if (fixId) created.docIds.push(["workOrders", fixId]);
-    await send("POST", `/api/v1/work-orders/${fixId}/status`, mCookies, { action: "start" });
-    await send("POST", `/api/v1/work-orders/${fixId}/complete`, mCookies, {
+    await send("POST", `/api/v1/work-orders/${fixId}/status`, wCookies, { action: "start" });
+    await send("POST", `/api/v1/work-orders/${fixId}/complete`, wCookies, {
       odometerKm: 83960,
       workPerformed: "Replaced brake master cylinder and bled the system.",
       resolvedIssueIds: [criticalId],
@@ -600,12 +604,12 @@ try {
       JSON.stringify(afterFix.body.vehicle?.status).slice(0, 150),
     );
 
-    const release = await send("POST", `/api/v1/vehicles/${vehRef.id}/status`, mCookies, {
+    const release = await send("POST", `/api/v1/vehicles/${vehRef.id}/status`, wCookies, {
       action: "release",
       reason: "Road-tested, brakes verified",
     });
     check(
-      "MAINTENANCE cannot release the hold (403 vehicle:release)",
+      "WORKSHOP cannot release the hold (403 vehicle:release)",
       release.status === 403 && /vehicle:release/.test(release.body?.error?.message ?? ""),
       JSON.stringify(release.body).slice(0, 200),
     );
@@ -619,23 +623,31 @@ try {
 
   /* ── F. Expense model: RECORDED → VOID, no approval anywhere ────────── */
   {
-    const woList = await get(`/api/v1/work-orders?vehicleId=${vehRef.id}`, mCookies);
+    const woList = await get(`/api/v1/work-orders?vehicleId=${vehRef.id}`, wCookies);
     const anyWo = (woList.body.workOrders ?? [])[0];
 
-    // OPERATIONS cannot record expenses (expense:create is FINANCE).
-    const denied = await send("POST", "/api/v1/expenses", oCookies, {
+    // WORKSHOP (driver) cannot record expenses — expense:create is OPERATIONS.
+    const denied = await send("POST", "/api/v1/expenses", wCookies, {
       vehicleId: vehRef.id,
       category: "PARTS",
       amount: "10.00",
       description: "should be denied",
     });
     check(
-      "OPERATIONS cannot record expenses (403 expense:create)",
+      "WORKSHOP cannot record expenses (403 expense:create)",
       denied.status === 403 && /expense:create/.test(denied.body?.error?.message ?? ""),
       JSON.stringify(denied.body).slice(0, 150),
     );
 
-    const expense = await send("POST", "/api/v1/expenses", fCookies, {
+    // OPERATIONS holds the money desk, so it can read the ledger.
+    const opsRead = await get("/api/v1/expenses", oCookies);
+    check(
+      "OPERATIONS can read the expense ledger (200)",
+      opsRead.status === 200 && Array.isArray(opsRead.body.expenses),
+      JSON.stringify(opsRead.body).slice(0, 150),
+    );
+
+    const expense = await send("POST", "/api/v1/expenses", moneyCookies, {
       vehicleId: vehRef.id,
       workOrderId: anyWo?.id,
       category: "PARTS",
@@ -644,7 +656,7 @@ try {
       supplierName: "Accra Auto Parts",
     });
     check(
-      "FINANCE records an expense (201, RECORDED status, pesewas integer)",
+      "OPERATIONS records an expense (201, RECORDED status, pesewas integer)",
       expense.status === 201 &&
         expense.body.expense?.status === "RECORDED" &&
         expense.body.expense?.amountMinor === 145075,
@@ -654,7 +666,7 @@ try {
     if (expenseId) created.docIds.push(["expenses", expenseId]);
 
     // No approval action exists — only void.
-    const approve = await send("POST", `/api/v1/expenses/${expenseId}/status`, fCookies, {
+    const approve = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
       action: "approve",
     });
     check(
@@ -664,7 +676,7 @@ try {
     );
 
     // Void requires a reason.
-    const noReason = await send("POST", `/api/v1/expenses/${expenseId}/status`, fCookies, {
+    const noReason = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
       action: "void",
     });
     check(
@@ -673,29 +685,29 @@ try {
       JSON.stringify(noReason.body).slice(0, 150),
     );
 
-    // MAINTENANCE cannot void (expense:void is FINANCE).
-    const maintVoid = await send("POST", `/api/v1/expenses/${expenseId}/status`, mCookies, {
+    // WORKSHOP cannot void (expense:void is OPERATIONS).
+    const maintVoid = await send("POST", `/api/v1/expenses/${expenseId}/status`, wCookies, {
       action: "void",
       reason: "should be denied",
     });
     check(
-      "MAINTENANCE cannot void expenses (403 expense:void)",
+      "WORKSHOP cannot void expenses (403 expense:void)",
       maintVoid.status === 403,
       JSON.stringify(maintVoid.body).slice(0, 150),
     );
 
-    // FINANCE voids with a reason — record preserved with VOID status.
-    const voided = await send("POST", `/api/v1/expenses/${expenseId}/status`, fCookies, {
+    // OPERATIONS voids with a reason — record preserved with VOID status.
+    const voided = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
       action: "void",
       reason: "Duplicate invoice — recorded against fuel entry instead",
     });
     check(
-      "FINANCE voids with reason (200, VOID, record preserved)",
+      "OPERATIONS voids with reason (200, VOID, record preserved)",
       voided.status === 200 && voided.body.expense?.status === "VOID",
       JSON.stringify(voided.body).slice(0, 250),
     );
 
-    const rerecord = await send("POST", "/api/v1/expenses", fCookies, {
+    const rerecord = await send("POST", "/api/v1/expenses", moneyCookies, {
       vehicleId: vehRef.id,
       workOrderId: anyWo?.id,
       category: "PARTS",
@@ -715,7 +727,7 @@ try {
     // Export excludes VOID rows — each pesewa counted once.
     const exportRes = await get(
       `/api/v1/expenses/export?format=json&vehicleId=${vehRef.id}`,
-      fCookies,
+      moneyCookies,
     );
     check(
       "export counts only non-VOID expenses (145075, not doubled)",
@@ -726,9 +738,9 @@ try {
       ),
     );
 
-    const deniedExport = await get("/api/v1/expenses/export", mCookies);
+    const deniedExport = await get("/api/v1/expenses/export", wCookies);
     check(
-      "MAINTENANCE cannot export (403 expense:export)",
+      "WORKSHOP cannot export (403 expense:export)",
       deniedExport.status === 403,
       JSON.stringify(deniedExport.body).slice(0, 150),
     );

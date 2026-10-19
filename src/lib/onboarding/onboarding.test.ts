@@ -75,46 +75,40 @@ describe("tour catalogue", () => {
 });
 
 describe("role → tour selection", () => {
-  it("maps every role to exactly one tour", () => {
+  it("maps every role to at least one tour, most privileged first", () => {
     for (const role of ROLE_KEYS) {
-      expect(toursForRoles([role])).toHaveLength(1);
+      expect(toursForRoles([role]).length).toBeGreaterThanOrEqual(1);
     }
+    // The default (most privileged) tour for each of the three roles.
     expect(new Set(ROLE_KEYS.map((role) => toursForRoles([role])[0]?.id))).toEqual(
-      new Set(TOUR_IDS),
+      new Set(["admin", "operations", "driver"]),
     );
   });
 
-  it("shows a driver the driver tour, not the maintenance or admin tour", () => {
+  it("shows a driver the driver and maintenance tours, not admin or finance", () => {
     const ids = availableTours(["DRIVER"], [...permissionsOf("DRIVER")]).map((t) => t.id);
-    expect(ids).toEqual(["driver"]);
-    expect(ids).not.toContain("maintenance");
+    // Drivers now also do the workshop bookkeeping, so the maintenance tour
+    // stays replayable for them — the driver tour is offered first.
+    expect(ids).toEqual(["driver", "maintenance"]);
     expect(ids).not.toContain("admin");
     expect(ids).not.toContain("finance");
   });
 
-  it("shows finance and admin users only their own tour", () => {
-    expect(availableTours(["FINANCE"], [...permissionsOf("FINANCE")]).map((t) => t.id)).toEqual([
-      "finance",
-    ]);
+  it("shows operations the operations and finance tours, admin only the admin tour", () => {
+    expect(
+      availableTours(["OPERATIONS"], [...permissionsOf("OPERATIONS")]).map((t) => t.id),
+    ).toEqual(["operations", "finance"]);
     expect(availableTours(["ADMIN"], [...permissionsOf("ADMIN")]).map((t) => t.id)).toEqual([
       "admin",
     ]);
-    expect(availableTours(["MANAGER"], [...permissionsOf("MANAGER")]).map((t) => t.id)).toEqual([
-      "admin",
-    ]);
-    expect(
-      availableTours(["OPERATIONS"], [...permissionsOf("OPERATIONS")]).map((t) => t.id),
-    ).toEqual(["operations"]);
-    expect(
-      availableTours(["MAINTENANCE"], [...permissionsOf("MAINTENANCE")]).map((t) => t.id),
-    ).toEqual(["maintenance"]);
   });
 
   it("orders multi-role users most privileged first", () => {
-    const permissions = [...permissionsOf("DRIVER"), ...permissionsOf("FINANCE")];
-    expect(availableTours(["DRIVER", "FINANCE"], permissions).map((t) => t.id)).toEqual([
-      "finance",
+    const permissions = [...permissionsOf("ADMIN"), ...permissionsOf("DRIVER")];
+    expect(availableTours(["ADMIN", "DRIVER"], permissions).map((t) => t.id)).toEqual([
+      "admin",
       "driver",
+      "maintenance",
     ]);
   });
 
@@ -124,16 +118,21 @@ describe("role → tour selection", () => {
     expect(recommendedTour(["DRIVER"], [...permissionsOf("DRIVER")])?.id).toBe("driver");
   });
 
-  it("hides steps whose permission the role does not hold", () => {
+  it("hides steps whose permission the user does not hold", () => {
     const admin = getTour("admin")!;
-    const managerPermissions = [...permissionsOf("MANAGER")];
-    expect(managerPermissions).not.toContain(PERMISSIONS.USER_ROLE_ASSIGN);
+    // An oversight reader holds every permission the admin steps require
+    // (user:read, audit:read) without holding user:role:assign or settings:update.
+    const readerPermissions: string[] = [
+      PERMISSIONS.USER_READ,
+      PERMISSIONS.AUDIT_READ,
+      PERMISSIONS.VEHICLE_READ,
+    ];
 
-    const managerSteps = visibleSteps(admin, managerPermissions);
-    expect(managerSteps).toHaveLength(admin.steps.length);
+    const readerSteps = visibleSteps(admin, readerPermissions);
+    expect(readerSteps).toHaveLength(admin.steps.length);
     expect(
-      managerSteps.every(
-        (step) => !step.requires || step.requires.some((key) => managerPermissions.includes(key)),
+      readerSteps.every(
+        (step) => !step.requires || step.requires.some((key) => readerPermissions.includes(key)),
       ),
     ).toBe(true);
 
@@ -152,18 +151,15 @@ describe("role → tour selection", () => {
         },
       ],
     };
-    const permitted = [PERMISSIONS.USER_READ, PERMISSIONS.AUDIT_READ, PERMISSIONS.VEHICLE_READ];
-    const kept = visibleSteps(restricted, permitted);
+    const kept = visibleSteps(restricted, readerPermissions);
     expect(kept).toHaveLength(admin.steps.length);
     expect(kept.some((step) => step.target === "ghost-control")).toBe(false);
   });
 
   it("gates the admin tour on the same permission the page enforces", () => {
-    const permissions = [...permissionsOf("MANAGER")];
-    expect(permissions).toContain(PERMISSIONS.USER_READ);
-    expect(rolesHavePermission(["MANAGER"], PERMISSIONS.USER_READ)).toBe(true);
-    expect(rolesHavePermission(["MANAGER"], PERMISSIONS.USER_UPDATE)).toBe(false);
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.USER_READ)).toBe(true);
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.USER_UPDATE)).toBe(true);
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.USER_READ)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.USER_UPDATE)).toBe(false);
   });
 });

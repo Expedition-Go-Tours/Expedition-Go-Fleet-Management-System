@@ -12,7 +12,12 @@ import { documentState } from "@/lib/domain/document";
  * so cron retries and overlapping runs never duplicate.
  */
 
-export const REMINDER_ROLES = ["MAINTENANCE", "OPERATIONS"] as const;
+/**
+ * Roles that receive maintenance/document reminders. Both the driver (who takes
+ * the vehicle for service) and the operations desk (who schedules it) need to
+ * know a task is due.
+ */
+export const REMINDER_ROLES = ["DRIVER", "OPERATIONS"] as const;
 
 /** Bucket a km-threshold reminder so it fires once per 250 km band. */
 export function kmBand(dueOdometerKm: number, remainingKm: number): string {

@@ -9,10 +9,11 @@
  * odometer ledger (PATCH mileage retired), report ownership scoping,
  * report/work-order lifecycles including invalid transitions and
  * evidence-gated completion, expense permission gating, incident ownership
- * scoping + review lifecycle, provider CRUD, and audit access. Uses only
- * non-privileged roles (DRIVER/OPERATIONS/MAINTENANCE) so no MFA is needed;
- * vehicle + expense fixtures are seeded directly via the Admin SDK because
- * vehicle:create / expense:create are ADMIN/FINANCE baselines.
+ * scoping + review lifecycle, provider CRUD, and audit access. Uses only the
+ * two non-admin roles (DRIVER/OPERATIONS). OPERATIONS is now privileged, so this
+ * expects the development MFA bypass (REQUIRE_MFA=false); vehicle + expense
+ * fixtures are seeded directly via the Admin SDK because vehicle:create is an
+ * ADMIN baseline and expense:create is an OPERATIONS baseline.
  */
 import { readFileSync } from "node:fs";
 
@@ -188,12 +189,14 @@ async function cleanup() {
 try {
   console.log(`\nPhase 3 fleet e2e @ ${BASE_URL}\n`);
 
-  // ── Users (all non-privileged → no MFA required) ──────────────────────────
+  // ── Users (non-admin roles → no admin-only grants) ────────────────────────
   const driverA = await createUser(`drivA.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["DRIVER"]);
   const driverB = await createUser(`drivB.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["DRIVER"]);
   const ops = await createUser(`ops.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["OPERATIONS"]);
-  const maint = await createUser(`maint.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["MAINTENANCE"]);
-  created.users.push(driverA, driverB, ops, maint);
+  // A second driver stands in for the old workshop account: drivers now own the
+  // maintenance / work-order workflow as well.
+  const workshop = await createUser(`wrk.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["DRIVER"]);
+  created.users.push(driverA, driverB, ops, workshop);
 
   // ── Vehicle fixtures (vehicle:create is ADMIN-only) ───────────────────────
   const veh1Ref = db.collection("vehicles").doc("e2e-veh-1");
@@ -224,11 +227,11 @@ try {
   });
   created.docIds.push(["vehicles", "e2e-veh-1"], ["vehicles", "e2e-veh-2"]);
 
-  const [sDriverA, sDriverB, sOps, sMaint] = await Promise.all([
+  const [sDriverA, sDriverB, sOps, sWorkshop] = await Promise.all([
     login(driverA.email),
     login(driverB.email),
     login(ops.email),
-    login(maint.email),
+    login(workshop.email),
   ]);
   console.log("  (users + vehicles ready)\n");
 
@@ -241,7 +244,7 @@ try {
       JSON.stringify(res.body).slice(0, 200),
     );
 
-    const create = await send("POST", "/api/v1/vehicles", sMaint.cookies, {
+    const create = await send("POST", "/api/v1/vehicles", sWorkshop.cookies, {
       regNumber: "E2E-X",
       make: "Ford",
       model: "Transit",
@@ -250,7 +253,7 @@ try {
       mileage: 0,
     });
     check(
-      "MAINTENANCE cannot create vehicles (403 vehicle:create)",
+      "WORKSHOP cannot create vehicles (403 vehicle:create)",
       create.status === 403 && create.body?.error?.code === "FORBIDDEN",
       JSON.stringify(create.body),
     );
@@ -258,7 +261,7 @@ try {
 
   // ── B. Odometer ledger (PATCH mileage retired, status via action only) ────
   {
-    const back = await send("PATCH", "/api/v1/vehicles/e2e-veh-1", sMaint.cookies, {
+    const back = await send("PATCH", "/api/v1/vehicles/e2e-veh-1", sWorkshop.cookies, {
       mileage: 5,
     });
     check(
@@ -267,7 +270,7 @@ try {
       JSON.stringify(back.body),
     );
 
-    const statusPatch = await send("PATCH", "/api/v1/vehicles/e2e-veh-1", sMaint.cookies, {
+    const statusPatch = await send("PATCH", "/api/v1/vehicles/e2e-veh-1", sWorkshop.cookies, {
       status: "ARCHIVED",
     });
     check(
@@ -276,20 +279,20 @@ try {
       JSON.stringify(statusPatch.body),
     );
 
-    const record = await send("POST", "/api/v1/vehicles/e2e-veh-1/odometer", sMaint.cookies, {
+    const record = await send("POST", "/api/v1/vehicles/e2e-veh-1/odometer", sWorkshop.cookies, {
       km: 15000,
       source: "MANUAL_ENTRY",
       notes: "e2e ledger record",
     });
     check(
-      "MAINTENANCE records an odometer reading (201 → projection 15000)",
+      "WORKSHOP records an odometer reading (201 → projection 15000)",
       record.status === 201 &&
         record.body?.reading?.km === 15000 &&
         record.body?.currentOdometerKm === 15000,
       JSON.stringify(record.body).slice(0, 200),
     );
 
-    const decrease = await send("POST", "/api/v1/vehicles/e2e-veh-1/odometer", sMaint.cookies, {
+    const decrease = await send("POST", "/api/v1/vehicles/e2e-veh-1/odometer", sWorkshop.cookies, {
       km: 14000,
       source: "MANUAL_ENTRY",
     });
@@ -300,30 +303,30 @@ try {
     );
   }
 
-  // ── C. Safety-hold invariant (maintenance can hold, never release) ────────
+  // ── C. Safety-hold invariant (driver can hold, never release) ─────────────
   {
-    const hold = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sMaint.cookies, {
+    const hold = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sWorkshop.cookies, {
       action: "safety_hold",
       reason: "brake wear observed",
     });
     check(
-      "MAINTENANCE can place a safety hold (200)",
+      "WORKSHOP can place a safety hold (200)",
       hold.status === 200 &&
         hold.body?.vehicle?.status === "SAFETY_HOLD" &&
         hold.body?.vehicle?.safetyHoldReason === "brake wear observed",
       JSON.stringify(hold.body).slice(0, 250),
     );
 
-    const release = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sMaint.cookies, {
+    const release = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sWorkshop.cookies, {
       action: "release",
     });
     check(
-      "MAINTENANCE cannot release a safety hold (403 vehicle:release)",
+      "WORKSHOP cannot release a safety hold (403 vehicle:release)",
       release.status === 403 && /vehicle:release/.test(release.body?.error?.message ?? ""),
       JSON.stringify(release.body),
     );
 
-    const wrongState = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sMaint.cookies, {
+    const wrongState = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sWorkshop.cookies, {
       action: "return_to_service",
     });
     check(
@@ -332,17 +335,17 @@ try {
       JSON.stringify(wrongState.body),
     );
 
-    const archive = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sMaint.cookies, {
+    const archive = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sWorkshop.cookies, {
       action: "archive",
     });
     check(
-      "MAINTENANCE cannot archive (403 vehicle:archive)",
+      "WORKSHOP cannot archive (403 vehicle:archive)",
       archive.status === 403 && /vehicle:archive/.test(archive.body?.error?.message ?? ""),
       JSON.stringify(archive.body),
     );
 
     // Workshop roundtrip on veh-2 (ACTIVE → IN_SERVICE → ACTIVE)
-    const sendWs = await send("POST", "/api/v1/vehicles/e2e-veh-2/status", sMaint.cookies, {
+    const sendWs = await send("POST", "/api/v1/vehicles/e2e-veh-2/status", sWorkshop.cookies, {
       action: "send_to_workshop",
     });
     check(
@@ -350,7 +353,7 @@ try {
       sendWs.status === 200 && sendWs.body?.vehicle?.status === "IN_SERVICE",
       JSON.stringify(sendWs.body).slice(0, 200),
     );
-    const ret = await send("POST", "/api/v1/vehicles/e2e-veh-2/status", sMaint.cookies, {
+    const ret = await send("POST", "/api/v1/vehicles/e2e-veh-2/status", sWorkshop.cookies, {
       action: "return_to_service",
     });
     check(
@@ -452,7 +455,7 @@ try {
     const noResolution = await send(
       "POST",
       `/api/v1/reports/${reportA.id}/status`,
-      sMaint.cookies,
+      sWorkshop.cookies,
       {
         action: "close",
       },
@@ -463,20 +466,30 @@ try {
       JSON.stringify(noResolution.body),
     );
 
-    const maintClose = await send("POST", `/api/v1/reports/${reportB.id}/status`, sMaint.cookies, {
-      action: "close",
-      resolution: "Inspected — no fault found; interior light replaced by driver.",
-    });
+    const maintClose = await send(
+      "POST",
+      `/api/v1/reports/${reportB.id}/status`,
+      sWorkshop.cookies,
+      {
+        action: "close",
+        resolution: "Inspected — no fault found; interior light replaced by driver.",
+      },
+    );
     check(
-      "MAINTENANCE closes report from OPEN with resolution (200 → CLOSED)",
+      "WORKSHOP closes report from OPEN with resolution (200 → CLOSED)",
       maintClose.status === 200 && maintClose.body?.report?.status === "CLOSED",
       JSON.stringify(maintClose.body).slice(0, 250),
     );
 
-    const closeAgain = await send("POST", `/api/v1/reports/${reportB.id}/status`, sMaint.cookies, {
-      action: "close",
-      resolution: "Already closed.",
-    });
+    const closeAgain = await send(
+      "POST",
+      `/api/v1/reports/${reportB.id}/status`,
+      sWorkshop.cookies,
+      {
+        action: "close",
+        resolution: "Already closed.",
+      },
+    );
     check(
       "closing a closed report is 409",
       closeAgain.status === 409,
@@ -501,37 +514,42 @@ try {
     const maintCreate = await send(
       "POST",
       `/api/v1/reports/${reportA.id}/work-order`,
-      sMaint.cookies,
+      sWorkshop.cookies,
       { priority: "URGENT", description: "Front brake pads + disc inspection" },
     );
     check(
-      "MAINTENANCE creates work order from report (201)",
+      "WORKSHOP creates work order from report (201)",
       maintCreate.status === 201 && maintCreate.body?.workOrder?.status === "OPEN",
       JSON.stringify(maintCreate.body).slice(0, 300),
     );
     workOrder = maintCreate.body?.workOrder;
     if (workOrder) created.docIds.push(["workOrders", workOrder.id]);
 
-    const dup = await send("POST", `/api/v1/reports/${reportA.id}/work-order`, sMaint.cookies, {
+    const dup = await send("POST", `/api/v1/reports/${reportA.id}/work-order`, sWorkshop.cookies, {
       priority: "NORMAL",
     });
     check("second work order for same report is 409", dup.status === 409, JSON.stringify(dup.body));
 
-    const driverStart = await send(
+    const opsStart = await send(
       "POST",
       `/api/v1/work-orders/${workOrder.id}/status`,
-      sDriverA.cookies,
+      sOps.cookies,
       { action: "start" },
     );
     check(
-      "DRIVER cannot act on work orders (403)",
-      driverStart.status === 403,
-      JSON.stringify(driverStart.body),
+      "OPERATIONS cannot act on work orders (403 work_order:update)",
+      opsStart.status === 403 && /work_order:update/.test(opsStart.body?.error?.message ?? ""),
+      JSON.stringify(opsStart.body),
     );
 
-    const start = await send("POST", `/api/v1/work-orders/${workOrder.id}/status`, sMaint.cookies, {
-      action: "start",
-    });
+    const start = await send(
+      "POST",
+      `/api/v1/work-orders/${workOrder.id}/status`,
+      sWorkshop.cookies,
+      {
+        action: "start",
+      },
+    );
     check(
       "start (200 → IN_PROGRESS)",
       start.status === 200 && start.body?.workOrder?.status === "IN_PROGRESS",
@@ -541,7 +559,7 @@ try {
     const completeEarly = await send(
       "POST",
       `/api/v1/work-orders/${workOrder.id}/status`,
-      sMaint.cookies,
+      sWorkshop.cookies,
       { action: "close" },
     );
     check(
@@ -553,7 +571,7 @@ try {
     const complete = await send(
       "POST",
       `/api/v1/work-orders/${workOrder.id}/complete`,
-      sMaint.cookies,
+      sWorkshop.cookies,
       {
         workPerformed: "Replaced front brake pads; inspected discs for wear.",
         odometerKm: 15050,
@@ -571,7 +589,7 @@ try {
     const replay = await send(
       "POST",
       `/api/v1/work-orders/${workOrder.id}/complete`,
-      sMaint.cookies,
+      sWorkshop.cookies,
       { workPerformed: "Replaced front brake pads; inspected discs for wear.", odometerKm: 15050 },
     );
     check(
@@ -580,9 +598,14 @@ try {
       JSON.stringify(replay.body).slice(0, 250),
     );
 
-    const close = await send("POST", `/api/v1/work-orders/${workOrder.id}/status`, sMaint.cookies, {
-      action: "close",
-    });
+    const close = await send(
+      "POST",
+      `/api/v1/work-orders/${workOrder.id}/status`,
+      sWorkshop.cookies,
+      {
+        action: "close",
+      },
+    );
     check(
       "close (200 → CLOSED)",
       close.status === 200 && close.body?.workOrder?.status === "CLOSED",
@@ -592,7 +615,7 @@ try {
     const reopen = await send(
       "POST",
       `/api/v1/work-orders/${workOrder.id}/status`,
-      sMaint.cookies,
+      sWorkshop.cookies,
       { action: "reopen" },
     );
     check(
@@ -607,7 +630,7 @@ try {
     const completeFromOpen = await send(
       "POST",
       `/api/v1/work-orders/${workOrder.id}/complete`,
-      sMaint.cookies,
+      sWorkshop.cookies,
       { workPerformed: "Re-diagnosed after reopening — no further action.", odometerKm: 15060 },
     );
     check(
@@ -617,7 +640,7 @@ try {
     );
   }
 
-  // ── F. Expenses: permission gating + read (lifecycle needs FINANCE/MFA) ──
+  // ── F. Expenses: permission gating + read (void/export need OPERATIONS) ──
   {
     const expenseFixture = await db.collection("expenses").add({
       workOrderId: workOrder.id,
@@ -633,22 +656,22 @@ try {
     });
     created.docIds.push(["expenses", expenseFixture.id]);
 
-    const read = await get("/api/v1/expenses", sMaint.cookies);
+    const read = await get("/api/v1/expenses", sWorkshop.cookies);
     const expenseIds = (read.body?.expenses ?? []).map((e) => e.id);
     check(
-      "MAINTENANCE can read expenses (200, includes fixture)",
+      "WORKSHOP can read expenses (200, includes fixture)",
       read.status === 200 && expenseIds.includes(expenseFixture.id),
       JSON.stringify(read.body).slice(0, 250),
     );
 
-    const create = await send("POST", "/api/v1/expenses", sMaint.cookies, {
+    const create = await send("POST", "/api/v1/expenses", sWorkshop.cookies, {
       workOrderId: workOrder.id,
       category: "FUEL",
       amount: 250.5,
       description: "fuel for workshop run",
     });
     check(
-      "MAINTENANCE cannot create expenses (403 expense:create)",
+      "WORKSHOP cannot create expenses (403 expense:create)",
       create.status === 403 && /expense:create/.test(create.body?.error?.message ?? ""),
       JSON.stringify(create.body),
     );
@@ -656,47 +679,47 @@ try {
     const voidAttempt = await send(
       "POST",
       `/api/v1/expenses/${expenseFixture.id}/status`,
-      sMaint.cookies,
-      { action: "void", reason: "should be denied to MAINTENANCE" },
+      sWorkshop.cookies,
+      { action: "void", reason: "should be denied to WORKSHOP" },
     );
     check(
-      "MAINTENANCE cannot void expenses (403 expense:void)",
+      "WORKSHOP cannot void expenses (403 expense:void)",
       voidAttempt.status === 403 && /expense:void/.test(voidAttempt.body?.error?.message ?? ""),
       JSON.stringify(voidAttempt.body),
     );
 
-    const exportRes = await get("/api/v1/expenses/export", sMaint.cookies);
+    const exportRes = await get("/api/v1/expenses/export", sWorkshop.cookies);
     check(
-      "MAINTENANCE cannot export (403 expense:export)",
+      "WORKSHOP cannot export (403 expense:export)",
       exportRes.status === 403 && /expense:export/.test(exportRes.body?.error?.message ?? ""),
       JSON.stringify(exportRes.body),
     );
   }
 
-  // ── G. Providers: MAINTENANCE baseline allows full CRUD ─────────────────
+  // ── G. Providers: WORKSHOP (driver) baseline allows full CRUD ────────────
   let provider;
   {
-    const createdRes = await send("POST", "/api/v1/providers", sMaint.cookies, {
+    const createdRes = await send("POST", "/api/v1/providers", sWorkshop.cookies, {
       name: `E2E Garage ${EMAIL_SUFFIX}`,
       phone: "+233200000000",
       specialties: ["mechanical", "tyres"],
     });
     check(
-      "MAINTENANCE can create a provider (201)",
+      "WORKSHOP can create a provider (201)",
       createdRes.status === 201 && createdRes.body?.provider?.active === true,
       JSON.stringify(createdRes.body).slice(0, 250),
     );
     provider = createdRes.body?.provider;
     if (provider) created.docIds.push(["providers", provider.id]);
 
-    const list = await get("/api/v1/providers?activeOnly=true", sMaint.cookies);
+    const list = await get("/api/v1/providers?activeOnly=true", sWorkshop.cookies);
     check(
-      "MAINTENANCE can read providers (200)",
+      "WORKSHOP can read providers (200)",
       list.status === 200 && Array.isArray(list.body?.providers),
       JSON.stringify(list.body).slice(0, 150),
     );
 
-    const badEmail = await send("PATCH", `/api/v1/providers/${provider.id}`, sMaint.cookies, {
+    const badEmail = await send("PATCH", `/api/v1/providers/${provider.id}`, sWorkshop.cookies, {
       email: "not-an-email",
     });
     check(
@@ -705,7 +728,7 @@ try {
       JSON.stringify(badEmail.body),
     );
 
-    const patch = await send("PATCH", `/api/v1/providers/${provider.id}`, sMaint.cookies, {
+    const patch = await send("PATCH", `/api/v1/providers/${provider.id}`, sWorkshop.cookies, {
       contactName: "Kwame Mensah",
       active: false,
     });
@@ -717,7 +740,7 @@ try {
       JSON.stringify(patch.body).slice(0, 250),
     );
 
-    const inactive = await get("/api/v1/providers?activeOnly=true", sMaint.cookies);
+    const inactive = await get("/api/v1/providers?activeOnly=true", sWorkshop.cookies);
     const ids = (inactive.body?.providers ?? []).map((p) => p.id);
     check(
       "inactive provider hidden from activeOnly list",
@@ -725,41 +748,29 @@ try {
       JSON.stringify(ids).slice(0, 150),
     );
 
-    const driverCreate = await send("POST", "/api/v1/providers", sDriverA.cookies, {
-      name: "Driver attempt",
+    // Drivers now own the workshop workflow, so provider CRUD is gated by the
+    // dispatch role instead (OPERATIONS holds provider:read but not create).
+    const opsCreate = await send("POST", "/api/v1/providers", sOps.cookies, {
+      name: "Ops attempt",
       phone: "+233200000001",
     });
     check(
-      "DRIVER cannot create providers (403 provider:create)",
-      driverCreate.status === 403,
-      JSON.stringify(driverCreate.body),
-    );
-
-    const driverRead = await get("/api/v1/providers", sDriverA.cookies);
-    check(
-      "DRIVER cannot read providers (403 provider:read)",
-      driverRead.status === 403,
-      JSON.stringify(driverRead.body),
+      "OPERATIONS cannot create providers (403 provider:create)",
+      opsCreate.status === 403 && /provider:create/.test(opsCreate.body?.error?.message ?? ""),
+      JSON.stringify(opsCreate.body),
     );
   }
 
   // ── H. Audit trail ───────────────────────────────────────────────────────
   {
-    const res = await get("/api/v1/audit?limit=200", sMaint.cookies);
+    const res = await get("/api/v1/audit?limit=200", sWorkshop.cookies);
     const types = new Set((res.body?.entries ?? []).map((e) => e.eventType));
     check(
-      "MAINTENANCE can read the audit log (200, has domain events)",
+      "WORKSHOP can read the audit log (200, has domain events)",
       res.status === 200 &&
         types.has("vehicle.status.changed") &&
         types.has("report.status.changed"),
       JSON.stringify([...types]).slice(0, 300),
-    );
-
-    const denial = await get("/api/v1/audit", sDriverA.cookies);
-    check(
-      "DRIVER cannot read the audit log (403 audit:read)",
-      denial.status === 403 && /audit:read/.test(denial.body?.error?.message ?? ""),
-      JSON.stringify(denial.body),
     );
   }
 

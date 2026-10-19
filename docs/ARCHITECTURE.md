@@ -60,7 +60,7 @@ State changes go through **explicit action endpoints** — a generic
 writes a service record + schedule resets, so it is not an action-map action).
 Every state change is written to the audit log.
 
-MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
+MFA (TOTP) is required for `ADMIN` and `OPERATIONS` roles.
 
 ## Data access
 
@@ -108,7 +108,7 @@ MFA (TOTP) is required for `ADMIN`, `MANAGER` and `FINANCE` roles.
     completion is evidence-gated (`workPerformed` + `odometerKm`) and
     idempotent per work order (replays return the existing service record).
   - Expenses follow `RECORDED → VOID` only — no in-app approval. Voiding
-    requires a reason and is FINANCE-only (`expense:void`).
+    requires a reason and is OPERATIONS/ADMIN (`expense:void`).
   - Report ownership: `report:read:own` scoping enforced in the list and
     get endpoints; `report:read:all` reads everything. Closing an issue
     requires a resolution, a duplicate link, or a not-actionable reason.

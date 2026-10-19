@@ -5,7 +5,8 @@
  *   npm run dev &
  *   node scripts/e2e-operations.mjs
  *
- * Mandated scenarios covered here (non-MFA roles only):
+ * Mandated scenarios covered here (two roles; OPERATIONS is now privileged, so
+ * this expects the development MFA bypass REQUIRE_MFA=false):
  *  - H: journey/mileage linkage — assignment start/end odometer → trip
  *    distance from accepted readings; missing/conflicting readings flagged.
  *  - B/G: safety-held vehicle cannot be assigned; failed critical inspection
@@ -187,9 +188,11 @@ try {
 
   const driver = await createUser(`drv.${EMAIL_SUFFIX}@e2e.local`, ["DRIVER"]);
   const ops = await createUser(`op.${EMAIL_SUFFIX}@e2e.local`, ["OPERATIONS"]);
-  const maint = await createUser(`mnt.${EMAIL_SUFFIX}@e2e.local`, ["MAINTENANCE"]);
-  const finance = await createUser(`fin.${EMAIL_SUFFIX}@e2e.local`, ["FINANCE"]);
-  created.users.push(driver, ops, maint, finance);
+  // Drivers now own the workshop workflow (documents, inspections) too.
+  const workshop = await createUser(`wrk.${EMAIL_SUFFIX}@e2e.local`, ["DRIVER"]);
+  // A second OPERATIONS user stands in for the old finance desk (fuel, money).
+  const opsFinance = await createUser(`fin.${EMAIL_SUFFIX}@e2e.local`, ["OPERATIONS"]);
+  created.users.push(driver, ops, workshop, opsFinance);
 
   const vehRef = db.collection("vehicles").doc(`e2e-ops-${EMAIL_SUFFIX}`);
   await vehRef.set({
@@ -209,11 +212,11 @@ try {
   });
   created.docIds.push(["vehicles", vehRef.id]);
 
-  const [dCookies, oCookies, mCookies, fCookies] = await Promise.all([
+  const [dCookies, oCookies, wCookies, ofCookies] = await Promise.all([
     login(driver.email),
     login(ops.email),
-    login(maint.email),
-    login(finance.email),
+    login(workshop.email),
+    login(opsFinance.email),
   ]);
   console.log("  (users + vehicle ready)\n");
 
@@ -310,7 +313,7 @@ try {
 
   /* ── Fuel: canonical expense, defensible consumption ────────────────── */
   {
-    const fuel1 = await send("POST", "/api/v1/fuel", fCookies, {
+    const fuel1 = await send("POST", "/api/v1/fuel", ofCookies, {
       vehicleId: vehRef.id,
       transactedOn: "2026-06-01",
       odometerKm: 50280,
@@ -322,7 +325,7 @@ try {
       clientToken: `e2e-f1-${EMAIL_SUFFIX}`,
     });
     check(
-      "FINANCE records a fuel purchase (201, canonical expense linked)",
+      "OPERATIONS records a fuel purchase (201, canonical expense linked)",
       fuel1.status === 201 &&
         fuel1.body.expense?.category === "FUEL" &&
         fuel1.body.entry?.totalMinor === 52800 &&
@@ -333,7 +336,7 @@ try {
     if (fuel1.body.expense?.id) created.docIds.push(["expenses", fuel1.body.expense.id]);
 
     // Idempotent retry.
-    const retry = await send("POST", "/api/v1/fuel", fCookies, {
+    const retry = await send("POST", "/api/v1/fuel", ofCookies, {
       vehicleId: vehRef.id,
       transactedOn: "2026-06-01",
       odometerKm: 50280,
@@ -350,7 +353,7 @@ try {
     );
 
     // Second full-tank fill-up 800 km later → consumption defensible.
-    const fuel2 = await send("POST", "/api/v1/fuel", fCookies, {
+    const fuel2 = await send("POST", "/api/v1/fuel", ofCookies, {
       vehicleId: vehRef.id,
       transactedOn: "2026-06-08",
       odometerKm: 51080,
@@ -364,32 +367,35 @@ try {
     if (fuel2.body.entry?.id) created.docIds.push(["fuelEntries", fuel2.body.entry.id]);
     if (fuel2.body.expense?.id) created.docIds.push(["expenses", fuel2.body.expense.id]);
 
-    const fuelList = await get(`/api/v1/fuel?vehicleId=${vehRef.id}`, fCookies);
+    const fuelList = await get(`/api/v1/fuel?vehicleId=${vehRef.id}`, ofCookies);
     check(
       "consumption computed from full-tank pair (16 km/l)",
       fuelList.status === 200 && fuelList.body.consumption?.kmPerLitre === 16,
       JSON.stringify(fuelList.body.consumption).slice(0, 200),
     );
 
-    // DRIVER cannot record fuel.
-    const denied = await send("POST", "/api/v1/fuel", dCookies, {
+    // DRIVER can record fuel now (fuel:create came with the workshop merge).
+    const allowed = await send("POST", "/api/v1/fuel", dCookies, {
       vehicleId: vehRef.id,
       transactedOn: "2026-06-09",
       odometerKm: 51100,
       fuelType: "DIESEL",
       litres: 10,
-      totalMinor: 10000,
+      unitPrice: "13.20",
+      clientToken: `e2e-f3-${EMAIL_SUFFIX}`,
     });
     check(
-      "DRIVER cannot record fuel (403 fuel:create)",
-      denied.status === 403 && /fuel:create/.test(denied.body?.error?.message ?? ""),
-      JSON.stringify(denied.body).slice(0, 150),
+      "DRIVER records fuel after the workshop merge (201 fuel:create)",
+      allowed.status === 201 && allowed.body.entry?.id,
+      JSON.stringify(allowed.body).slice(0, 150),
     );
+    if (allowed.body.entry?.id) created.docIds.push(["fuelEntries", allowed.body.entry.id]);
+    if (allowed.body.expense?.id) created.docIds.push(["expenses", allowed.body.expense.id]);
   }
 
   /* ── Documents: expiry states + assignment blocking ─────────────────── */
   {
-    const expiredDoc = await send("POST", "/api/v1/documents", mCookies, {
+    const expiredDoc = await send("POST", "/api/v1/documents", wCookies, {
       vehicleId: vehRef.id,
       category: "INSURANCE",
       expiryDate: "2026-01-01",
@@ -397,7 +403,7 @@ try {
       fileKey: `private/insurance-${EMAIL_SUFFIX}.pdf`,
     });
     check(
-      "MAINTENANCE uploads a document reference (201)",
+      "WORKSHOP uploads a document reference (201)",
       expiredDoc.status === 201 && expiredDoc.body.document?.mandatory === true,
       JSON.stringify(expiredDoc.body).slice(0, 250),
     );
@@ -405,7 +411,7 @@ try {
       created.docIds.push(["vehicleDocuments", expiredDoc.body.document.id]);
     }
 
-    const docs = await get(`/api/v1/documents?vehicleId=${vehRef.id}`, mCookies);
+    const docs = await get(`/api/v1/documents?vehicleId=${vehRef.id}`, wCookies);
     const doc = (docs.body.documents ?? []).find((d) => d.id === expiredDoc.body.document?.id);
     check(
       "expired document computed as EXPIRED",
@@ -435,7 +441,7 @@ try {
     const renewed = await send(
       "PATCH",
       `/api/v1/documents/${expiredDoc.body.document?.id}`,
-      mCookies,
+      wCookies,
       { expiryDate: "2027-06-01" },
     );
     check(
@@ -444,12 +450,13 @@ try {
       JSON.stringify(renewed.body).slice(0, 200),
     );
 
-    // DRIVER cannot see the document register (no document:read).
-    const denied = await get(`/api/v1/documents?vehicleId=${vehRef.id}`, dCookies);
+    // DRIVER can read the document register now (document:read came with the
+    // workshop merge); the workspace driver keeps that access.
+    const driverDocs = await get(`/api/v1/documents?vehicleId=${vehRef.id}`, dCookies);
     check(
-      "DRIVER cannot read documents (403 document:read)",
-      denied.status === 403 && /document:read/.test(denied.body?.error?.message ?? ""),
-      JSON.stringify(denied.body).slice(0, 150),
+      "DRIVER reads documents after the workshop merge (200 document:read)",
+      driverDocs.status === 200 && Array.isArray(driverDocs.body.documents),
+      JSON.stringify(driverDocs.body).slice(0, 150),
     );
   }
 
@@ -591,9 +598,9 @@ try {
     );
 
     // Notifications readable by roles that hold notification:read.
-    const notifs = await get("/api/v1/notifications?limit=10", mCookies);
+    const notifs = await get("/api/v1/notifications?limit=10", wCookies);
     check(
-      "MAINTENANCE can read notifications (200)",
+      "WORKSHOP can read notifications (200)",
       notifs.status === 200 && Array.isArray(notifs.body.notifications),
       JSON.stringify(notifs.body).slice(0, 200),
     );

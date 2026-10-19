@@ -3,7 +3,11 @@ import { NextRequest } from "next/server";
 import { isValidCronBearer, readCronSecret } from "@/lib/api/cron";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
-import { deriveDocumentReminders, deriveScheduleReminders } from "@/lib/domain/reminders";
+import {
+  deriveDocumentReminders,
+  deriveScheduleReminders,
+  REMINDER_ROLES,
+} from "@/lib/domain/reminders";
 import { listAllSchedules } from "@/lib/repos/maintenance";
 import { reconcileAssignmentReservations } from "@/lib/repos/assignments";
 import { listDocumentsExpiringSoon } from "@/lib/repos/documents";
@@ -80,7 +84,7 @@ async function runReminders(request: NextRequest) {
         now,
       });
 
-      for (const role of ["MAINTENANCE", "OPERATIONS"]) {
+      for (const role of REMINDER_ROLES) {
         for (const candidate of candidates) {
           const result = await createNotification({
             recipientRole: role,
@@ -113,7 +117,7 @@ async function runReminders(request: NextRequest) {
         now,
         warningDays,
       });
-      for (const role of ["OPERATIONS", "MAINTENANCE"]) {
+      for (const role of REMINDER_ROLES) {
         for (const candidate of candidates) {
           const result = await createNotification({
             recipientRole: role,

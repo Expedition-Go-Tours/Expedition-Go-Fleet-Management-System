@@ -46,16 +46,15 @@ describe("hashSessionToken", () => {
 });
 
 describe("policy selection ($4.2)", () => {
-  it("uses the shorter privileged policy for ADMIN/MANAGER/FINANCE", () => {
+  it("uses the shorter privileged policy for ADMIN and OPERATIONS", () => {
     expect(policyForRoles(["ADMIN"])).toEqual(SESSION_POLICIES.privileged);
-    expect(policyForRoles(["MANAGER"])).toEqual(SESSION_POLICIES.privileged);
-    expect(policyForRoles(["FINANCE"])).toEqual(SESSION_POLICIES.privileged);
+    expect(policyForRoles(["OPERATIONS"])).toEqual(SESSION_POLICIES.privileged);
     expect(isPrivileged(["ADMIN", "DRIVER"])).toBe(true);
+    expect(isPrivileged(["OPERATIONS"])).toBe(true);
   });
 
-  it("uses the standard policy for other roles", () => {
+  it("uses the standard policy for DRIVER", () => {
     expect(policyForRoles(["DRIVER"])).toEqual(SESSION_POLICIES.standard);
-    expect(policyForRoles(["OPERATIONS", "MAINTENANCE"])).toEqual(SESSION_POLICIES.standard);
     expect(isPrivileged(["DRIVER"])).toBe(false);
   });
 });

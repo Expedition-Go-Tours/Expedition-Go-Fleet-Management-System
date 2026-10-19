@@ -6,7 +6,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/fields";
 import { api } from "@/lib/client/api";
-import { ROLE_KEYS } from "@/lib/auth/types";
+import { ROLE_KEYS, ROLE_LABELS } from "@/lib/auth/types";
 
 /**
  * Invite form: creates the account and surfaces the one-time temporary
@@ -98,7 +98,7 @@ export function InviteUserForm() {
         <Select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)}>
           {ROLE_KEYS.map((r) => (
             <option key={r} value={r}>
-              {r}
+              {ROLE_LABELS[r]}
             </option>
           ))}
         </Select>

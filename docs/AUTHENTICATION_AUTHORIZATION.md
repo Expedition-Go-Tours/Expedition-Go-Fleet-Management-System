@@ -77,7 +77,7 @@ Only an authorized administrator may change account status. Require a reason for
 
 ### 3.3 MFA
 
-- Require MFA for `ADMIN`, `MANAGER`, and `FINANCE` users.
+- Require MFA for `ADMIN` and `OPERATIONS` users.
 - Encourage or require MFA for all staff as operationally practical.
 - Prefer passkeys/security keys or an authenticator-based method when supported. Do not make SMS the only option for privileged users.
 - Provide a controlled recovery process. Recovery codes, where offered, must be single-use and stored only in protected/hashed form by the provider or application.
@@ -124,7 +124,7 @@ The `__Host-` prefix requires a secure cookie, root path, and no `Domain` attrib
 Set the browser cookie lifetime and Redis TTL consistently. A practical baseline is:
 
 - Standard staff: 60-minute idle timeout, 12-hour absolute lifetime.
-- Privileged users (`ADMIN`, `MANAGER`, `FINANCE`): 30-minute idle timeout, 8-hour absolute lifetime.
+- Privileged users (`ADMIN`, `OPERATIONS`): 30-minute idle timeout, 8-hour absolute lifetime.
 - Warn users shortly before expiry and preserve unsaved form drafts safely where practical.
 - Require recent reauthentication (e.g. within 10 minutes) for privileged operations such as role assignment, account recovery/security changes, expense voiding, and clearing a safety hold/releasing a vehicle where policy requires it.
 
@@ -172,7 +172,7 @@ Every protected operation must pass all relevant checks:
 4. **Record scope:** the user may access that particular report, vehicle, work order, expense, attachment, or user record.
 5. **Business invariants:** the state transition is valid (e.g. a vehicle cannot be released while a safety hold remains active).
 
-Checking only that a user is logged in, or only that they have a broad role such as `MAINTENANCE`, is insufficient.
+Checking only that a user is logged in, or only that they have a broad role such as `DRIVER`, is insufficient.
 
 ### 6.3 Permission keys
 
@@ -223,22 +223,43 @@ Only grant the permissions actually needed by each role. Additional per-user gra
 
 ### 6.4 Baseline role matrix
 
-| Capability | Driver | Operations | Maintenance | Finance | Manager | Admin |
-|---|---|---|---|---|---|---|
-| Read relevant vehicle information | Yes | All | All | Limited | All | Support need |
-| Submit maintenance report | Yes | Yes | Optional | No | Optional | Support need |
-| Read own reports | Yes | Yes | Yes | Limited | Yes | Support need |
-| Read/triage all reports | No | Yes | Yes | Limited | Yes | Support need |
-| Create/manage work orders | No | Read/coordinate | Yes | No | Read | Support need |
-| Record expenses | No | Optional | Yes, if granted | Yes | Read | Support need |
-| Change payment status | No | No | No by default | Yes | Read | No by default |
-| Void/correct expenses | No | No | No by default | Yes, with reason | Read | No by default |
-| Read financial totals | No | Limited summary | Limited | Yes | Yes | Only if needed |
-| Release vehicle | No | No by default | Only with `vehicle:release` | No | Only if granted | No automatic bypass |
-| Manage users/roles | No | No | No | No | No by default | Yes |
-| Read audit logs | No | Limited | Limited | Financial events | Yes | Yes |
+The original six roles have been consolidated to **three**: `ADMIN`, `OPERATIONS`
+and `DRIVER`. `MANAGER` folded into `ADMIN`, `MAINTENANCE` into `DRIVER` (the
+driver takes the vehicle to the garage and records the work), and `FINANCE` into
+`OPERATIONS` (dispatch and costs are one desk job). The matrix below is the
+binding one, and matches `src/lib/auth/permissions.ts`.
 
-“Limited” and “Support need” must be translated into explicit record scope and fields. A user interface hiding a page is not enforcement. Finance should not be able to change repair details or release vehicles. Administrative access should not silently bypass safety and financial invariants.
+| Capability | Driver | Operations | Admin |
+|---|---|---|---|
+| Read vehicle information | Yes | Yes | Yes |
+| Submit reports/issues | Yes | Yes | Yes |
+| Read own reports | Yes | Yes | Yes |
+| Read/triage/close all reports | Yes | Yes | Yes |
+| Create/manage work orders | Yes | Read/coordinate | Yes |
+| Preventive maintenance schedules + service records | Yes | Read | Yes |
+| Record/correct odometer readings | Yes | Record | Yes |
+| Record fuel | Yes | Yes | Yes |
+| Read expenses | Yes | Yes | Yes |
+| Record expenses | No | Yes | Yes |
+| Void/correct expenses | No | Yes, with reason | Yes, with reason |
+| Read financial totals / export | No | Yes | Yes |
+| Manage providers | Yes | Read | Yes |
+| Release vehicle from safety hold | No | No | Only with `vehicle:release`; no automatic bypass |
+| Manage users/roles | No | No | Yes |
+| Read audit logs | Yes | Yes | Yes |
+
+Because the merge is **additive**, drivers inherit the workshop bookkeeping
+(work orders, schedules, service records, odometer corrections, fuel) along with
+their driving work, and operations inherits the money desk. Two consequences are
+deliberate and worth reviewing if you want tighter limits later:
+
+- A driver can read the audit log and record fuel (inherited from `MAINTENANCE`).
+- A driver may verify the completion of a repair they recorded themselves. The
+  safety-hold release stays with `ADMIN` as the backstop against unsafe vehicles.
+
+A user interface hiding a page is not enforcement. `ADMIN` must never silently
+bypass safety and financial invariants — in particular, the safety-hold release
+is a distinct permission and is not granted automatically.
 
 ### 6.5 Resource-level checks
 

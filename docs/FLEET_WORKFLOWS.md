@@ -67,7 +67,7 @@ POST /reports/:id/status           { action: "triage" }
 POST /reports/:id/work-order       { priority, description }
 ```
 
-- `work_order:create` (MAINTENANCE). One work order per issue — a second
+- `work_order:create` (DRIVER). One work order per issue — a second
   attempt is `409 CONFLICT`. The issue↔work-order link is written in the same
   transaction, so `issueIds` on the work order is authoritative.
 - Work orders can also be created directly (`POST /work-orders`) for
@@ -103,7 +103,7 @@ POST /work-orders/:id/status       { action: "reopen" }       → OPEN
     the existing service record with `duplicate: true`.
 - Completion **never releases a safety hold** — releasing is a separate,
   permission-gated `vehicle:release` action (§1.5).
-- `verify` (`work_order:verify`, OPERATIONS/FINANCE) and `close` complete the
+- `verify` (`work_order:verify`, DRIVER/ADMIN) and `close` complete the
   QA loop; `reopen` (from `CLOSED`) clears downstream evidence links on the
   work order (the service record remains as history).
 
@@ -141,7 +141,7 @@ POST /odometer/:id/correct         { correctedKm, reason }   (odometer:correct)
 GET  /odometer/recent              → recent readings across the fleet
 ```
 
-- `odometer:record` (DRIVER/OPERATIONS/MAINTENANCE/…). Live sources
+- `odometer:record` (DRIVER/OPERATIONS/ADMIN). Live sources
   (`TRIP_START`, `TRIP_END`, `PRE_TRIP_INSPECTION`, `POST_TRIP_INSPECTION`,
   `FUEL_PURCHASE`, `SERVICE_COMPLETION`, `MANUAL_ENTRY`) must be ≥ current
   projection — a decrease is `409 DECREASE_REJECTED` and directs the caller to
@@ -226,7 +226,7 @@ POST /fuel                         { vehicleId, odometerKm, litres, pricePerLitr
   semantics); the odometer flows into the ledger (`FUEL_PURCHASE`).
 - Expenses observe the lifecycle `RECORDED → VOID` only
   (`POST /expenses/:id/status { action: "void", reason }`, `expense:void`,
-  FINANCE). There is **no in-app approval**; voiding is permanent-audited and
+  OPERATIONS/ADMIN). There is **no in-app approval**; voiding is permanent-audited and
   never deletes. Export (`GET /expenses/export`) requires `expense:export`.
 
 ---
@@ -238,7 +238,7 @@ POST /documents                    { vehicleId, kind, fileUrl, expiresAt? }
 PATCH /documents/:id               { name?, expiresAt?, notes?, status? }
 ```
 
-- Upload is permission-gated (`document:upload`, OPERATIONS/MAINTENANCE);
+- Upload is permission-gated (`document:upload`, OPERATIONS/DRIVER);
   management (`document:manage`) adds rename/expiry handling.
 - Derived states: `VALID | EXPIRING_SOON | EXPIRED | MISSING` from
   `expiresAt` (30-day window). Vehicles with a missing/expired **mandatory**
@@ -304,9 +304,9 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
 `scripts/e2e-operations.mjs` (25) against live Firestore:
 
 - **A — Real report**: driver submits a CRITICAL report → vehicle held;
-  MAINTENANCE creates work order, starts, completes with evidence (schedule
+  the driver creates the work order, starts, completes it with evidence (schedule
   baselines: only named ones reset; oil-change untouched), verifies, closes;
-  release is denied to MAINTENANCE (`403 vehicle:release`); audit rows exist.
+  release is denied to the driver (`403 vehicle:release`); audit rows exist.
 - **B — Mileage boundaries**: `validateReading` rejects decreases
   (`DECREASE_REJECTED`), accepts equal/higher, rejects non-integer/negative/
   absurd values; correction supersedes and recomputes the projection;
@@ -341,6 +341,6 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
 | No repair without a traceable record | work-order completion evidence gate + immutable ServiceRecord |
 | No release from a hold by same-party fixers | `vehicle:release` not granted to any default role; re-checks open critical issues |
 | Money recorded once, never double-counted | integer pesewas; fuel → canonical Expense in one transaction |
-| No expense "approval" drift | expenses only `RECORDED → VOID` (FINANCE-only, reason required) |
+| No expense "approval" drift | expenses only `RECORDED → VOID` (OPERATIONS/ADMIN, reason required) |
 | Reminders/journaling survive reruns | `dedupeKey` idempotency + Firestore transactions |
 | Write payloads never fail on `undefined` | `definedOnly` stripping in every repo write path |

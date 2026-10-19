@@ -13,27 +13,12 @@ import type { TourDefinition, TourId, TourProgress, TourStep } from "@/lib/onboa
  */
 
 /**
- * Role precedence for users holding several roles. The most privileged tour
- * the user qualifies for is the default; every qualifying tour stays replayable
- * from Help.
+ * Role precedence for users holding several roles. The most privileged tour a
+ * user qualifies for is the default; every qualifying tour stays replayable from
+ * Help — a driver now qualifies for both the driver and maintenance tours, and
+ * the operations desk for both operations and finance.
  */
-export const ROLE_TOUR_ORDER: readonly RoleKey[] = [
-  "ADMIN",
-  "MANAGER",
-  "OPERATIONS",
-  "MAINTENANCE",
-  "FINANCE",
-  "DRIVER",
-];
-
-export const ROLE_TOUR: Record<RoleKey, TourId> = {
-  ADMIN: "admin",
-  MANAGER: "admin",
-  OPERATIONS: "operations",
-  MAINTENANCE: "maintenance",
-  FINANCE: "finance",
-  DRIVER: "driver",
-};
+export const ROLE_TOUR_ORDER: readonly RoleKey[] = ["ADMIN", "OPERATIONS", "DRIVER"];
 
 export const TOURS: readonly TourDefinition[] = [
   {
@@ -168,7 +153,7 @@ export const TOURS: readonly TourDefinition[] = [
     version: 2,
     title: "Maintenance tour",
     summary: "Reminders, open issues, work orders and recording repairs correctly.",
-    roles: ["MAINTENANCE"],
+    roles: ["DRIVER"],
     requiresAnyOf: [PERMISSIONS.WORK_ORDER_COMPLETE, PERMISSIONS.SCHEDULE_MANAGE],
     startRoute: "/maintenance",
     steps: [
@@ -230,7 +215,7 @@ export const TOURS: readonly TourDefinition[] = [
     version: 1,
     title: "Finance tour",
     summary: "The expense ledger, recording costs, fuel records and permitted exports.",
-    roles: ["FINANCE"],
+    roles: ["OPERATIONS"],
     requiresAnyOf: [PERMISSIONS.EXPENSE_CREATE, PERMISSIONS.EXPENSE_EXPORT],
     startRoute: "/expenses",
     steps: [
@@ -285,9 +270,9 @@ export const TOURS: readonly TourDefinition[] = [
   {
     id: "admin",
     version: 2,
-    title: "Admin & manager tour",
+    title: "Admin tour",
     summary: "The fleet dashboard, vehicle history, employee accounts, audit records and reports.",
-    roles: ["ADMIN", "MANAGER"],
+    roles: ["ADMIN"],
     requiresAnyOf: [PERMISSIONS.USER_READ, PERMISSIONS.AUDIT_READ, PERMISSIONS.VEHICLE_READ],
     startRoute: "/",
     steps: [
@@ -387,24 +372,21 @@ export const TOURS: readonly TourDefinition[] = [
         route: "/maintenance",
         target: "maintenance-kpis",
         title: "Maintenance schedules",
-        description:
-          "Preventive maintenance reminders based on odometer and time intervals.",
+        description: "Preventive maintenance reminders based on odometer and time intervals.",
         side: "bottom",
       },
       {
         route: "/expenses",
         target: "expense-ledger",
         title: "Expense tracking",
-        description:
-          "Record and approve vehicle expenses. Export to CSV for accounting.",
+        description: "Record and approve vehicle expenses. Export to CSV for accounting.",
         side: "top",
       },
       {
         route: "/fuel",
         target: "fuel-ledger",
         title: "Fuel records",
-        description:
-          "Track fuel consumption and costs across the fleet.",
+        description: "Track fuel consumption and costs across the fleet.",
         side: "top",
       },
     ],
@@ -424,17 +406,22 @@ export function isTourId(value: unknown): value is TourId {
 
 /** Tours the given roles qualify for, most privileged first. */
 export function toursForRoles(roles: readonly RoleKey[]): TourDefinition[] {
-  const seen = new Set<TourId>();
-  const found: TourDefinition[] = [];
-  for (const role of ROLE_TOUR_ORDER) {
-    if (!roles.includes(role)) continue;
-    const id = ROLE_TOUR[role];
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const tour = TOURS.find((t) => t.id === id);
-    if (tour) found.push(tour);
-  }
-  return found;
+  const held = new Set(roles);
+  // Rank a tour by the most privileged role the user holds that owns it, so an
+  // admin+driver sees the admin tour first; ties keep the TOURS declaration order.
+  const rankOf = (tour: TourDefinition): number => {
+    let best = Number.POSITIVE_INFINITY;
+    for (const role of tour.roles) {
+      if (!held.has(role)) continue;
+      const idx = ROLE_TOUR_ORDER.indexOf(role);
+      if (idx >= 0 && idx < best) best = idx;
+    }
+    return best;
+  };
+  return TOURS.map((tour, index) => ({ tour, index, rank: rankOf(tour) }))
+    .filter((entry) => Number.isFinite(entry.rank))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.tour);
 }
 
 /** Tours that are actually offered: role-qualified *and* permission-backed. */

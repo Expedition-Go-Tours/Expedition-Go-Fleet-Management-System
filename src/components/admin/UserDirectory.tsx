@@ -8,7 +8,13 @@ import { RoleEditor } from "@/components/admin/RoleEditor";
 import { UserStatusButton } from "@/components/admin/UserStatusButton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Select, Input } from "@/components/ui/fields";
-import { USER_STATUSES, ROLE_KEYS, type RoleKey, type UserStatus } from "@/lib/auth/types";
+import {
+  USER_STATUSES,
+  ROLE_KEYS,
+  ROLE_LABELS,
+  type RoleKey,
+  type UserStatus,
+} from "@/lib/auth/types";
 
 /** Plain, serializable employee row handed down from the server page. */
 export interface DirectoryUser {
@@ -79,7 +85,7 @@ export function UserDirectory({
             <option value="ALL">All roles</option>
             {ROLE_KEYS.map((role) => (
               <option key={role} value={role}>
-                {role}
+                {ROLE_LABELS[role]}
               </option>
             ))}
           </Select>
@@ -147,7 +153,7 @@ export function UserDirectory({
                       key={role}
                       className="border-hairline text-muted rounded-pill font-ui border px-2.5 py-0.5 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase"
                     >
-                      {role}
+                      {ROLE_LABELS[role]}
                     </span>
                   ))}
                 </div>

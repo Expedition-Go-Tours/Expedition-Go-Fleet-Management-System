@@ -39,7 +39,7 @@ export const serverEnv = {
     return required("CRON_SECRET", process.env.CRON_SECRET);
   },
   /**
-   * Whether privileged roles (ADMIN/MANAGER/FINANCE) must complete MFA at
+   * Whether privileged roles (ADMIN/OPERATIONS) must complete MFA at
    * session establishment. Defaults to true; set REQUIRE_MFA=false ONLY in
    * development before TOTP is enabled in the Firebase console.
    */

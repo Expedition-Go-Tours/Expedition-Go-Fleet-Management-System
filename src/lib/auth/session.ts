@@ -53,7 +53,7 @@ export const SESSION_POLICIES = {
 } as const satisfies Record<string, SessionPolicy>;
 
 /** Roles that require MFA and receive the shorter session timeouts. */
-export const PRIVILEGED_ROLES: readonly RoleKey[] = ["ADMIN", "MANAGER", "FINANCE"];
+export const PRIVILEGED_ROLES: readonly RoleKey[] = ["ADMIN", "OPERATIONS"];
 
 export function isPrivileged(roles: readonly RoleKey[]): boolean {
   return roles.some((role) => PRIVILEGED_ROLES.includes(role));

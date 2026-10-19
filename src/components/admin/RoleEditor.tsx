@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/client/api";
-import { ROLE_KEYS } from "@/lib/auth/types";
+import { ROLE_KEYS, ROLE_LABELS } from "@/lib/auth/types";
 
 /**
  * Role editor for one user. Posts the full new role set to
@@ -55,7 +55,7 @@ export function RoleEditor({ userId, currentRoles }: { userId: string; currentRo
                 : "border-hairline text-muted hover:border-strong hover:text-ink"
             }`}
           >
-            {role}
+            {ROLE_LABELS[role]}
           </button>
         ))}
       </div>

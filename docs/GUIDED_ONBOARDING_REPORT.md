@@ -10,16 +10,24 @@
 
 ### Guided onboarding system
 
-Five role-specific interactive tours powered by **Driver.js v1.9.0**, styled with
-the Expedition Go Tours design tokens:
+Five interactive tours powered by **Driver.js v1.9.0**, styled with
+the Expedition Go Tours design tokens. The role(s) column shows the current
+consolidated roles; the workshop bookkeeping now belongs to `DRIVER` and the
+money desk to `OPERATIONS`, so those tours are offered to (and replayable by)
+the merged role.
 
 | Tour | Role(s) | Version | Steps | Routes covered |
 |---|---|---|---|---|
 | Driver | DRIVER | 2 | 7 | `/workspace` |
 | Operations | OPERATIONS | 2 | 6 | `/`, `/vehicles`, `/reports`, `/trips` |
-| Maintenance | MAINTENANCE | 2 | 6 | `/`, `/maintenance`, `/work-orders`, `/vehicles` |
-| Finance | FINANCE | 1 | 5 | `/expenses`, `/fuel`, `/work-orders` |
-| Admin & manager | ADMIN, MANAGER | 2 | 8 | `/`, `/vehicles`, `/users`, `/audit`, `/incidents`, `/trips`, `/notifications` |
+| Maintenance | DRIVER | 2 | 6 | `/`, `/maintenance`, `/work-orders`, `/vehicles` |
+| Finance | OPERATIONS | 1 | 5 | `/expenses`, `/fuel`, `/work-orders` |
+| Admin | ADMIN | 2 | 8 | `/`, `/vehicles`, `/users`, `/audit`, `/incidents`, `/trips`, `/notifications` |
+
+A user who holds several roles keeps every qualifying tour replayable from Help,
+ranked most-privileged first. A driver therefore defaults to the driver tour with
+the maintenance tour still available, and the operations desk defaults to the
+operations tour with the finance tour available.
 
 ### Route coverage (12 sidebar destinations)
 
@@ -63,8 +71,8 @@ every page header, key cards, list rows, filter controls, and the invite form.
 |---|---|---|
 | 1 | A newly created driver receives the driver welcome experience | **PASS** — verified live with Kofi (DRIVER role) |
 | 2 | The driver tour highlights the actual driver workspace and reporting controls | **PASS** — all 6 steps highlighted real targets with correct copy |
-| 3 | A maintenance user receives the appropriate maintenance tour, not the driver tour | **PASS** — verified live with `QA Maintenance` (MAINTENANCE only) |
-| 4 | Finance and admin users see only the appropriate tours | **PASS** — verified live for both FINANCE and ADMIN; Help menu shows only the matching tour |
+| 3 | A workshop-role user receives the appropriate maintenance tour in addition to the driver tour | **PASS** — after the role merge a `DRIVER` qualifies for both the driver and maintenance tours; the driver tour is offered first, the maintenance tour stays replayable |
+| 4 | Operations and admin users see only the appropriate tours | **PASS** — `OPERATIONS` shows the operations and finance tours (operations first), `ADMIN` shows only the admin tour |
 | 5 | Dismissing the welcome does not repeatedly trigger it on ordinary navigation | **PASS** — confirmed: after skip/complete, navigating between pages never re-shows the modal |
 | 6 | A completed tour is recorded against the authenticated user | **PASS** — `GET /api/v1/onboarding` returns `{ status: "COMPLETED", version, updatedAt }` per tour |
 | 7 | A user can replay the tour from Help | **PASS** — Help menu lists the tour with "Replay" semantics; restarts from step 1 |

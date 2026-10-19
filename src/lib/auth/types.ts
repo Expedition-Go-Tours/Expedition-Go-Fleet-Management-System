@@ -3,15 +3,26 @@
 export const USER_STATUSES = ["INVITED", "ACTIVE", "SUSPENDED", "DISABLED"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
-export const ROLE_KEYS = [
-  "ADMIN",
-  "MANAGER",
-  "OPERATIONS",
-  "MAINTENANCE",
-  "FINANCE",
-  "DRIVER",
-] as const;
+/**
+ * The three operational roles.
+ *
+ * The fleet runs with three hats: the people doing the driving work, the desk
+ * role that dispatches and handles money, and the owner/admin who runs accounts.
+ * Three former roles folded in:
+ *   - MANAGER → ADMIN (one owner-level role: oversight *and* user management)
+ *   - MAINTENANCE → DRIVER (the workshop has no account; the driver takes the
+ *     vehicle to the garage and records the work)
+ *   - FINANCE → OPERATIONS (dispatch and costs are the same desk job)
+ */
+export const ROLE_KEYS = ["ADMIN", "OPERATIONS", "DRIVER"] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
+
+/** Human-facing role names — the stored keys are uppercase enums. */
+export const ROLE_LABELS: Record<RoleKey, string> = {
+  ADMIN: "Admin",
+  OPERATIONS: "Operations",
+  DRIVER: "Driver",
+};
 
 export interface AppUser {
   id: string;
