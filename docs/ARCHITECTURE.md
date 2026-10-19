@@ -108,8 +108,12 @@ MFA (TOTP) is required for `ADMIN` and `OPERATIONS` roles.
     `OPEN → IN_PROGRESS ⇄ WAITING → COMPLETED → VERIFIED → CLOSED →(reopen) OPEN`;
     completion is evidence-gated (`workPerformed` + `odometerKm`) and
     idempotent per work order (replays return the existing service record).
-  - Expenses follow `RECORDED → VOID` only — no in-app approval. Voiding
-    requires a reason and is OPERATIONS/ADMIN (`expense:void`).
+  - Expenses follow `PENDING → APPROVED | REJECTED`, with `VOID` as a
+    reversal of an approved cost. Approving/rejecting needs `expense:approve`
+    (OPERATIONS/ADMIN) and runs only from `PENDING`; voiding needs
+    `expense:void` and runs only from `APPROVED`. Rejection and void each
+    require a reason. `PENDING`/`APPROVED` count in reports, `REJECTED`/`VOID`
+    do not.
   - Report ownership: `report:read:own` scoping enforced in the list and
     get endpoints; `report:read:all` reads everything. Closing an issue
     requires a resolution, a duplicate link, or a not-actionable reason.
@@ -148,8 +152,11 @@ MFA (TOTP) is required for `ADMIN` and `OPERATIONS` roles.
   deactivated providers stay in history rather than being deleted.
 - **Data migration:** `scripts/migrate-v1.mjs` is the idempotent forward
   migration (legacy `mileage` → odometer baseline reading, expense statuses
-  → `RECORDED`/`VOID`, work-order status remap, `serviceHistory` promotion).
-  Run with `--dry-run` first; it never deletes data.
+  → `PENDING`/`APPROVED`/`VOID`, work-order status remap, `serviceHistory`
+  promotion). `scripts/migrate-roles.mjs` folds six roles into three and
+  `scripts/migrate-expense-approval.mjs` moves pre-approval `RECORDED`
+  expenses onto the new lifecycle. All are dry-run by default and never delete
+  data.
 
 ## Deliverables verification
 

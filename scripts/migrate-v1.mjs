@@ -14,10 +14,11 @@
  *    reading in the ledger (source HISTORICAL_IMPORT, status ACCEPTED) and
  *    the vehicle document gains the `odometerKm` projection + `odometerAt`.
  *    Vehicles already carrying `odometerKm` are skipped.
- * 2. Expenses ─ legacy lifecycle statuses map onto the no-approval model:
- *      PENDING/APPROVED  → RECORDED  (approved outside the system already)
- *      PAID              → RECORDED  (same — payment is outside the system)
- *      VOID              → VOID
+ * 2. Expenses ─ legacy lifecycle statuses map onto the in-app approval model:
+ *      PENDING  → PENDING   (never approved; now waits for a sign-off)
+ *      APPROVED → APPROVED  (already approved)
+ *      PAID     → APPROVED  (payment implies it was approved)
+ *      VOID     → VOID
  *    Legacy `approval*` fields are retained untouched.
  * 3. Work orders ─ legacy statuses map onto the extended pipeline:
  *      OPEN      → OPEN
@@ -69,9 +70,9 @@ const counts = {
 };
 
 const LEGACY_EXPENSE_TO_NEW = {
-  PENDING: "RECORDED",
-  APPROVED: "RECORDED",
-  PAID: "RECORDED",
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  PAID: "APPROVED",
   VOID: "VOID",
 };
 
@@ -132,8 +133,8 @@ async function migrateExpenses() {
     const data = doc.data();
     const legacy = data.status;
     const clean = LEGACY_EXPENSE_TO_NEW[legacy];
-    if (!clean) {
-      // Already RECORDED or VOID — skip.
+    if (!clean || clean === legacy) {
+      // Already on the current lifecycle (or an unknown legacy value) — skip.
       counts.expenses.skipped += 1;
       continue;
     }

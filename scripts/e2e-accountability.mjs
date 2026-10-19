@@ -16,7 +16,7 @@
  *    only named schedules reset, unrelated schedule untouched.
  *  - Issue → safety hold: critical issue holds the vehicle; completion does
  *    not release it; release permission missing for DRIVER.
- *  - Expense model: RECORDED→VOID only, no approval states anywhere.
+ *  - Expense model: PENDING → APPROVED/REJECTED, with VOID as a reversal.
  */
 import { readFileSync } from "node:fs";
 
@@ -621,7 +621,7 @@ try {
     void dbRelease;
   }
 
-  /* ── F. Expense model: RECORDED → VOID, no approval anywhere ────────── */
+  /* ── F. Expense model: PENDING → APPROVED/REJECTED, VOID reverses ───── */
   {
     const woList = await get(`/api/v1/work-orders?vehicleId=${vehRef.id}`, wCookies);
     const anyWo = (woList.body.workOrders ?? [])[0];
@@ -647,6 +647,7 @@ try {
       JSON.stringify(opsRead.body).slice(0, 150),
     );
 
+    // A recorded expense starts PENDING — awaiting a sign-off.
     const expense = await send("POST", "/api/v1/expenses", moneyCookies, {
       vehicleId: vehRef.id,
       workOrderId: anyWo?.id,
@@ -656,27 +657,105 @@ try {
       supplierName: "Accra Auto Parts",
     });
     check(
-      "OPERATIONS records an expense (201, RECORDED status, pesewas integer)",
+      "OPERATIONS records an expense (201, PENDING status, pesewas integer)",
       expense.status === 201 &&
-        expense.body.expense?.status === "RECORDED" &&
+        expense.body.expense?.status === "PENDING" &&
         expense.body.expense?.amountMinor === 145075,
       JSON.stringify(expense.body).slice(0, 300),
     );
     const expenseId = expense.body.expense?.id;
     if (expenseId) created.docIds.push(["expenses", expenseId]);
 
-    // No approval action exists — only void.
-    const approve = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
+    // WORKSHOP cannot sign expenses off — expense:approve is OPERATIONS/ADMIN.
+    const deniedApprove = await send("POST", `/api/v1/expenses/${expenseId}/status`, wCookies, {
       action: "approve",
     });
     check(
-      "no approve action exists (400 UNKNOWN_ACTION)",
-      approve.status === 400 && /Unknown action/.test(approve.body?.error?.message ?? ""),
-      JSON.stringify(approve.body).slice(0, 200),
+      "WORKSHOP cannot approve expenses (403 expense:approve)",
+      deniedApprove.status === 403 &&
+        /expense:approve/.test(deniedApprove.body?.error?.message ?? ""),
+      JSON.stringify(deniedApprove.body).slice(0, 150),
+    );
+
+    // Rejecting requires a reason, so the person who recorded it understands why.
+    const noReasonReject = await send(
+      "POST",
+      `/api/v1/expenses/${expenseId}/status`,
+      moneyCookies,
+      {
+        action: "reject",
+      },
+    );
+    check(
+      "rejecting without a reason is rejected (400)",
+      noReasonReject.status === 400 && /reason/.test(noReasonReject.body?.error?.message ?? ""),
+      JSON.stringify(noReasonReject.body).slice(0, 150),
+    );
+
+    const rejected = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
+      action: "reject",
+      reason: "Billed against the wrong vehicle",
+    });
+    check(
+      "OPERATIONS rejects with a reason (200, REJECTED, record preserved)",
+      rejected.status === 200 &&
+        rejected.body.expense?.status === "REJECTED" &&
+        rejected.body.expense?.rejectReason === "Billed against the wrong vehicle",
+      JSON.stringify(rejected.body).slice(0, 250),
+    );
+
+    // REJECTED is terminal — it cannot be revived.
+    const lateApprove = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
+      action: "approve",
+    });
+    check(
+      "a rejected expense cannot be approved later (409)",
+      lateApprove.status === 409,
+      JSON.stringify(lateApprove.body).slice(0, 200),
+    );
+
+    // A second expense goes through the full sign-off → void flow.
+    const expense2 = await send("POST", "/api/v1/expenses", moneyCookies, {
+      vehicleId: vehRef.id,
+      workOrderId: anyWo?.id,
+      category: "PARTS",
+      amount: "1450.75",
+      description: "Brake master cylinder + fluid",
+      supplierName: "Accra Auto Parts",
+    });
+    check(
+      "second expense starts PENDING (201)",
+      expense2.status === 201 && expense2.body.expense?.status === "PENDING",
+      JSON.stringify(expense2.body).slice(0, 200),
+    );
+    const expense2Id = expense2.body.expense?.id;
+    if (expense2Id) created.docIds.push(["expenses", expense2Id]);
+
+    // Voiding is a reversal of an approved cost, not a way to delete a draft.
+    const earlyVoid = await send("POST", `/api/v1/expenses/${expense2Id}/status`, moneyCookies, {
+      action: "void",
+      reason: "should be refused",
+    });
+    check(
+      "a pending expense cannot be voided (409)",
+      earlyVoid.status === 409,
+      JSON.stringify(earlyVoid.body).slice(0, 200),
+    );
+
+    // OPERATIONS signs it off — the approver is recorded.
+    const approved = await send("POST", `/api/v1/expenses/${expense2Id}/status`, moneyCookies, {
+      action: "approve",
+    });
+    check(
+      "OPERATIONS approves (200, APPROVED, approver recorded)",
+      approved.status === 200 &&
+        approved.body.expense?.status === "APPROVED" &&
+        !!approved.body.expense?.approvedBy,
+      JSON.stringify(approved.body).slice(0, 250),
     );
 
     // Void requires a reason.
-    const noReason = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
+    const noReason = await send("POST", `/api/v1/expenses/${expense2Id}/status`, moneyCookies, {
       action: "void",
     });
     check(
@@ -686,7 +765,7 @@ try {
     );
 
     // WORKSHOP cannot void (expense:void is OPERATIONS).
-    const maintVoid = await send("POST", `/api/v1/expenses/${expenseId}/status`, wCookies, {
+    const maintVoid = await send("POST", `/api/v1/expenses/${expense2Id}/status`, wCookies, {
       action: "void",
       reason: "should be denied",
     });
@@ -696,17 +775,18 @@ try {
       JSON.stringify(maintVoid.body).slice(0, 150),
     );
 
-    // OPERATIONS voids with a reason — record preserved with VOID status.
-    const voided = await send("POST", `/api/v1/expenses/${expenseId}/status`, moneyCookies, {
+    // OPERATIONS voids an approved expense — the record is preserved as VOID.
+    const voided = await send("POST", `/api/v1/expenses/${expense2Id}/status`, moneyCookies, {
       action: "void",
       reason: "Duplicate invoice — recorded against fuel entry instead",
     });
     check(
-      "OPERATIONS voids with reason (200, VOID, record preserved)",
+      "OPERATIONS voids an approved expense (200, VOID, record preserved)",
       voided.status === 200 && voided.body.expense?.status === "VOID",
       JSON.stringify(voided.body).slice(0, 250),
     );
 
+    // A clean record stays PENDING — counted in totals, shown as awaiting approval.
     const rerecord = await send("POST", "/api/v1/expenses", moneyCookies, {
       vehicleId: vehRef.id,
       workOrderId: anyWo?.id,
@@ -716,8 +796,10 @@ try {
       supplierName: "Accra Auto Parts",
     });
     check(
-      "correct expense recorded once more (201)",
-      rerecord.status === 201 && rerecord.body.expense?.amountMinor === 145075,
+      "correct expense recorded once more (201, PENDING)",
+      rerecord.status === 201 &&
+        rerecord.body.expense?.amountMinor === 145075 &&
+        rerecord.body.expense?.status === "PENDING",
       JSON.stringify(rerecord.body).slice(0, 200),
     );
     if (rerecord.body.expense?.id) {
@@ -730,7 +812,7 @@ try {
       moneyCookies,
     );
     check(
-      "export counts only non-VOID expenses (145075, not doubled)",
+      "export counts only PENDING/APPROVED expenses (145075, not doubled)",
       exportRes.status === 200 && exportRes.body.totalMinor === 145075,
       JSON.stringify({ total: exportRes.body.totalMinor, count: exportRes.body.count }).slice(
         0,

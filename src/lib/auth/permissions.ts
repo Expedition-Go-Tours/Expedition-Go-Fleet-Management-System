@@ -56,6 +56,7 @@ export const PERMISSIONS = {
   EXPENSE_READ: "expense:read",
   EXPENSE_CREATE: "expense:create",
   EXPENSE_UPDATE: "expense:update",
+  EXPENSE_APPROVE: "expense:approve",
   EXPENSE_VOID: "expense:void",
   EXPENSE_EXPORT: "expense:export",
 
@@ -184,6 +185,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.EXPENSE_READ,
     PERMISSIONS.EXPENSE_CREATE,
     PERMISSIONS.EXPENSE_UPDATE,
+    PERMISSIONS.EXPENSE_APPROVE,
     PERMISSIONS.EXPENSE_VOID,
     PERMISSIONS.EXPENSE_EXPORT,
     PERMISSIONS.FUEL_CREATE,

@@ -12,8 +12,10 @@ export const runtime = "nodejs";
 
 /**
  * GET /api/v1/expenses/export
- * Expense export as CSV or JSON (expense:export). Non-VOID expenses only;
- * the export itself is audited.
+ * Expense export as CSV or JSON (expense:export). Counted expenses only —
+ * REJECTED and VOID rows are excluded, matching `totalExpensesMinor`, so the
+ * exported total never disagrees with the figures on screen. The export itself
+ * is audited.
  * Query: ?format=csv|json (default csv), ?vehicleId=, ?workOrderId=
  */
 export async function GET(request: NextRequest) {
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
     const workOrderId = params.get("workOrderId") ?? undefined;
 
     const expenses = (await listExpenses({ vehicleId, workOrderId, limit: 2000 })).filter(
-      (e) => e.status !== "VOID",
+      (e) => e.status === "PENDING" || e.status === "APPROVED",
     );
     const totalMinor = await totalExpensesMinor({ vehicleId, workOrderId });
 

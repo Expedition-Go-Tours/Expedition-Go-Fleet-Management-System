@@ -19,7 +19,7 @@ Terminology is fixed here; code uses these names.
 | `WorkOrderIssueLink` | `workOrderIssues` | Many-to-many issue↔work-order links |
 | `VehicleAssignment` | `assignments` | Who used which vehicle, when, for what (trip/journey) |
 | `Inspection` | `inspections` | Structured pre-trip/return checklist results |
-| `Expense` | `expenses` | Recorded financial cost (no in-app approval) |
+| `Expense` | `expenses` | Recorded financial cost (PENDING until approved) |
 | `FuelEntry` | `fuelEntries` | Fuel purchase; links to canonical `Expense` for cost |
 | `VehicleDocument` | `vehicleDocuments` | Registration/insurance/permit + expiry |
 | `Notification` | `notifications` | In-app actionable notification (idempotent via `dedupeKey`) |
@@ -84,7 +84,10 @@ Release: `vehicle:release` + reason + server check of open critical issues.
   incident and in `incident.updated` audit events. Status is the only
   action-gated field — descriptive fields edit via `incident:manage` PATCH.
 
-## Expense model (no approval)
+## Expense model (in-app approval)
 
-`RECORDED → VOID(reason, actor)`. Fuel entries create/reference one canonical
-expense; reports count each pesewa once via `expenseId`.
+`PENDING → APPROVED | REJECTED`, and `APPROVED → VOID(reason, actor)` as a
+reversal. Approving and rejecting need `expense:approve` and run only from
+`PENDING`; rejection requires a reason. Reports count `PENDING` and `APPROVED`
+only. Fuel entries create/reference one canonical expense; reports count each
+pesewa once via `expenseId`.

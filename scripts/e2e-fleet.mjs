@@ -379,12 +379,9 @@ try {
     const criticalReport = critical.body?.report;
     if (criticalReport) created.docIds.push(["maintenanceReports", criticalReport.id]);
 
-    const blockedRelease = await send(
-      "POST",
-      "/api/v1/vehicles/e2e-veh-1/status",
-      sAdmin.cookies,
-      { action: "release" },
-    );
+    const blockedRelease = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sAdmin.cookies, {
+      action: "release",
+    });
     check(
       "ADMIN cannot release while a critical issue is open (409)",
       blockedRelease.status === 409 && /critical/i.test(blockedRelease.body?.error?.message ?? ""),
@@ -703,7 +700,7 @@ try {
     );
   }
 
-  // ── F. Expenses: permission gating + read (void/export need OPERATIONS) ──
+  // ── F. Expenses: permission gating + read (approve/void/export need money desk) ──
   {
     const expenseFixture = await db.collection("expenses").add({
       workOrderId: workOrder.id,
@@ -712,7 +709,7 @@ try {
       amountMinor: 45500,
       currency: "GHS",
       description: "Front brake pads",
-      status: "RECORDED",
+      status: "PENDING",
       createdBy: "e2e-setup",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -737,6 +734,19 @@ try {
       "WORKSHOP cannot create expenses (403 expense:create)",
       create.status === 403 && /expense:create/.test(create.body?.error?.message ?? ""),
       JSON.stringify(create.body),
+    );
+
+    const approveAttempt = await send(
+      "POST",
+      `/api/v1/expenses/${expenseFixture.id}/status`,
+      sWorkshop.cookies,
+      { action: "approve" },
+    );
+    check(
+      "WORKSHOP cannot approve expenses (403 expense:approve)",
+      approveAttempt.status === 403 &&
+        /expense:approve/.test(approveAttempt.body?.error?.message ?? ""),
+      JSON.stringify(approveAttempt.body),
     );
 
     const voidAttempt = await send(

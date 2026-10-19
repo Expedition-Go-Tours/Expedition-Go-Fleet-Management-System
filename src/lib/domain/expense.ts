@@ -4,12 +4,13 @@ import type { ActionMap } from "@/lib/domain/lifecycle";
 /*
  * Expense domain model.
  *
- * Approval happens OUTSIDE this system (business requirement). A recorded
- * expense is a fact; the only in-app state change is a void with a reason.
- * Money is stored as integer pesewas — never floats.
+ * Approval happens IN this system: an expense is recorded as PENDING, then an
+ * approver (Operations/Admin) signs it off as APPROVED or REJECTED. A recorded
+ * expense is a fact — nothing is ever deleted; a void (with a reason) reverses
+ * an approved cost. Money is stored as integer pesewas — never floats.
  */
 
-export const EXPENSE_STATUSES = ["RECORDED", "VOID"] as const;
+export const EXPENSE_STATUSES = ["PENDING", "APPROVED", "REJECTED", "VOID"] as const;
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
 
 export const EXPENSE_CATEGORIES = [
@@ -52,19 +53,43 @@ export interface Expense {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Who signed the expense off (or rejected it), and when. */
+  approvedBy?: string;
+  approvedAt?: Date;
+  rejectedBy?: string;
+  rejectedAt?: Date;
+  rejectReason?: string;
   voidedBy?: string;
   voidedAt?: string;
   voidReason?: string;
 }
 
 /**
- * The only lifecycle action: void (RECORDED → VOID), permission-controlled,
- * reason required by the route, audited. Paid/void states are terminal.
+ * Expense lifecycle (see FLEET_WORKFLOWS.md §7.3).
+ *
+ * A new expense is PENDING until an approver signs it off:
+ *   PENDING  -> APPROVED  (expense:approve)
+ *   PENDING  -> REJECTED  (expense:approve, reason required)
+ *   APPROVED -> VOID      (expense:void, reason required — reverses the cost)
+ *
+ * PENDING and APPROVED are counted in reports; REJECTED and VOID are excluded.
+ * The transitions are enforced server-side; see
+ * src/app/api/v1/expenses/[id]/status/route.ts.
  */
 export const EXPENSE_ACTIONS = {
+  approve: {
+    permission: PERMISSIONS.EXPENSE_APPROVE,
+    from: ["PENDING"],
+    to: "APPROVED",
+  },
+  reject: {
+    permission: PERMISSIONS.EXPENSE_APPROVE,
+    from: ["PENDING"],
+    to: "REJECTED",
+  },
   void: {
     permission: PERMISSIONS.EXPENSE_VOID,
-    from: ["RECORDED"],
+    from: ["APPROVED"],
     to: "VOID",
   },
 } as const satisfies ActionMap<ExpenseStatus>;

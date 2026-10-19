@@ -11,7 +11,12 @@ import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { EXPENSE_ACTIONS, EXPENSE_CATEGORIES } from "@/lib/domain/expense";
 import { formatMoney, humanizeEnum } from "@/lib/format";
-import { listExpenses, countExpenses } from "@/lib/repos/expenses";
+import {
+  listExpenses,
+  countExpenses,
+  pendingExpensesMinor,
+  totalExpensesMinor,
+} from "@/lib/repos/expenses";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
 import Link from "next/link";
@@ -19,6 +24,8 @@ import Link from "next/link";
 export const metadata = { title: "Expenses" };
 
 const LABELS: Record<string, string> = {
+  approve: "Approve",
+  reject: "Reject",
   void: "Void",
 };
 
@@ -40,12 +47,15 @@ export default async function ExpensesPage({
   const pageRaw = Number(params.page);
   const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
 
-  const [expenses, workOrders, vehicles, expenseTotal] = await Promise.all([
-    listExpenses({ category, vehicleId, limit: 500 }),
-    listWorkOrders({ limit: 200 }),
-    listVehicles(),
-    countExpenses({ vehicleId }),
-  ]);
+  const [expenses, workOrders, vehicles, expenseTotal, countedMinor, awaitingMinor] =
+    await Promise.all([
+      listExpenses({ category, vehicleId, limit: 500 }),
+      listWorkOrders({ limit: 200 }),
+      listVehicles(),
+      countExpenses({ vehicleId }),
+      totalExpensesMinor({ vehicleId }),
+      pendingExpensesMinor({ vehicleId }),
+    ]);
 
   const totalPages = Math.max(1, Math.ceil(expenses.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -143,9 +153,17 @@ export default async function ExpensesPage({
                           endpoint={`/api/v1/expenses/${expense.id}/status`}
                           actions={actions}
                           confirm={{
+                            approve:
+                              "Approve this expense? It will be counted in financial reports.",
+                            reject: "Reject this expense? It will be excluded from totals.",
                             void: "Void this expense? The record is kept but excluded from totals.",
                           }}
                           reason={{
+                            reject: {
+                              label: "Reason for rejecting",
+                              required: true,
+                              placeholder: "Wrong vehicle or amount",
+                            },
                             void: {
                               label: "Reason for voiding",
                               required: true,
@@ -186,63 +204,86 @@ export default async function ExpensesPage({
           </Card>
         </div>
 
-        {canCreate && (
-          <Card title="Record expense" icon={FilePlus2} dataTour="expense-create">
-            <div className="p-5">
-              <CreateForm
-                endpoint="/api/v1/expenses"
-                submitLabel="Record"
-                fields={[
-                  {
-                    name: "vehicleId",
-                    label: "Vehicle",
-                    type: "select",
-                    required: true,
-                    options: vehicles.map((v) => ({
-                      value: v.id,
-                      label: `${v.regNumber} — ${v.make} ${v.model}`,
-                    })),
-                  },
-                  {
-                    name: "workOrderId",
-                    label: "Work order (optional)",
-                    type: "select",
-                    options: workOrders.map((wo) => ({
-                      value: wo.id,
-                      label: `${wo.number ? `${wo.number} — ` : ""}${wo.title}`,
-                    })),
-                  },
-                  {
-                    name: "category",
-                    label: "Category",
-                    type: "select",
-                    required: true,
-                    options: EXPENSE_CATEGORIES.map((c) => ({ value: c, label: c })),
-                  },
-                  {
-                    name: "amount",
-                    label: "Amount (GHS)",
-                    type: "number",
-                    required: true,
-                    placeholder: "250.00",
-                    step: "0.01",
-                  },
-                  { name: "description", label: "Description", required: true },
-                  {
-                    name: "supplierName",
-                    label: "Supplier (optional)",
-                    placeholder: "Kofi Auto Parts",
-                  },
-                  {
-                    name: "incurredOn",
-                    label: "Date incurred (optional)",
-                    type: "date",
-                  },
-                ]}
-              />
-            </div>
-          </Card>
-        )}
+        <div className="flex flex-col gap-6">
+          {canExport && (
+            <Card title="Totals" icon={ReceiptText} dataTour="expense-totals">
+              <dl className="divide-hairline divide-y">
+                <div className="flex items-baseline justify-between gap-3 px-5 py-3">
+                  <dt className="text-body-xs text-muted">Counted total</dt>
+                  <dd className="font-heading text-heading-sm font-semibold">
+                    {formatMoney(countedMinor, "GHS")}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3 px-5 py-3">
+                  <dt className="text-body-xs text-muted">Awaiting approval</dt>
+                  <dd className="font-heading text-heading-sm font-semibold">
+                    {formatMoney(awaitingMinor, "GHS")}
+                  </dd>
+                </div>
+              </dl>
+              <p className="text-body-xs text-muted border-hairline border-t px-5 py-3">
+                Rejected and voided expenses are kept in the ledger but excluded from totals.
+              </p>
+            </Card>
+          )}
+          {canCreate && (
+            <Card title="Record expense" icon={FilePlus2} dataTour="expense-create">
+              <div className="p-5">
+                <CreateForm
+                  endpoint="/api/v1/expenses"
+                  submitLabel="Record"
+                  fields={[
+                    {
+                      name: "vehicleId",
+                      label: "Vehicle",
+                      type: "select",
+                      required: true,
+                      options: vehicles.map((v) => ({
+                        value: v.id,
+                        label: `${v.regNumber} — ${v.make} ${v.model}`,
+                      })),
+                    },
+                    {
+                      name: "workOrderId",
+                      label: "Work order (optional)",
+                      type: "select",
+                      options: workOrders.map((wo) => ({
+                        value: wo.id,
+                        label: `${wo.number ? `${wo.number} — ` : ""}${wo.title}`,
+                      })),
+                    },
+                    {
+                      name: "category",
+                      label: "Category",
+                      type: "select",
+                      required: true,
+                      options: EXPENSE_CATEGORIES.map((c) => ({ value: c, label: c })),
+                    },
+                    {
+                      name: "amount",
+                      label: "Amount (GHS)",
+                      type: "number",
+                      required: true,
+                      placeholder: "250.00",
+                      step: "0.01",
+                    },
+                    { name: "description", label: "Description", required: true },
+                    {
+                      name: "supplierName",
+                      label: "Supplier (optional)",
+                      placeholder: "Kofi Auto Parts",
+                    },
+                    {
+                      name: "incurredOn",
+                      label: "Date incurred (optional)",
+                      type: "date",
+                    },
+                  ]}
+                />
+              </div>
+            </Card>
+          )}
+        </div>
       </div>
     </Container>
   );

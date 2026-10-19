@@ -224,10 +224,20 @@ POST /fuel                         { vehicleId, odometerKm, litres, pricePerLitr
   back on the fuel entry. Money is never figured twice.
 - Consumption is only recorded on **full-tank purchases** (fuel level
   semantics); the odometer flows into the ledger (`FUEL_PURCHASE`).
-- Expenses observe the lifecycle `RECORDED → VOID` only
-  (`POST /expenses/:id/status { action: "void", reason }`, `expense:void`,
-  OPERATIONS/ADMIN). There is **no in-app approval**; voiding is permanent-audited and
-  never deletes. Export (`GET /expenses/export`) requires `expense:export`.
+- Expenses observe the lifecycle `PENDING → APPROVED | REJECTED`, with `VOID`
+  as a reversal of an approved cost
+  (`POST /expenses/:id/status { action: "approve" | "reject" | "void", reason? }`).
+  - `approve` and `reject` require `expense:approve` (OPERATIONS/ADMIN) and only
+    run from `PENDING`. Rejecting requires a reason, so whoever recorded the
+    expense understands why.
+  - `void` requires `expense:void` (OPERATIONS/ADMIN) and only runs from
+    `APPROVED` — it reverses a cost that was already signed off. Voiding and
+    rejecting are permanent-audited and never delete the record.
+  - `PENDING` and `APPROVED` count in reports; `REJECTED` and `VOID` do not, so
+    no pesewa is ever counted twice or lost. The expenses page shows the
+    outstanding "Awaiting approval" total alongside the counted total.
+  - Export (`GET /expenses/export`) requires `expense:export` and exports the
+    same counted set, so an exported total never disagrees with the screen.
 
 ---
 
@@ -341,6 +351,6 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
 | No repair without a traceable record | work-order completion evidence gate + immutable ServiceRecord |
 | No release from a hold by same-party fixers | `vehicle:release` held only by ADMIN, and only after open critical issues are closed |
 | Money recorded once, never double-counted | integer pesewas; fuel → canonical Expense in one transaction |
-| No expense "approval" drift | expenses only `RECORDED → VOID` (OPERATIONS/ADMIN, reason required) |
+| No expense "approval" drift | every expense is PENDING until an approver signs it off; rejection and void both require a reason and are audited |
 | Reminders/journaling survive reruns | `dedupeKey` idempotency + Firestore transactions |
 | Write payloads never fail on `undefined` | `definedOnly` stripping in every repo write path |

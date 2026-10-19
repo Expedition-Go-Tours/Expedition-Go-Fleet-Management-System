@@ -12,10 +12,12 @@ import { VEHICLE_STATUS_ACTIONS, VEHICLE_STATUSES, type VehicleStatus } from "@/
 import { WORK_ORDER_ACTIONS, type WorkOrderStatus } from "@/lib/domain/work-order";
 import {
   EXPENSE_ACTIONS,
+  EXPENSE_STATUSES,
   isValidAmountMinor,
   toPesewas,
   type ExpenseStatus,
 } from "@/lib/domain/expense";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 const VEHICLES = VEHICLE_STATUS_ACTIONS as ActionMap<VehicleStatus>;
 const REPORTS = REPORT_ACTIONS as ActionMap<ReportStatus>;
@@ -102,17 +104,57 @@ describe("work order lifecycle", () => {
   });
 });
 
-describe("expense model (no in-app approval)", () => {
-  it("has only RECORDED and VOID — no approval states", () => {
-    expect(Object.keys(EXPENSES)).toEqual(["void"]);
+describe("expense model (in-app approval)", () => {
+  it("has approve, reject and void — and no others", () => {
+    expect(Object.keys(EXPENSES).sort()).toEqual(["approve", "reject", "void"]);
   });
 
-  it("void is only valid from RECORDED", () => {
+  it("approve and reject are only valid from PENDING", () => {
+    for (const action of ["approve", "reject"] as const) {
+      const result = resolveAction(EXPENSES, action);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(transitionAllowed(result.def, "PENDING")).toBe(true);
+        expect(transitionAllowed(result.def, "APPROVED")).toBe(false);
+        expect(transitionAllowed(result.def, "REJECTED")).toBe(false);
+        expect(transitionAllowed(result.def, "VOID")).toBe(false);
+      }
+    }
+  });
+
+  it("void is only valid from APPROVED — a reversal of an approved cost", () => {
     const result = resolveAction(EXPENSES, "void");
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(transitionAllowed(result.def, "RECORDED")).toBe(true);
+      expect(transitionAllowed(result.def, "APPROVED")).toBe(true);
+      expect(transitionAllowed(result.def, "PENDING")).toBe(false);
       expect(transitionAllowed(result.def, "VOID")).toBe(false);
+    }
+  });
+
+  it("approving is permission-gated and separate from voiding", () => {
+    const approve = resolveAction(EXPENSES, "approve");
+    const reject = resolveAction(EXPENSES, "reject");
+    const voidIt = resolveAction(EXPENSES, "void");
+    if (approve.ok && reject.ok && voidIt.ok) {
+      expect(approve.def.permission).toBe(PERMISSIONS.EXPENSE_APPROVE);
+      expect(reject.def.permission).toBe(PERMISSIONS.EXPENSE_APPROVE);
+      expect(voidIt.def.permission).toBe(PERMISSIONS.EXPENSE_VOID);
+    }
+  });
+
+  it("no action can reach a terminal state from itself (no loops)", () => {
+    for (const [name, def] of Object.entries(EXPENSES)) {
+      expect(transitionAllowed(def, def.to), `${name} → ${def.to}`).toBe(false);
+    }
+  });
+
+  it("every action lands on a real status", () => {
+    for (const def of Object.values(EXPENSES)) {
+      expect(EXPENSE_STATUSES as readonly string[]).toContain(def.to);
+      for (const from of def.from) {
+        expect(EXPENSE_STATUSES as readonly string[]).toContain(from);
+      }
     }
   });
 

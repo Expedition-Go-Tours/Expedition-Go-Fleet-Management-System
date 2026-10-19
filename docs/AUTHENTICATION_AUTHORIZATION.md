@@ -203,8 +203,8 @@ work_order:reopen
 expense:read
 expense:create
 expense:update
+expense:approve
 expense:void
-expense:payment:update
 expense:export
 
 provider:read
@@ -241,6 +241,7 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 | Record fuel | Yes | Yes | Yes |
 | Read expenses | Yes | Yes | Yes |
 | Record expenses | No | Yes | Yes |
+| Approve/reject expenses | No | Yes | Yes |
 | Void/correct expenses | No | Yes, with reason | Yes, with reason |
 | Read financial totals / export | No | Yes | Yes |
 | Manage providers | Yes | Read | Yes |
@@ -398,7 +399,7 @@ Record at least:
 - User suspension/deactivation.
 - Safety-hold creation/clearance and vehicle release.
 - Odometer corrections and service-history corrections.
-- Expense amount changes, invoice changes, payment updates, and expense voids.
+- Expense amount changes, invoice changes, approvals/rejections, and expense voids.
 - Sensitive document access/export events where justified.
 
 Each event should have a timestamp, actor (when known), action, target record, request/correlation ID, and outcome. Protect logs from ordinary update/delete operations and restrict who can read them. Alert on repeated login failures, new administrator grants, suspicious permission-denial spikes, and unusual privileged activity.

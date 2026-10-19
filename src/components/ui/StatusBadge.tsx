@@ -53,7 +53,9 @@ const STATUS_TONES: Record<string, StatusTone> = {
   NORMAL: "muted",
   URGENT: "danger",
   // expenses
-  RECORDED: "success",
+  PENDING: "warning",
+  APPROVED: "success",
+  REJECTED: "muted",
   VOID: "danger",
   // users
   INVITED: "info",

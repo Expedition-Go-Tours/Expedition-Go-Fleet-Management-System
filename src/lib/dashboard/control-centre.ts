@@ -12,7 +12,8 @@
  *    time-based tasks are counted like distance tasks.
  *  - Priority queue: critical safety issues > safety holds > overdue maintenance
  *    > missing/expired mandatory documents > waiting work orders.
- *  - Expenses shown are RECORDED (unvoided) only; money stays integer pesewas.
+ *  - Expenses shown are PENDING and APPROVED only (rejected/voided are not
+ *    real costs); money stays integer pesewas.
  *
  * Query strategy matches every other list page (per-collection equality filters
  * + in-memory aggregation — no composite indexes).
@@ -62,7 +63,7 @@ export interface ControlCentre {
   queue: ActionItem[];
   /** Open issues by severity (unprivileged users see only their own). */
   issuesBySeverity?: { severity: string; count: number }[];
-  /** RECORDED expenses this calendar month. */
+  /** Counted expenses (PENDING + APPROVED) this calendar month. */
   monthExpenses?: { count: number; totalMinor: number };
 }
 
@@ -119,7 +120,7 @@ export async function loadControlCentre(input: {
     canReadAllReports ? listIssues({ safetyCritical: true, status: "OPEN", limit: 200 }) : [],
     canReadAllReports ? listIssues({ safetyCritical: true, status: "TRIAGED", limit: 200 }) : [],
     canReadWorkOrders ? listWorkOrders({ limit: 500 }) : [],
-    canReadExpenses ? listExpenses({ status: "RECORDED", limit: 500 }) : [],
+    canReadExpenses ? listExpenses({ limit: 500 }) : [],
   ]);
 
   const fleetVehicles = vehicles.filter((v) => v.status !== "ARCHIVED");
@@ -287,13 +288,16 @@ export async function loadControlCentre(input: {
     result.issuesBySeverity = countBySeverity(mine.filter((i) => i.status !== "CLOSED"));
   }
 
-  // ---- RECORDED expenses this calendar month ----------------------------------
+  // ---- Counted expenses this calendar month ----------------------------------
+  // REJECTED and VOID are not real costs, so they are excluded here too.
   if (canReadExpenses) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const recorded = expenses.filter((e) => e.incurredOn >= monthStart);
+    const counted = expenses.filter(
+      (e) => (e.status === "PENDING" || e.status === "APPROVED") && e.incurredOn >= monthStart,
+    );
     result.monthExpenses = {
-      count: recorded.length,
-      totalMinor: recorded.reduce((sum, e) => sum + e.amountMinor, 0),
+      count: counted.length,
+      totalMinor: counted.reduce((sum, e) => sum + e.amountMinor, 0),
     };
   }
 

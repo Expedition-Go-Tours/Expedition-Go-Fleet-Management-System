@@ -7,6 +7,7 @@ import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/li
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   EXPENSE_CATEGORIES,
+  EXPENSE_STATUSES,
   isValidAmountMinor,
   toPesewas,
   type ExpenseStatus,
@@ -35,8 +36,8 @@ export async function GET(request: NextRequest) {
     const limitRaw = Number(params.get("limit"));
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 && limitRaw <= 1000 ? limitRaw : 200;
     const statusParam = params.get("status");
-    if (statusParam && !["RECORDED", "VOID"].includes(statusParam)) {
-      throw ApiError.badRequest("status must be RECORDED or VOID");
+    if (statusParam && !(EXPENSE_STATUSES as readonly string[]).includes(statusParam)) {
+      throw ApiError.badRequest(`status must be one of: ${EXPENSE_STATUSES.join(", ")}`);
     }
 
     const expenses = await listExpenses({
@@ -57,9 +58,10 @@ export async function GET(request: NextRequest) {
  *
  * The VEHICLE is the primary association; a work order is optional context
  * (repair costs may be logged before/without a work order, and general costs
- * like insurance never have one). Approval happens outside this system, so a
- * new expense is always RECORDED. Amount is given as a decimal string/number
- * in major units and stored as integer minor units (never floats).
+ * like insurance never have one). A new expense is always PENDING — an
+ * approver (Operations/Admin) signs it off via
+ * `POST /api/v1/expenses/[id]/status`. Amount is given as a decimal
+ * string/number in major units and stored as integer minor units (never floats).
  */
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();

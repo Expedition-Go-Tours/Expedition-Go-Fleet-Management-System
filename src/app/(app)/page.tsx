@@ -227,7 +227,7 @@ export default async function DashboardPage() {
           {centre.monthExpenses && (
             <Card
               title="Recorded expenses"
-              description="This calendar month (RECORDED only)"
+              description="This calendar month (pending + approved)"
               icon={ReceiptText}
               action={
                 <Link
