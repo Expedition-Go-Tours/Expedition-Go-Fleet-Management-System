@@ -85,6 +85,15 @@ export function requirePermission(context: AuthContext, permission: PermissionKe
       "PASSWORD_CHANGE_REQUIRED",
     );
   }
+  // Privileged sessions granted only so the user can enroll a second factor are
+  // restricted to the account screen — enrolling is done in the browser against
+  // Firebase, so nothing else may run until it is done.
+  if (context.session.mfaEnrollmentRequired) {
+    throw ApiError.forbidden(
+      "You must set up two-factor authentication before continuing",
+      "MFA_ENROLLMENT_REQUIRED",
+    );
+  }
   if (!rolesHavePermission(context.user.roles, permission)) {
     throw ApiError.forbidden(`Missing permission: ${permission}`);
   }

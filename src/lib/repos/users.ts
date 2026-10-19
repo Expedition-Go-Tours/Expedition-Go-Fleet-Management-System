@@ -198,3 +198,13 @@ export async function touchLastLogin(id: string): Promise<void> {
     .doc(id)
     .update({ lastLoginAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
 }
+
+/**
+ * Mirror the account's MFA enrollment onto our user document. The authoritative
+ * state lives in Firebase; this cache exists so the UI can show "protected"
+ * without querying Firebase on every request.
+ */
+export async function setUserMfaEnabled(id: string, enabled: boolean): Promise<void> {
+  const { FieldValue } = await import("firebase-admin/firestore");
+  await usersRef().doc(id).update({ mfaEnabled: enabled, updatedAt: FieldValue.serverTimestamp() });
+}

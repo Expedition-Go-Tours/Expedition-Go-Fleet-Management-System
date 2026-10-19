@@ -77,12 +77,67 @@ Only an authorized administrator may change account status. Require a reason for
 
 ### 3.3 MFA
 
-- Require MFA for `ADMIN` and `OPERATIONS` users.
-- Encourage or require MFA for all staff as operationally practical.
+**Policy**
+
+- Require MFA for `ADMIN` and `OPERATIONS` users. Drivers are exempt today
+  (they hold no money or account access), which keeps the cost of the rollout
+  down — see `PRIVILEGED_ROLES` in `src/lib/auth/session.ts`.
 - Prefer passkeys/security keys or an authenticator-based method when supported. Do not make SMS the only option for privileged users.
-- Provide a controlled recovery process. Recovery codes, where offered, must be single-use and stored only in protected/hashed form by the provider or application.
 - Log MFA enrollment, removal, recovery, and reset events.
 - Require recent reauthentication plus MFA for sensitive account/security changes and privileged role changes.
+
+**What is implemented**
+
+MFA is **TOTP** (authenticator app), verified by Firebase Auth. The server never
+sees or stores the TOTP secret — it only checks the `firebase.sign_in_second_factor`
+claim on the ID token the client presents at session establishment.
+
+- Sign-in: a password alone raises `auth/multi-factor-auth-required`; the sign-in
+  form keeps the Firebase resolver, asks for the 6-digit code, and finishes the
+  sign-in with it (`src/components/auth/SignInForm.tsx`).
+- Enrollment: `/account` re-authenticates with a password, mints a TOTP secret in
+  the browser, and shows it as a manual key plus an `otpauth://` link
+  (`src/components/auth/MfaSettings.tsx`, `src/lib/firebase/mfa.ts`).
+- Enforcement: `decideMfa` in `src/lib/auth/mfa.ts` is the single decision point,
+  and it is unit-tested. `POST /api/v1/auth/session` applies it.
+
+**The lockout rule (important)**
+
+Firebase only issues a second-factor challenge when a factor is actually
+enrolled. So a privileged user who has never enrolled can never satisfy the
+check, and rejecting them outright would permanently lock out the very person
+expected to set it up. `decideMfa` therefore returns:
+
+| Situation | Outcome |
+|---|---|
+| Non-privileged role | `not_required` |
+| Privileged, factor proven | `satisfied` |
+| Privileged, has a factor, no proof | `reject` (correct — a password alone is not enough) |
+| Privileged, **no factor yet** | `enroll` — a restricted session that can reach only `/account` |
+
+While a session is in the `enroll` state it is refused by `requirePermission`
+with `MFA_ENROLLMENT_REQUIRED`, and the app layout redirects it to `/account`.
+Removing their only factor puts a privileged user straight back into that state.
+
+**Operator steps (required before production)**
+
+1. In the Firebase console → Authentication → Sign-in method → **enable the
+   "TOTP (authenticator app)" multi-factor provider** (or the project-level
+   "Multi-factor authentication" setting on Identity Platform).
+2. Leave `REQUIRE_MFA` unset (it defaults to **on**). `REQUIRE_MFA=false` exists
+   only for local development while step 1 is not yet done; `.env.local` is
+   gitignored so it cannot reach production.
+3. Sign in as each `ADMIN`/`OPERATIONS` user once and complete the enrollment
+   screen. Until they do, they are confined to `/account`.
+
+**Known gaps**
+
+- No recovery codes yet. A user who loses their authenticator needs an
+  administrator to remove the factor (delete the Firebase user's enrolled
+  factor) and let them re-enroll. Recovery codes are the recommended next step.
+- No QR image is rendered — the secret is shown as a manual key with an
+  `otpauth://` link, so it works without adding a QR library. Scanning a QR
+  code is a small addition if you want it.
 
 ### 3.4 Passwords and recovery
 

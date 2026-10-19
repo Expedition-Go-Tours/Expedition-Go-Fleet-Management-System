@@ -29,6 +29,7 @@ function toSessionRecord(tokenHash: string, data: DocumentData): SessionRecord {
     expiresAt: toDate(data.expiresAt) ?? new Date(0),
     mfaSatisfied: Boolean(data.mfaSatisfied),
     mustChangePassword: Boolean(data.mustChangePassword),
+    mfaEnrollmentRequired: Boolean(data.mfaEnrollmentRequired),
     userAgentLabel: data.userAgentLabel ? String(data.userAgentLabel) : undefined,
     revokedAt: toDate(data.revokedAt),
     revokeReason: data.revokeReason ? String(data.revokeReason) : undefined,
@@ -52,6 +53,18 @@ export async function touchSession(
   idleExpiresAt: Date,
 ): Promise<void> {
   await sessionsRef().doc(tokenHash).update({ lastSeenAt, idleExpiresAt });
+}
+
+/**
+ * Lift (or reinstate) the enrollment-only restriction on a session. Called after
+ * the browser confirms a second factor is enrolled or removed, so the user is
+ * not stuck on the account screen.
+ */
+export async function setMfaEnrollmentRequired(
+  tokenHash: string,
+  required: boolean,
+): Promise<void> {
+  await sessionsRef().doc(tokenHash).update({ mfaEnrollmentRequired: required });
 }
 
 export async function revokeSession(tokenHash: string, reason: string): Promise<void> {

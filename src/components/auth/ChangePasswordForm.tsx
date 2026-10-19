@@ -9,13 +9,21 @@ import { api } from "@/lib/client/api";
 import { getFirebaseClientAuth } from "@/lib/firebase/client";
 
 /**
- * Password change for invited users (temporary password → chosen password).
+ * Password change — used both for invited users (temporary password → chosen
+ * password) and for active users changing their password from the account menu.
  *
- * The session was established with the temporary password; this proves the
- * current password against the server, applies the new one, then re-authenticates
- * with the new credentials to obtain a full (non-restricted) session.
+ * The current password is proven against the server, the new one is applied,
+ * every session is revoked, and we then re-authenticate with the new
+ * credentials to obtain a fresh session.
  */
-export function ChangePasswordForm({ email }: { email: string }) {
+export function ChangePasswordForm({
+  email,
+  required = false,
+}: {
+  email: string;
+  /** True when this is the blocked mid-onboarding screen. */
+  required?: boolean;
+}) {
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -32,7 +40,7 @@ export function ChangePasswordForm({ email }: { email: string }) {
       return;
     }
     if (newPassword === currentPassword) {
-      setError("New password must differ from the temporary one.");
+      setError("New password must differ from the current one.");
       return;
     }
 
@@ -62,8 +70,9 @@ export function ChangePasswordForm({ email }: { email: string }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
       <p className="text-on-dark/70 text-body-sm">
-        You signed in with a temporary password. Choose your own to finish setting up your account —
-        you&apos;ll stay signed in.
+        {required
+          ? "You signed in with a temporary password. Choose your own to finish setting up your account — you'll stay signed in."
+          : "Enter your current password, then choose a new one. You'll sign in again with the new password."}
       </p>
 
       <div className="flex flex-col gap-2">
@@ -71,7 +80,7 @@ export function ChangePasswordForm({ email }: { email: string }) {
           htmlFor="current"
           className="font-ui text-on-dark/60 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase"
         >
-          Temporary password
+          {required ? "Temporary password" : "Current password"}
         </label>
         <input
           id="current"

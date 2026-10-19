@@ -85,6 +85,12 @@ export interface SessionRecord {
    * While true, the session may only call the password-change endpoint.
    */
   mustChangePassword?: boolean;
+  /**
+   * True when this is a privileged session granted *only* so the user can enroll
+   * a second factor (they had none yet, so there was nothing to challenge).
+   * While true, the session may only reach the account/MFA screens.
+   */
+  mfaEnrollmentRequired?: boolean;
   userAgentLabel?: string;
   revokedAt?: Date;
   revokeReason?: string;

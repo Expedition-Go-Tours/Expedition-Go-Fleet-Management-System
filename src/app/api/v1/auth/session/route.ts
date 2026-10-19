@@ -6,6 +6,7 @@ import { NextRequest } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { generateCsrfToken, isTrustedOrigin } from "@/lib/auth/csrf";
 import { secureCookies } from "@/lib/auth/guards";
+import { decideMfa, hasEnrolledMfaFactor } from "@/lib/auth/mfa";
 import { permissionsForRoles } from "@/lib/auth/permissions";
 import {
   computeSessionExpiry,
@@ -90,11 +91,10 @@ export async function POST(request: NextRequest) {
     // Determine if this is a temp-password onboarding session.
     const passwordChangeRequired = user.status === "INVITED" || Boolean(user.mustChangePassword);
 
-    // MFA policy: privileged roles cannot establish a session without MFA.
-    // Exception: onboarding sessions (mustChangePassword) skip MFA — they can't
-    // enroll MFA until after the password is changed and they re-authenticate.
-    // REQUIRE_Mfa=false is a development-only escape hatch for projects where
-    // TOTP is not yet enabled in the Firebase console (never set it in prod).
+    // MFA policy: privileged roles (ADMIN/OPERATIONS) cannot establish a session
+    // without MFA. The decision table lives in `decideMfa` — notably, a
+    // privileged user with no enrolled factor gets a restricted session so they
+    // can enroll one, rather than being locked out forever.
     const privileged = isPrivileged(user.roles);
     const secondFactor = (
       decoded as {
@@ -102,9 +102,20 @@ export async function POST(request: NextRequest) {
       }
     ).firebase?.sign_in_second_factor;
     const mfaSatisfied = typeof secondFactor === "string" && secondFactor.length > 0;
-    if (privileged && !mfaSatisfied && !passwordChangeRequired && serverEnv.requireMfa) {
+
+    // Only query Firebase when the answer can actually change the outcome.
+    const mfaApplies = privileged && serverEnv.requireMfa && !passwordChangeRequired;
+    const mfaDecision = decideMfa({
+      privileged,
+      mfaSatisfied,
+      hasFactor: mfaApplies ? await hasEnrolledMfaFactor(decoded.uid) : false,
+      passwordChangeRequired,
+      requireMfa: serverEnv.requireMfa,
+    });
+    if (mfaDecision === "reject") {
       throw ApiError.forbidden("Multi-factor authentication is required", "MFA_REQUIRED");
     }
+    const mfaEnrollmentRequired = mfaDecision === "enroll";
 
     // Mint the opaque session.
     const secure = secureCookies();
@@ -123,6 +134,7 @@ export async function POST(request: NextRequest) {
       expiresAt: expiry.expiresAt,
       mfaSatisfied,
       mustChangePassword: passwordChangeRequired,
+      mfaEnrollmentRequired,
       userAgentLabel: coarseUserAgent(request.headers.get("user-agent")),
     });
 
@@ -150,10 +162,12 @@ export async function POST(request: NextRequest) {
 
     return jsonOk({
       user: toPublicUser(user),
-      permissions: passwordChangeRequired ? [] : [...permissionsForRoles(user.roles)],
+      permissions:
+        passwordChangeRequired || mfaEnrollmentRequired ? [] : [...permissionsForRoles(user.roles)],
       csrfToken,
       expiresAt: expiry.expiresAt.toISOString(),
       passwordChangeRequired,
+      mfaEnrollmentRequired,
     });
   } catch (error) {
     return toErrorResponse(error);

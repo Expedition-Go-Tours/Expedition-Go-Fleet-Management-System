@@ -21,6 +21,8 @@ export const AUDIT_EVENTS = {
   USER_ROLE_ASSIGNED: "user.role.assigned",
   USER_STATUS_CHANGED: "user.status.changed",
   PASSWORD_CHANGED: "user.password.changed",
+  MFA_ENROLLED: "auth.mfa.enrolled",
+  MFA_REMOVED: "auth.mfa.removed",
   AUTHORIZATION_DENIED: "authz.denied",
   VEHICLE_CREATED: "vehicle.created",
   VEHICLE_UPDATED: "vehicle.updated",

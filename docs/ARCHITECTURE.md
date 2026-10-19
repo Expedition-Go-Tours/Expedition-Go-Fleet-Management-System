@@ -60,7 +60,10 @@ State changes go through **explicit action endpoints** — a generic
 writes a service record + schedule resets, so it is not an action-map action).
 Every state change is written to the audit log.
 
-MFA (TOTP) is required for `ADMIN` and `OPERATIONS` roles.
+MFA (TOTP) is required for `ADMIN` and `OPERATIONS` roles. A privileged account
+with no enrolled factor gets a restricted session that can reach only `/account`,
+so a first-time user is never locked out of setting it up (see
+AUTHENTICATION_AUTHORIZATION.md §3.3 for the decision table).
 
 ## Data access
 
@@ -193,9 +196,11 @@ MFA (TOTP) is required for `ADMIN` and `OPERATIONS` roles.
   re-checks regardless.
 - **`REQUIRE_MFA` dev gate:** privileged-role MFA enforcement (spec §4.2) can
   be disabled with `REQUIRE_MFA=false` **only** while TOTP is not yet enabled
-  in the Firebase console. It defaults to enforced and must stay enforced in
-  production; the flag is documented in `.env.example` and the auth E2E reads
-  it to pick the expected outcome.
+  in the Firebase console. The TOTP flow itself is implemented (sign-in second
+  factor plus `/account` enrollment), so the flag is purely a bootstrap escape
+  hatch. It defaults to enforced and must stay enforced in production; the flag
+  is documented in `.env.example` and the auth E2E reads it to pick the
+  expected outcome.
 - **Bootstrap/recovery script:** `scripts/create-admin.mjs` creates or updates
   an admin directly via the Admin SDK (used for the first account and for
   recovery if the last-admin invariant locks everyone out).

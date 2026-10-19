@@ -9,12 +9,15 @@ import { toPublicUser } from "@/lib/auth/types";
 /**
  * Authenticated application layout. Unauthenticated visitors go to /sign-in;
  * users mid-onboarding (restricted temp-password session) go to the password
- * screen — every guarded page inside inherits this protection.
+ * screen, and privileged users who have not yet set up a second factor go to
+ * the account screen — every guarded page inside inherits this protection.
+ * `/account` lives in the `(auth)` group, so this redirect never loops.
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const context = await getAuthContext();
   if (!context) redirect("/sign-in");
   if (context.session.mustChangePassword) redirect("/change-password");
+  if (context.session.mfaEnrollmentRequired) redirect("/account");
 
   const permissions = [...permissionsForRoles(context.user.roles)];
 

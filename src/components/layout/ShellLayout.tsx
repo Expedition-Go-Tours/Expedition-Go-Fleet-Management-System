@@ -334,6 +334,13 @@ export function ShellLayout({
                     <p className="text-data-xs text-muted truncate">{user.email}</p>
                   </div>
                   <Link
+                    href="/account"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="text-data hover:bg-subtle text-ink block px-4 py-2.5"
+                  >
+                    Account &amp; security
+                  </Link>
+                  <Link
                     href="/change-password"
                     onClick={() => setUserMenuOpen(false)}
                     className="text-data hover:bg-subtle text-ink block px-4 py-2.5"
