@@ -425,7 +425,12 @@ describe("resolveOriginDestination (read path — never throws)", () => {
   it("respects sequence order, not array order, when falling back", () => {
     const stops = [
       makeStop({ id: "late", type: "INTERMEDIATE" as TripStop["type"], sequence: 2, label: "End" }),
-      makeStop({ id: "early", type: "INTERMEDIATE" as TripStop["type"], sequence: 0, label: "Start" }),
+      makeStop({
+        id: "early",
+        type: "INTERMEDIATE" as TripStop["type"],
+        sequence: 0,
+        label: "Start",
+      }),
     ];
     const { origin, destination } = resolveOriginDestination(stops);
     expect(origin.id).toBe("early");
@@ -433,8 +438,17 @@ describe("resolveOriginDestination (read path — never throws)", () => {
   });
 
   it("uses a present marker over position when only one marker exists", () => {
-    const untypedFirst = makeStop({ type: "INTERMEDIATE" as TripStop["type"], sequence: 0, label: "First" });
-    const markedDest = makeStop({ id: "s9", type: "DESTINATION", sequence: 1, label: "Marked end" });
+    const untypedFirst = makeStop({
+      type: "INTERMEDIATE" as TripStop["type"],
+      sequence: 0,
+      label: "First",
+    });
+    const markedDest = makeStop({
+      id: "s9",
+      type: "DESTINATION",
+      sequence: 1,
+      label: "Marked end",
+    });
     const { origin, destination } = resolveOriginDestination([untypedFirst, markedDest]);
     // Origin has no marker → positional first.
     expect(origin.label).toBe("First");
