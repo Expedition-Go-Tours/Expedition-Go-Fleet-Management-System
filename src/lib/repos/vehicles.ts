@@ -272,8 +272,9 @@ export async function applyVehicleStatus(
 }
 
 /**
- * Effective availability for assignment: a vehicle is assignable when it is
- * ACTIVE and has no open critical issue.
+ * Open critical issues for a vehicle: `severity === "CRITICAL"`,
+ * `safetyCritical === true`, and not yet `CLOSED`. Drives assignment
+ * availability and blocks a safety-hold release.
  */
 export async function countOpenCriticalIssues(vehicleId: string): Promise<number> {
   const snap = await getAdminDb()

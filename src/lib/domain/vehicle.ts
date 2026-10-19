@@ -56,9 +56,9 @@ export interface Vehicle {
 /**
  * Vehicle status transitions (explicit action endpoints only).
  *
- *  - `release` moves a vehicle out of SAFETY_HOLD and requires the dedicated
- *    `vehicle:release` permission — no role has it by default (§6.4); the
- *    route additionally re-checks open critical issues before releasing.
+ *  - `release` moves a vehicle out of SAFETY_HOLD and requires the dedicated,
+ *    ADMIN-only `vehicle:release` permission (§6.4); the route additionally
+ *    re-checks open critical issues before releasing.
  *  - `archive` requires `vehicle:archive` and is blocked in the route while
  *    open work orders exist.
  */

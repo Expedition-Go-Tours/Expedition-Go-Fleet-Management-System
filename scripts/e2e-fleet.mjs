@@ -196,7 +196,10 @@ try {
   // A second driver stands in for the old workshop account: drivers now own the
   // maintenance / work-order workflow as well.
   const workshop = await createUser(`wrk.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["DRIVER"]);
-  created.users.push(driverA, driverB, ops, workshop);
+  // ADMIN is the only role that can clear a safety hold (vehicle:release). The
+  // development MFA bypass (REQUIRE_MFA=false) lets it sign in here.
+  const admin = await createUser(`adm.${EMAIL_SUFFIX}@e2e.local`, "ACTIVE", ["ADMIN"]);
+  created.users.push(driverA, driverB, ops, workshop, admin);
 
   // ── Vehicle fixtures (vehicle:create is ADMIN-only) ───────────────────────
   const veh1Ref = db.collection("vehicles").doc("e2e-veh-1");
@@ -227,11 +230,12 @@ try {
   });
   created.docIds.push(["vehicles", "e2e-veh-1"], ["vehicles", "e2e-veh-2"]);
 
-  const [sDriverA, sDriverB, sOps, sWorkshop] = await Promise.all([
+  const [sDriverA, sDriverB, sOps, sWorkshop, sAdmin] = await Promise.all([
     login(driverA.email),
     login(driverB.email),
     login(ops.email),
     login(workshop.email),
+    login(admin.email),
   ]);
   console.log("  (users + vehicles ready)\n");
 
@@ -342,6 +346,65 @@ try {
       "WORKSHOP cannot archive (403 vehicle:archive)",
       archive.status === 403 && /vehicle:archive/.test(archive.body?.error?.message ?? ""),
       JSON.stringify(archive.body),
+    );
+
+    // ADMIN holds vehicle:release — and only ADMIN does.
+    const adminRelease = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sAdmin.cookies, {
+      action: "release",
+      reason: "brake pads replaced and road-tested",
+    });
+    check(
+      "ADMIN releases the hold when no critical issue is open (200 → ACTIVE)",
+      adminRelease.status === 200 && adminRelease.body?.vehicle?.status === "ACTIVE",
+      JSON.stringify(adminRelease.body).slice(0, 250),
+    );
+
+    // Re-hold, then open a CRITICAL safety issue. Holding vehicle:release is not
+    // enough — the release route re-checks open critical issues.
+    await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sWorkshop.cookies, {
+      action: "safety_hold",
+      reason: "critical fault reported",
+    });
+    const critical = await send("POST", "/api/v1/reports", sDriverA.cookies, {
+      vehicleId: "e2e-veh-1",
+      title: "Brake fluid leak",
+      description: "Puddle under the front wheel; pedal feels soft.",
+      severity: "CRITICAL",
+    });
+    check(
+      "CRITICAL report created and vehicle is held (201)",
+      critical.status === 201 && critical.body?.report?.safetyCritical === true,
+      JSON.stringify(critical.body).slice(0, 200),
+    );
+    const criticalReport = critical.body?.report;
+    if (criticalReport) created.docIds.push(["maintenanceReports", criticalReport.id]);
+
+    const blockedRelease = await send(
+      "POST",
+      "/api/v1/vehicles/e2e-veh-1/status",
+      sAdmin.cookies,
+      { action: "release" },
+    );
+    check(
+      "ADMIN cannot release while a critical issue is open (409)",
+      blockedRelease.status === 409 && /critical/i.test(blockedRelease.body?.error?.message ?? ""),
+      JSON.stringify(blockedRelease.body).slice(0, 250),
+    );
+
+    if (criticalReport) {
+      await send("POST", `/api/v1/reports/${criticalReport.id}/status`, sDriverA.cookies, {
+        action: "close",
+        resolution: "Hose replaced and system bled; leak gone.",
+      });
+    }
+    const afterFix = await send("POST", "/api/v1/vehicles/e2e-veh-1/status", sAdmin.cookies, {
+      action: "release",
+      reason: "critical issue closed",
+    });
+    check(
+      "ADMIN releases once the critical issue is closed (200 → ACTIVE)",
+      afterFix.status === 200 && afterFix.body?.vehicle?.status === "ACTIVE",
+      JSON.stringify(afterFix.body).slice(0, 250),
     );
 
     // Workshop roundtrip on veh-2 (ACTIVE → IN_SERVICE → ACTIVE)

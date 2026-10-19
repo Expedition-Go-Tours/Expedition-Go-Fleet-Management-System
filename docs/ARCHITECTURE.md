@@ -99,8 +99,9 @@ MFA (TOTP) is required for `ADMIN` and `OPERATIONS` roles.
   validates the source state (409 on invalid transitions) → applies → audits
   before/after. Covered by unit tests in `src/lib/domain/lifecycle.test.ts`.
 - **Key invariants:**
-  - Vehicle `SAFETY_HOLD → ACTIVE` requires the dedicated `vehicle:release`
-    permission (no role has it by default); `ARCHIVED` is terminal; archiving
+  - Vehicle `SAFETY_HOLD → ACTIVE` requires the dedicated, ADMIN-only
+    `vehicle:release` permission and re-checks open critical issues before
+    releasing; `ARCHIVED` is terminal; archiving
     is blocked while open work orders exist; the odometer ledger never
     decreases (corrections supersede, historical imports flag, never delete).
   - Work orders run the pipeline

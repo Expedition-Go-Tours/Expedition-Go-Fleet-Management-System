@@ -92,14 +92,18 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
   });
 
-  it("ADMIN administers users but never bypasses the release invariant", () => {
+  it("ADMIN administers users and is the only role that can release a hold", () => {
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.USER_INVITE)).toBe(true);
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.USER_ROLE_ASSIGN)).toBe(true);
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.SETTINGS_UPDATE)).toBe(true);
     // Old MANAGER oversight reads are now part of ADMIN.
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.USER_READ)).toBe(true);
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.EXPENSE_CREATE)).toBe(true);
-    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
+    // Only ADMIN may clear a safety hold; the route still re-checks open
+    // critical issues, so the grant does not bypass the safety invariant.
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.VEHICLE_RELEASE)).toBe(true);
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
   });
 
   it("defaults to deny for unknown roles", () => {

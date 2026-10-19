@@ -119,10 +119,10 @@ POST /vehicles/:id/status          { action: "return_to_service" }   → ACTIVE
 - `safety_hold` (any `vehicle:status:update` role) records the reason, actor,
   applied-at, and the triggering `issueId` (when created from a CRITICAL
   report/inspection failure).
-- **`release` requires the dedicated `vehicle:release` permission which no
-  role holds by default**; release is granted via a custom role/policy when
-  the fleet owner decides. The route re-checks open critical issues before
-  clearing the hold.
+- **`release` requires the dedicated `vehicle:release` permission, held by
+  `ADMIN` only** — otherwise a held vehicle could never return to service. The
+  route re-checks open critical issues before clearing the hold, so the grant
+  never bypasses the safety invariant (an unsafe vehicle stays held).
 - `archive` requires `vehicle:archive` and is blocked while open work orders
   exist (`countOpenWorkOrders > 0` → 409 with the count).
 
@@ -339,7 +339,7 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
 | Odometer never decreases silently | ledger transaction → `409 DECREASE_REJECTED` |
 | Trip distance is always end − start | assignment end reads both ledger readings |
 | No repair without a traceable record | work-order completion evidence gate + immutable ServiceRecord |
-| No release from a hold by same-party fixers | `vehicle:release` not granted to any default role; re-checks open critical issues |
+| No release from a hold by same-party fixers | `vehicle:release` held only by ADMIN, and only after open critical issues are closed |
 | Money recorded once, never double-counted | integer pesewas; fuel → canonical Expense in one transaction |
 | No expense "approval" drift | expenses only `RECORDED → VOID` (OPERATIONS/ADMIN, reason required) |
 | Reminders/journaling survive reruns | `dedupeKey` idempotency + Firestore transactions |

@@ -102,9 +102,11 @@ export const ALL_PERMISSIONS: readonly PermissionKey[] = Object.values(PERMISSIO
  *   - OPERATIONS = dispatching plus the money the old FINANCE role held.
  *   - ADMIN = everything, minus the deliberate safety-hold carve-out below.
  *
- * Deliberately excluded:
- *  - `vehicle:release` is not automatic for ADMIN ("no automatic bypass"); it is
- *    an explicit, per-user grant subject to the safety-hold invariant.
+ * Deliberately explicit:
+ *  - `vehicle:release` is held only by ADMIN. It is not implied by any other
+ *    permission, and the release route re-checks open critical issues before it
+ *    will clear a safety hold, so an unsafe vehicle cannot be put back on the
+ *    road just because the admin holds the grant.
  */
 export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
   DRIVER: [
@@ -198,9 +200,10 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.AUDIT_READ,
   ],
 
-  // Admin administers access; it does not automatically bypass safety/financial
-  // invariants (notably `vehicle:release`).
-  ADMIN: ALL_PERMISSIONS.filter((key) => key !== PERMISSIONS.VEHICLE_RELEASE),
+  // Admin administers access and is the only role that can clear a safety hold
+  // (`vehicle:release`). The release route still re-checks open critical issues,
+  // so the grant never bypasses the safety invariant.
+  ADMIN: [...ALL_PERMISSIONS],
 };
 
 /** Expand a set of roles into the union of granted permission keys. */

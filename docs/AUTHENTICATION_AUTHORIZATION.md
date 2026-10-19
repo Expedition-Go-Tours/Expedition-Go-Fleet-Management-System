@@ -244,7 +244,7 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 | Void/correct expenses | No | Yes, with reason | Yes, with reason |
 | Read financial totals / export | No | Yes | Yes |
 | Manage providers | Yes | Read | Yes |
-| Release vehicle from safety hold | No | No | Only with `vehicle:release`; no automatic bypass |
+| Release vehicle from safety hold | No | No | Yes (`vehicle:release`); re-checks open critical issues |
 | Manage users/roles | No | No | Yes |
 | Read audit logs | Yes | Yes | Yes |
 
@@ -257,9 +257,11 @@ deliberate and worth reviewing if you want tighter limits later:
 - A driver may verify the completion of a repair they recorded themselves. The
   safety-hold release stays with `ADMIN` as the backstop against unsafe vehicles.
 
-A user interface hiding a page is not enforcement. `ADMIN` must never silently
-bypass safety and financial invariants — in particular, the safety-hold release
-is a distinct permission and is not granted automatically.
+A user interface hiding a page is not enforcement, and holding a permission is not
+a bypass. `ADMIN` holds `vehicle:release` (otherwise a held vehicle could never
+be returned to service), but the release route re-checks open critical issues
+before it will clear a hold — so an unsafe vehicle cannot be released just
+because the admin has the grant.
 
 ### 6.5 Resource-level checks
 
