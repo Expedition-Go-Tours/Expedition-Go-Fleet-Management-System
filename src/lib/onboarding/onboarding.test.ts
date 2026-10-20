@@ -194,11 +194,12 @@ describe("role → tour selection", () => {
   it("hides steps whose permission the user does not hold", () => {
     const admin = getTour("admin")!;
     // An oversight reader holds every permission the admin steps require
-    // (user:read, audit:read, user:update) without holding user:role:assign or
-    // settings:update.
+    // (user:read, user:update, user:invite, audit:read) without holding
+    // user:role:assign or settings:update.
     const readerPermissions: string[] = [
       PERMISSIONS.USER_READ,
       PERMISSIONS.USER_UPDATE,
+      PERMISSIONS.USER_INVITE,
       PERMISSIONS.AUDIT_READ,
       PERMISSIONS.VEHICLE_READ,
     ];
@@ -211,14 +212,16 @@ describe("role → tour selection", () => {
       ),
     ).toBe(true);
 
-    // A real step is dropped too, not just a synthetic one: someone without
-    // user:update never sees the two-factor recovery step.
+    // Real steps are dropped too, not just a synthetic one: without user:update
+    // the two-factor recovery step disappears, and without user:invite so does
+    // the invitation step.
     const withoutUserUpdate = visibleSteps(admin, [
       PERMISSIONS.USER_READ,
       PERMISSIONS.AUDIT_READ,
       PERMISSIONS.VEHICLE_READ,
     ]);
     expect(withoutUserUpdate.some((step) => step.target === "admin-user-list")).toBe(false);
+    expect(withoutUserUpdate.some((step) => step.target === "admin-invite")).toBe(false);
     expect(withoutUserUpdate.length).toBeLessThan(admin.steps.length);
 
     // A step guarded by an extra permission is dropped rather than shown to

@@ -23,7 +23,7 @@ export const ROLE_TOUR_ORDER: readonly RoleKey[] = ["ADMIN", "OPERATIONS", "DRIV
 export const TOURS: readonly TourDefinition[] = [
   {
     id: "driver",
-    version: 3,
+    version: 4,
     title: "Driver tour",
     summary: "Trips, odometer readings, inspections and reporting from the driver workspace.",
     roles: ["DRIVER"],
@@ -87,12 +87,20 @@ export const TOURS: readonly TourDefinition[] = [
           "Assignments, replies to your reports and maintenance releases arrive as notifications.",
         side: "bottom",
       },
+      {
+        route: "/workspace",
+        target: "header-help",
+        title: "Any time you need a reminder",
+        description:
+          "Every tour stays available from the Help menu in the top bar. Replaying one never blocks the app — it is there whenever a screen looks unfamiliar.",
+        side: "bottom",
+      },
     ],
   },
 
   {
     id: "operations",
-    version: 3,
+    version: 4,
     title: "Operations tour",
     summary: "Run the dashboard, assign drivers, check availability and triage driver reports.",
     roles: ["OPERATIONS"],
@@ -139,6 +147,14 @@ export const TOURS: readonly TourDefinition[] = [
         required: true,
       },
       {
+        route: "/vehicles",
+        target: "vehicle-create",
+        title: "Putting a vehicle on the system",
+        description:
+          "Register it once with its registration, make, model and current odometer reading. That reading becomes the baseline the whole mileage ledger is measured from, so enter it carefully.",
+        side: "top",
+      },
+      {
         route: "/reports",
         target: "reports-board",
         title: "Review and triage reports",
@@ -155,12 +171,20 @@ export const TOURS: readonly TourDefinition[] = [
           "Open a report to reach its vehicle and linked work order; jump to Work orders to watch the repair progress.",
         side: "right",
       },
+      {
+        route: "/reports",
+        target: "header-help",
+        title: "Any time you need a reminder",
+        description:
+          "Every tour stays available from the Help menu in the top bar. Replaying one never blocks the app — it is there whenever a screen looks unfamiliar.",
+        side: "bottom",
+      },
     ],
   },
 
   {
     id: "maintenance",
-    version: 3,
+    version: 4,
     title: "Maintenance tour",
     summary: "Reminders, open issues, work orders and recording repairs correctly.",
     roles: ["DRIVER"],
@@ -217,12 +241,20 @@ export const TOURS: readonly TourDefinition[] = [
           "Open a vehicle to see its odometer ledger, completed service and documents in one place. The Documents tab is also where you upload scans of registration, insurance, roadworthiness and permits.",
         side: "right",
       },
+      {
+        route: "/vehicles",
+        target: "header-help",
+        title: "Any time you need a reminder",
+        description:
+          "Every tour stays available from the Help menu in the top bar. Replaying one never blocks the app — it is there whenever a screen looks unfamiliar.",
+        side: "bottom",
+      },
     ],
   },
 
   {
     id: "finance",
-    version: 2,
+    version: 3,
     title: "Expenses and costs tour",
     summary: "The expense ledger, signing costs off, fuel records and permitted exports.",
     roles: ["OPERATIONS"],
@@ -283,12 +315,20 @@ export const TOURS: readonly TourDefinition[] = [
         side: "top",
         requires: [PERMISSIONS.WORK_ORDER_READ],
       },
+      {
+        route: "/work-orders",
+        target: "header-help",
+        title: "Any time you need a reminder",
+        description:
+          "Every tour stays available from the Help menu in the top bar. Replaying one never blocks the app — it is there whenever a screen looks unfamiliar.",
+        side: "bottom",
+      },
     ],
   },
 
   {
     id: "admin",
-    version: 3,
+    version: 4,
     title: "Admin tour",
     summary: "The fleet dashboard, vehicle history, employee accounts, audit records and reports.",
     roles: ["ADMIN"],
@@ -330,6 +370,14 @@ export const TOURS: readonly TourDefinition[] = [
         side: "top",
       },
       {
+        route: "/vehicles",
+        target: "vehicle-create",
+        title: "Putting a vehicle on the system",
+        description:
+          "Register it once with its registration, make, model and current odometer reading. That reading becomes the baseline the whole mileage ledger is measured from, so enter it carefully.",
+        side: "top",
+      },
+      {
         route: "/users",
         target: "admin-users",
         title: "Employee accounts and permissions",
@@ -347,6 +395,16 @@ export const TOURS: readonly TourDefinition[] = [
           "Each row shows whether that person has two-factor authentication switched on. If someone loses their phone, Reset 2FA clears their old factor so they can set up a new one — it asks for a reason and is written to the audit log.",
         side: "top",
         requires: [PERMISSIONS.USER_UPDATE],
+      },
+      {
+        route: "/users",
+        target: "admin-invite",
+        fallbacks: ["admin-users"],
+        title: "Bringing people on",
+        description:
+          "Invite someone by email and give them the narrowest role that fits the job. They sign in with a temporary password, set their own, and land on the tour for their role.",
+        side: "top",
+        requires: [PERMISSIONS.USER_INVITE],
       },
       {
         route: "/audit",
@@ -427,6 +485,14 @@ export const TOURS: readonly TourDefinition[] = [
         title: "Fuel records",
         description: "Track fuel consumption and costs across the fleet.",
         side: "top",
+      },
+      {
+        route: "/fuel",
+        target: "header-help",
+        title: "Any time you need a reminder",
+        description:
+          "Every tour stays available from the Help menu in the top bar, alongside the ones for the other roles. Replaying one never blocks the app — it is there whenever a screen looks unfamiliar.",
+        side: "bottom",
       },
     ],
   },

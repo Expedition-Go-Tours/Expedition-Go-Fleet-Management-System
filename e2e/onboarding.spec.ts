@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { expect, test, type Page } from "@playwright/test";
 
 /*
@@ -213,5 +215,54 @@ test.describe("tour target validation", () => {
 
     // All targets found
     expect(missingTargets).toHaveLength(0);
+  });
+});
+
+test.describe("full tour coverage", () => {
+  test.skip(!EMAIL || !PASSWORD, "E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD not set");
+
+  /**
+   * Every step of every tour must land on a real element *on the route the step
+   * declares*. The unit test proves a target exists somewhere in the source;
+   * this proves it is on the right page — the failure mode when someone moves a
+   * `data-tour` between screens, which no amount of source-scanning catches.
+   */
+  test("every step of every tour points at a real element on its own route", async ({ page }) => {
+    test.setTimeout(240_000);
+    await signIn(page);
+
+    const source = readFileSync("src/lib/onboarding/tours.ts", "utf8");
+    // Each step is `route` followed by `target`; split on the former and read
+    // the latter from the slice before the next step.
+    const steps: Array<{ route: string; target: string }> = [];
+    const chunks = source.split(/\n\s*route: /);
+    for (const chunk of chunks.slice(1)) {
+      const route = chunk.match(/^"([^"]+)"/)?.[1];
+      const target = chunk.match(/target: "([a-z0-9-]+)"/)?.[1];
+      if (route && target) steps.push({ route, target });
+    }
+    expect(steps.length, "failed to parse tour steps").toBeGreaterThan(30);
+
+    // Group by route so each screen loads once rather than once per step.
+    const byRoute = new Map<string, Set<string>>();
+    for (const step of steps) {
+      if (!byRoute.has(step.route)) byRoute.set(step.route, new Set());
+      byRoute.get(step.route)!.add(step.target);
+    }
+
+    const missing: string[] = [];
+    for (const [route, targets] of byRoute) {
+      await page.goto(route);
+      await page.waitForTimeout(1_500);
+      for (const target of targets) {
+        if ((await page.locator(`[data-tour="${target}"]`).count()) === 0) {
+          missing.push(`${target} (expected on ${route})`);
+        }
+      }
+    }
+
+    if (missing.length > 0) {
+      throw new Error(`Tour steps pointing at missing elements:\n  ${missing.join("\n  ")}`);
+    }
   });
 });
