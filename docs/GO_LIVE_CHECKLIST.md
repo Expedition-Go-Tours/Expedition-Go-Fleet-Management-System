@@ -20,8 +20,11 @@ for real. Nothing here needs a developer except where it says so.
 | Rate limiting on sign-in, password change, invites and uploads | Done |
 | Security headers (HSTS, CSP, clickjacking, MIME sniffing) | Done |
 
-Every step was verified as it went: **320 tests pass**, type-checking clean,
-lint clean, and a production build succeeds.
+Every step was verified as it went: **339 unit tests**, type-checking clean,
+lint clean, a production build succeeds, and **all five end-to-end suites pass
+against a live server (149 checks)** — sign-in and permissions, the safety-hold
+release, expense approval, fuel, documents, assignments, inspections, the
+odometer ledger, work orders and concurrency.
 
 ---
 
