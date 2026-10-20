@@ -105,6 +105,8 @@ acceptance-matrix evidence and screenshots.
 
 ## Documentation
 
+- **`docs/GO_LIVE_CHECKLIST.md` — start here.** Plain-language list of what is
+  done and what still needs you before this runs for real.
 - `docs/AUTHENTICATION_AUTHORIZATION.md` — binding auth/authz specification
   (roles, permission keys, sessions, audit, tests).
 - `docs/DESIGN_SYSTEM.md` — source visual-language document. See the adaptation
