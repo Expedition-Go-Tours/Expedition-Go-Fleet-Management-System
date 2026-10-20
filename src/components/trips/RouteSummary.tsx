@@ -23,6 +23,7 @@ export function RouteSummary({
   provider,
   calculatedAt,
   stale,
+  approximate,
 }: {
   stops: TripStop[];
   legs: RouteLeg[];
@@ -31,6 +32,8 @@ export function RouteSummary({
   provider: string | null;
   calculatedAt: string | null;
   stale: boolean;
+  /** True when no routing service is configured — distance is an estimate only. */
+  approximate?: boolean;
 }) {
   if (!totalDistanceM || legs.length === 0) return null;
 
@@ -38,6 +41,16 @@ export function RouteSummary({
 
   return (
     <div className="border-hairline bg-surface rounded-md border">
+      {approximate && (
+        <p
+          role="status"
+          className="border-warning/30 bg-warning/10 text-warning text-body-xs border-b px-4 py-2"
+        >
+          Approximate distance — no routing service is configured, so this is straight-line distance
+          scaled by a road factor. Set GEOAPIFY_API_KEY for real road distances.
+        </p>
+      )}
+
       <div className="border-hairline flex flex-wrap items-center gap-3 border-b px-4 py-2.5">
         <Route className="text-accent h-4 w-4" />
         <div className="flex items-center gap-2">

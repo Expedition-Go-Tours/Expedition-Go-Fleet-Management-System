@@ -145,6 +145,16 @@ async function main() {
     deletions.get(collection).add(id);
   };
 
+  // Hard guard for a destructive script: nothing in the identity set may ever
+  // appear in the wipe list, so a future edit cannot silently delete logins.
+  for (const identity of IDENTITY_COLLECTIONS) {
+    if (BUSINESS_COLLECTIONS.includes(identity)) {
+      throw new Error(
+        `Refusing to run: "${identity}" is listed as both identity and business data`,
+      );
+    }
+  }
+
   if (ALL) {
     for (const collection of BUSINESS_COLLECTIONS) {
       for (const doc of await collectionDocs(collection)) queue(collection, doc.id);

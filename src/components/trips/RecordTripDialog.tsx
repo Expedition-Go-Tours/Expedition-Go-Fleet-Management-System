@@ -63,6 +63,7 @@ export function RecordTripDialog({
   const [routeCalculatedAt, setRouteCalculatedAt] = useState<string | null>(null);
   const [routeGeometry, setRouteGeometry] = useState<GeoJsonLineString | null>(null);
   const [routeStale, setRouteStale] = useState(false);
+  const [routeApproximate, setRouteApproximate] = useState(false);
   const [savedTripId, setSavedTripId] = useState<string | null>(null);
 
   // Track stop changes to mark route stale.
@@ -97,6 +98,7 @@ export function RecordTripDialog({
     setRouteCalculatedAt(null);
     setRouteGeometry(null);
     setRouteStale(false);
+    setRouteApproximate(false);
     setSavedTripId(null);
     prevStopsRef.current = "";
   }, [defaultVehicleId, defaultDate, vehicles]);
@@ -203,6 +205,7 @@ export function RecordTripDialog({
           provider: string;
           calculatedAt: string;
           geometry?: { type: string; coordinates: [number, number][] };
+          approximate?: boolean;
         };
         legs: RouteLeg[];
       }>("/api/v1/trips/calculate-route", { tripId });
@@ -211,6 +214,7 @@ export function RecordTripDialog({
       setRouteDurationS(result.route.totalDurationS);
       setRouteProvider(result.route.provider);
       setRouteCalculatedAt(result.route.calculatedAt);
+      setRouteApproximate(result.route.approximate === true);
       setRouteLegs(result.legs);
       setRouteGeometry(
         result.route.geometry && result.route.geometry.type === "LineString"
@@ -470,6 +474,7 @@ export function RecordTripDialog({
                 provider={routeProvider}
                 calculatedAt={routeCalculatedAt}
                 stale={routeStale}
+                approximate={routeApproximate}
               />
             </div>
           )}

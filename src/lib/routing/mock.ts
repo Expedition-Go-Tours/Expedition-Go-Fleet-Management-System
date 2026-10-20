@@ -73,6 +73,8 @@ export class MockRoutingProvider implements RoutingProvider {
       provider: this.name,
       calculatedAt: new Date().toISOString(),
       geometry: { type: "LineString", coordinates },
+      // Straight-line × road factor — never a measured road distance.
+      approximate: true,
     };
   }
 }

@@ -5,7 +5,7 @@ import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/li
 import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import type { RouteLeg } from "@/lib/domain/trip";
 import { getRoutingProvider, RoutingError } from "@/lib/routing/index";
-import type { RouteWaypoint } from "@/lib/routing/provider";
+import type { RouteResult, RouteWaypoint } from "@/lib/routing/provider";
 import { getTripById, saveRouteCalculation } from "@/lib/repos/trips";
 
 export const runtime = "nodejs";
@@ -112,10 +112,12 @@ export async function POST(request: NextRequest) {
       throw ApiError.badRequest("Provide either waypoints array or tripId");
     }
 
-    // Calculate route with timeout
-    const provider = getRoutingProvider();
-    let route: Awaited<ReturnType<typeof provider.calculateRoute>>;
+    // Calculate route with timeout. `getRoutingProvider` is inside the try so a
+    // configuration problem surfaces as a clear error rather than an unhandled
+    // 500 from the outer handler.
+    let route: RouteResult;
     try {
+      const provider = getRoutingProvider();
       route = await Promise.race([
         provider.calculateRoute(waypoints),
         new Promise<never>((_, reject) => setTimeout(() => reject(RoutingError.timeout()), 30_000)),

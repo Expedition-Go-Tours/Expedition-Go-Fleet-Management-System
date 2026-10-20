@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { getRoutingProvider, isRoutingConfigured } from "@/lib/routing/index";
 import { MockRoutingProvider, haversineDistanceM } from "@/lib/routing/mock";
 import { RoutingError } from "@/lib/routing/provider";
 
@@ -218,5 +219,67 @@ describe("Geoapify duration handling", () => {
   it("handles zero duration correctly", () => {
     const totalDurationS = Math.round(0);
     expect(totalDurationS).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Graceful degradation — a missing routing key must never break the app
+// ---------------------------------------------------------------------------
+
+describe("getRoutingProvider graceful degradation", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function unconfigure() {
+    vi.stubEnv("GEOAPIFY_API_KEY", "");
+    vi.stubEnv("MAPBOX_ACCESS_TOKEN", "");
+  }
+
+  it("never throws when no routing service is configured", () => {
+    unconfigure();
+    // This used to throw in production and surface as an unhandled 500 on the
+    // trip route calculation. A missing third-party key must not take down
+    // trip recording.
+    expect(() => getRoutingProvider()).not.toThrow();
+    expect(getRoutingProvider()).toBeInstanceOf(MockRoutingProvider);
+  });
+
+  it("still degrades instead of throwing in production", () => {
+    unconfigure();
+    vi.stubEnv("NODE_ENV", "production");
+    expect(() => getRoutingProvider()).not.toThrow();
+    expect(getRoutingProvider()).toBeInstanceOf(MockRoutingProvider);
+  });
+
+  it("falls back to approximate distances and says so", async () => {
+    unconfigure();
+    const route = await getRoutingProvider().calculateRoute([
+      { latitude: 5.6037, longitude: -0.187, label: "Accra" },
+      { latitude: 5.1054, longitude: -1.2461, label: "Cape Coast" },
+    ]);
+    // Flagged approximate so the UI can warn — nobody should mistake this
+    // for a measured road distance.
+    expect(route.approximate).toBe(true);
+    expect(route.totalDistanceM).toBeGreaterThan(0);
+  });
+
+  it("reports whether a real routing service is configured", () => {
+    unconfigure();
+    expect(isRoutingConfigured()).toBe(false);
+
+    vi.stubEnv("GEOAPIFY_API_KEY", "abc123");
+    expect(isRoutingConfigured()).toBe(true);
+
+    vi.stubEnv("GEOAPIFY_API_KEY", "");
+    vi.stubEnv("MAPBOX_ACCESS_TOKEN", "pk.test");
+    expect(isRoutingConfigured()).toBe(true);
+  });
+
+  it("still rejects fewer than two waypoints rather than guessing", async () => {
+    unconfigure();
+    await expect(
+      getRoutingProvider().calculateRoute([{ latitude: 5.6, longitude: -0.18, label: "Only one" }]),
+    ).rejects.toMatchObject({ code: "INVALID_WAYPOINTS" });
   });
 });

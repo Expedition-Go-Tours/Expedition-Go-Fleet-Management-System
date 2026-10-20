@@ -77,11 +77,17 @@ interface RoutingProvider {
 |---|---|---|---|
 | **Geoapify** | `src/lib/routing/geoapify.ts` | `GEOAPIFY_API_KEY` | Free tier: 3,000 req/day. Primary. |
 | **Mapbox** | `src/lib/routing/mapbox.ts` | `MAPBOX_ACCESS_TOKEN` | Secondary fallback. Server-side only. |
-| **Mock** | `src/lib/routing/mock.ts` | — | Haversine × 1.3. Dev/test only; throws in production. |
+| **Mock** | `src/lib/routing/mock.ts` | — | Haversine × 1.3 straight-line estimate. Results are flagged `approximate: true`. |
 
 ### Factory (`src/lib/routing/index.ts`)
 
-Returns Geoapify if `GEOAPIFY_API_KEY` is set, then Mapbox, then Mock (dev only). Production without a real provider throws `NOT_CONFIGURED`.
+Returns Geoapify if `GEOAPIFY_API_KEY` is set, then Mapbox, then the mock.
+
+**This never throws.** A missing routing key must not take down trip recording, so
+with no provider configured the app keeps working on approximate distances and
+the UI says so ("Approximate distance — no routing service is configured").
+`isRoutingConfigured()` reports whether a real service is in use. The warning is
+logged once per process, not on every calculation.
 
 ## Geocoding
 

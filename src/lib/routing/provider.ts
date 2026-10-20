@@ -31,6 +31,13 @@ export interface RouteResult {
   providerMeta?: unknown;
   /** GeoJSON LineString geometry for the route, when available. */
   geometry?: GeoJsonLineString;
+  /**
+   * True when the distance is an estimate rather than a real road route —
+   * i.e. no routing service is configured and we fell back to straight-line
+   * distance scaled by a road factor. Surfaces as a "approximate" note in the
+   * UI so nobody mistakes it for a measured distance.
+   */
+  approximate?: boolean;
 }
 
 /**

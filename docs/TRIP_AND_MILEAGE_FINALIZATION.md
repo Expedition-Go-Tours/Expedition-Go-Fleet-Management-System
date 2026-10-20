@@ -88,7 +88,7 @@
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `GEOAPIFY_API_KEY` | Yes (production) | Free tier: 3,000 requests/day |
+| `GEOAPIFY_API_KEY` | No — but recommended | Free tier: 3,000 requests/day. Without it trip recording still works, on approximate distances clearly labelled as such. |
 | `MAPBOX_ACCESS_TOKEN` | No | Secondary fallback |
 | MapLibre + OpenFreeMap | — | No key needed (free tiles) |
 
