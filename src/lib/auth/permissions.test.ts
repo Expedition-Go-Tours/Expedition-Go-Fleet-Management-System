@@ -76,6 +76,23 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.USER_INVITE)).toBe(false);
   });
 
+  it("a driver sees only their own reports — merging roles never widened record scope", () => {
+    // The role merge decided *who does the job*; it must not quietly relax the
+    // data-scoping rules the specification calls out as hard invariants.
+    // A driver reads their own reports and works through work orders, but
+    // cannot browse every other driver's incident reports.
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.REPORT_READ_OWN)).toBe(true);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.REPORT_READ_ALL)).toBe(false);
+    // The same scoping principle applies to incidents and to money.
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.INCIDENT_READ_OWN)).toBe(true);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.INCIDENT_READ_ALL)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.EXPENSE_EXPORT)).toBe(false);
+
+    // The roles that coordinate and own the business do see everything.
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.REPORT_READ_ALL)).toBe(true);
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.REPORT_READ_ALL)).toBe(true);
+  });
+
   it("OPERATIONS dispatches and handles money (merged OPERATIONS + FINANCE)", () => {
     // Dispatch and triage (old OPERATIONS).
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.REPORT_TRIAGE)).toBe(true);

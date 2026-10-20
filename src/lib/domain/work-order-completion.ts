@@ -1,3 +1,4 @@
+import { DomainError } from "@/lib/domain/errors";
 import { COMPLETABLE_STATUSES } from "@/lib/domain/work-order";
 import type { ServiceRecord } from "@/lib/repos/maintenance";
 
@@ -12,12 +13,10 @@ import type { ServiceRecord } from "@/lib/repos/maintenance";
  * transaction immediately afterwards.
  */
 
-export class CompletionError extends Error {
-  readonly code: string;
+export class CompletionError extends DomainError {
   constructor(code: string, message: string) {
-    super(message);
+    super(code, message);
     this.name = "CompletionError";
-    this.code = code;
   }
 }
 

@@ -487,13 +487,17 @@ try {
       JSON.stringify(history.body).slice(0, 200),
     );
 
-    const issueAfter = await get(`/api/v1/reports/${issueId}`, wCookies);
+    // Read it back as its owner. Report reads are scoped to the person who
+    // raised them (AUTHENTICATION_AUTHORIZATION.md §6.5) — the workshop role
+    // acts on reports through work orders, but does not browse other drivers'
+    // reports.
+    const issueAfter = await get(`/api/v1/reports/${issueId}`, dCookies);
     check(
       "resolved issue is CLOSED with a resolution",
       issueAfter.status === 200 &&
         issueAfter.body.report?.status === "CLOSED" &&
         issueAfter.body.report?.resolution?.includes("sump gasket"),
-      JSON.stringify(issueAfter.body?.report?.status).slice(0, 200),
+      JSON.stringify(issueAfter.body?.report?.status ?? null).slice(0, 200),
     );
 
     // Work order shows the service record link.
@@ -581,7 +585,7 @@ try {
       "vehicle status is SAFETY_HOLD with the causing issue linked",
       veh.body.vehicle?.status === "SAFETY_HOLD" &&
         veh.body.vehicle?.safetyHoldIssueId === criticalId,
-      JSON.stringify(veh.body.vehicle?.status).slice(0, 150),
+      JSON.stringify(veh.body.vehicle?.status ?? null).slice(0, 150),
     );
 
     // Fix via a work order; completion must NOT release the hold.
@@ -601,7 +605,7 @@ try {
     check(
       "completion does NOT release the safety hold",
       afterFix.body.vehicle?.status === "SAFETY_HOLD",
-      JSON.stringify(afterFix.body.vehicle?.status).slice(0, 150),
+      JSON.stringify(afterFix.body.vehicle?.status ?? null).slice(0, 150),
     );
 
     const release = await send("POST", `/api/v1/vehicles/${vehRef.id}/status`, wCookies, {

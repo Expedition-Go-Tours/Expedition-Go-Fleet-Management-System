@@ -6,6 +6,7 @@ import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { requirePagePermission } from "@/lib/auth/page-guard";
+import { countMfaFactorsByUid } from "@/lib/auth/mfa";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { formatDateTime } from "@/lib/format";
 import { countUsers, listUsers } from "@/lib/repos/users";
@@ -26,6 +27,9 @@ export default async function UsersPage() {
   const canUpdate = permissions.includes(PERMISSIONS.USER_UPDATE);
 
   const [users, userTotal] = await Promise.all([listUsers(), countUsers()]);
+  // Resolved from Firebase in one batched call, not from our cached flag —
+  // showing who is actually protected is worth being accurate about.
+  const mfaCounts = await countMfaFactorsByUid(users.map((user) => user.firebaseUid));
 
   const rows = users.map((user) => ({
     id: user.id,
@@ -34,6 +38,7 @@ export default async function UsersPage() {
     phone: user.phone ?? null,
     status: user.status,
     roles: user.roles,
+    mfaEnabled: (mfaCounts[user.firebaseUid] ?? 0) > 0,
     lastLogin: formatDateTime(user.lastLoginAt),
   }));
 

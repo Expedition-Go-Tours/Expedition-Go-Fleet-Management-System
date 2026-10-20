@@ -118,8 +118,11 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.ODOMETER_RECORD,
     PERMISSIONS.ODOMETER_CORRECT,
     PERMISSIONS.REPORT_CREATE,
+    // Scoping matters here: a driver sees the defects *they* raised. The
+    // workshop work they inherited is done through work orders and service
+    // records, which they can read. (AUTHENTICATION_AUTHORIZATION.md §6.5 —
+    // "a driver can read a report only when reportedById matches their user ID".)
     PERMISSIONS.REPORT_READ_OWN,
-    PERMISSIONS.REPORT_READ_ALL,
     PERMISSIONS.REPORT_TRIAGE,
     PERMISSIONS.REPORT_UPDATE,
     PERMISSIONS.REPORT_CLOSE,

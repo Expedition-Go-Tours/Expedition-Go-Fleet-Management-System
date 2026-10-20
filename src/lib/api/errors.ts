@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { DomainError } from "@/lib/domain/errors";
+
 /**
  * API error type. Handlers throw these; the route wrapper turns them into
  * consistent JSON responses. 401 is returned for unauthenticated requests and
@@ -50,6 +52,16 @@ export interface ApiErrorBody {
 /** Convert any thrown value into a safe JSON response. Never leaks internals. */
 export function toErrorResponse(error: unknown): NextResponse<ApiErrorBody> {
   if (error instanceof ApiError) {
+    return NextResponse.json(
+      { error: { code: error.code, message: error.message } },
+      { status: error.status },
+    );
+  }
+
+  // Expected domain failures carry their own code, message and status. They are
+  // written for the person who hit them ("Odometer cannot decrease…") — report
+  // them rather than collapsing to a generic 500 and losing the explanation.
+  if (error instanceof DomainError) {
     return NextResponse.json(
       { error: { code: error.code, message: error.message } },
       { status: error.status },

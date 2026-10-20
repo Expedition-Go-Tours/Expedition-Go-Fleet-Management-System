@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
+import { clientAddress, enforceRateLimit, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { generateTempPassword } from "@/lib/auth/passwords";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -23,6 +24,8 @@ export const runtime = "nodejs";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const requestId = randomUUID();
   try {
+    // A re-invite issues fresh credentials — same bound as inviting.
+    enforceRateLimit(`invite:${clientAddress(request)}`, RATE_LIMITS.invite);
     await assertCsrfAndOrigin();
 
     const context = await requireAuthContext();

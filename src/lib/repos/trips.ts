@@ -20,6 +20,7 @@ import {
   validateTripForSave,
 } from "@/lib/domain/trip";
 import { COLLECTIONS } from "@/lib/db/collections";
+import { DomainError } from "@/lib/domain/errors";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { AUDIT_EVENTS, writeAuditEventInTx } from "@/lib/repos/audit";
 import { toDate } from "@/lib/repos/timestamps";
@@ -38,12 +39,10 @@ import type { RouteResult } from "@/lib/routing/provider";
 // Error type
 // ---------------------------------------------------------------------------
 
-export class TripError extends Error {
-  readonly code: string;
+export class TripError extends DomainError {
   constructor(code: string, message: string) {
-    super(message);
+    super(code, message);
     this.name = "TripError";
-    this.code = code;
   }
 }
 

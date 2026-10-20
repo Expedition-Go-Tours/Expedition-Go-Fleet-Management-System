@@ -3,6 +3,7 @@ import type { DocumentData } from "firebase-admin/firestore";
 import type { SavedLocation, SavedLocationCategory } from "@/lib/domain/saved-location";
 import { validateSavedLocation } from "@/lib/domain/saved-location";
 import { COLLECTIONS } from "@/lib/db/collections";
+import { DomainError } from "@/lib/domain/errors";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { toDate } from "@/lib/repos/timestamps";
@@ -15,12 +16,10 @@ import { toDate } from "@/lib/repos/timestamps";
  * when recording trips.
  */
 
-export class SavedLocationError extends Error {
-  readonly code: string;
+export class SavedLocationError extends DomainError {
   constructor(code: string, message: string) {
-    super(message);
+    super(code, message);
     this.name = "SavedLocationError";
-    this.code = code;
   }
 }
 

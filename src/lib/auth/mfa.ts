@@ -38,6 +38,33 @@ export interface EnrolledMfaFactor {
 }
 
 /**
+ * Second-factor counts for many accounts in one call — `getUsers` batches up to
+ * 100 lookups, so a directory of staff costs one round trip rather than one per
+ * person. Used to show who is actually protected rather than trusting our
+ * cached flag.
+ */
+export async function countMfaFactorsByUid(
+  firebaseUids: string[],
+): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  const unique = [...new Set(firebaseUids.filter(Boolean))];
+
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100);
+    try {
+      const result = await getAdminAuth().getUsers(chunk.map((uid) => ({ uid })));
+      for (const record of result.users) {
+        counts[record.uid] = record.multiFactor?.enrolledFactors?.length ?? 0;
+      }
+    } catch {
+      // A lookup failure is not worth failing the page over — those accounts
+      // simply show as unenrolled, and the detail page is authoritative.
+    }
+  }
+  return counts;
+}
+
+/**
  * What to do about a sign-in attempt, from the MFA policy's point of view.
  *
  *  - `not_required`  — ordinary user; MFA does not apply.

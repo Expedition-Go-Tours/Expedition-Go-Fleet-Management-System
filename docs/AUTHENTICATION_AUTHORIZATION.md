@@ -289,7 +289,8 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 | Read vehicle information | Yes | Yes | Yes |
 | Submit reports/issues | Yes | Yes | Yes |
 | Read own reports | Yes | Yes | Yes |
-| Read/triage/close all reports | Yes | Yes | Yes |
+| Read all reports | No | Yes | Yes |
+| Triage/close reports | Yes | Yes | Yes |
 | Create/manage work orders | Yes | Read/coordinate | Yes |
 | Preventive maintenance schedules + service records | Yes | Read | Yes |
 | Record/correct odometer readings | Yes | Record | Yes |
@@ -312,6 +313,14 @@ deliberate and worth reviewing if you want tighter limits later:
 - A driver can read the audit log and record fuel (inherited from `MAINTENANCE`).
 - A driver may verify the completion of a repair they recorded themselves. The
   safety-hold release stays with `ADMIN` as the backstop against unsafe vehicles.
+
+**What the merge does *not* change: record scope.** Deciding *who does the job*
+is separate from *whose records they can see*. A driver still reads only the
+reports they raised, and still has no access to the money ledger or to
+exporting it. The merged workshop work happens through work orders and service
+records, which they can read in full. This is asserted by
+`src/lib/auth/permissions.test.ts` so a future role change cannot quietly widen
+it.
 
 A user interface hiding a page is not enforcement, and holding a permission is not
 a bypass. `ADMIN` holds `vehicle:release` (otherwise a held vehicle could never

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
+import { clearRateLimit, clientAddress, enforceRateLimit, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { generateCsrfToken, isTrustedOrigin } from "@/lib/auth/csrf";
 import { secureCookies } from "@/lib/auth/guards";
 import { decideMfa, hasEnrolledMfaFactor } from "@/lib/auth/mfa";
@@ -40,6 +41,10 @@ const MAX_AUTH_AGE_SECONDS = 5 * 60;
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
   try {
+    // Sign-in is the credential-stuffing target — throttle before doing any
+    // token verification or database work.
+    enforceRateLimit(`signin:${clientAddress(request)}`, RATE_LIMITS.signIn);
+
     const origin = request.headers.get("origin");
     if (origin && !isTrustedOrigin(origin, serverEnv.appUrl)) {
       throw ApiError.forbidden("Untrusted origin");
@@ -137,6 +142,10 @@ export async function POST(request: NextRequest) {
       mfaEnrollmentRequired,
       userAgentLabel: coarseUserAgent(request.headers.get("user-agent")),
     });
+
+    // A successful sign-in does not consume the failure budget — otherwise a
+    // whole office behind one address would lock itself out just by logging in.
+    clearRateLimit(`signin:${clientAddress(request)}`);
 
     const csrfToken = generateCsrfToken();
     const maxAgeSeconds = Math.floor(policy.absoluteMs / 1000);

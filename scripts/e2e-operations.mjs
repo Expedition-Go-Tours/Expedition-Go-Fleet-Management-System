@@ -423,7 +423,7 @@ try {
     const blocked = await send("POST", "/api/v1/assignments", dCookies, {
       vehicleId: vehRef.id,
       purpose: "TOUR",
-      startOdometerKm: 51080,
+      startOdometerKm: 51120,
     });
     // The assignment route checks safety hold/status but not documents yet —
     // document blocking is enforced at the domain level (blocksAssignment) and
@@ -471,7 +471,7 @@ try {
     const inspection = await send("POST", "/api/v1/inspections", dCookies, {
       vehicleId: vehRef.id,
       type: "PRE_TRIP",
-      odometerKm: 51080,
+      odometerKm: 51120,
       items: [
         { key: "tyres", result: "FAIL", notes: "Front left tyre badly worn" },
         { key: "brakes", result: "PASS" },
@@ -497,7 +497,7 @@ try {
     const retry = await send("POST", "/api/v1/inspections", dCookies, {
       vehicleId: vehRef.id,
       type: "PRE_TRIP",
-      odometerKm: 51080,
+      odometerKm: 51120,
       items: [{ key: "tyres", result: "FAIL", notes: "Front left tyre badly worn" }],
       clientToken: `e2e-insp-${EMAIL_SUFFIX}`,
     });
@@ -512,14 +512,14 @@ try {
     check(
       "vehicle is on SAFETY_HOLD after failed critical check",
       vehAfter.body.vehicle?.status === "SAFETY_HOLD",
-      JSON.stringify(vehAfter.body.vehicle?.status).slice(0, 150),
+      JSON.stringify(vehAfter.body.vehicle?.status ?? null).slice(0, 150),
     );
 
     // Held vehicle cannot be assigned.
     const blocked = await send("POST", "/api/v1/assignments", oCookies, {
       vehicleId: vehRef.id,
       purpose: "TOUR",
-      startOdometerKm: 51080,
+      startOdometerKm: 51120,
     });
     check(
       "safety-held vehicle cannot be assigned (409)",
@@ -535,7 +535,7 @@ try {
     const clean = await send("POST", "/api/v1/inspections", dCookies, {
       vehicleId: vehRef.id,
       type: "RETURN",
-      odometerKm: 51080,
+      odometerKm: 51120,
       items: [
         { key: "tyres", result: "PASS" },
         { key: "brakes", result: "PASS" },

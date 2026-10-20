@@ -164,6 +164,38 @@ export async function uploadDocument(input: {
 }
 
 /**
+ * Ask Cloudinary for a fresh signed delivery URL for an already-stored file.
+ *
+ * Used to self-heal: the URL we keep on the record is the one Cloudinary signed
+ * at upload time, and rotating the API secret invalidates those. Rather than
+ * leaving documents permanently unopenable, we can re-resolve the URL from the
+ * stored `fileKey`. Falls back to null — the caller then reports a clear error
+ * rather than redirecting to a dead link.
+ */
+export async function resolveDeliveryUrl(publicId: string): Promise<string | null> {
+  if (!isCloudinaryConfigured() || !publicId) return null;
+
+  const cloudName = serverEnv.cloudinaryCloudName as string;
+  const apiKey = serverEnv.cloudinaryApiKey as string;
+  const apiSecret = serverEnv.cloudinaryApiSecret as string;
+  const authorization = `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`;
+  // Documents are stored as `raw` unless they are images; try both rather than
+  // remembering which kind each one was.
+  for (const resourceType of ["raw", "image"]) {
+    try {
+      const url = `${CLOUDINARY_UPLOAD_API}/${cloudName}/resources/${resourceType}/authenticated/${publicId}`;
+      const response = await fetch(url, { headers: { authorization } });
+      if (!response.ok) continue;
+      const data = (await response.json().catch(() => null)) as { secure_url?: unknown } | null;
+      if (typeof data?.secure_url === "string" && data.secure_url) return data.secure_url;
+    } catch {
+      // Try the next resource type.
+    }
+  }
+  return null;
+}
+
+/**
  * Best-effort deletion of a stored document. Failures are swallowed — an orphan
  * in Cloudinary is preferable to a failed user action after the record is gone.
  */

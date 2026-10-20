@@ -3,7 +3,8 @@ import { NextRequest } from "next/server";
 import { ApiError, toErrorResponse } from "@/lib/api/errors";
 import { requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { getDocumentById } from "@/lib/repos/documents";
+import { resolveDeliveryUrl } from "@/lib/cloudinary";
+import { getDocumentById, updateDocument } from "@/lib/repos/documents";
 
 export const runtime = "nodejs";
 
@@ -24,17 +25,26 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const document = await getDocumentById(id);
     if (!document) throw ApiError.notFound("Document not found");
-    if (!document.fileUrl) {
+
+    // Fast path is the URL Cloudinary signed at upload time. If it is missing
+    // (or an API-secret rotation invalidated it), re-resolve a fresh signed URL
+    // from the stored key and keep it, so documents survive a rotation.
+    let fileUrl = document.fileUrl;
+    if (!fileUrl && document.fileKey) {
+      fileUrl = (await resolveDeliveryUrl(document.fileKey)) ?? undefined;
+      if (fileUrl) await updateDocument(document.id, { fileUrl });
+    }
+    if (!fileUrl) {
       throw ApiError.notFound(
-        "This document has no file attached. It may have been recorded before file uploads were configured.",
+        "This document's file is not available. It may have been recorded before uploads were configured — re-upload it, or ask an administrator to refresh the link.",
       );
     }
 
     return new Response(null, {
       status: 302,
       headers: {
-        location: document.fileUrl,
-        // The signed URL is short-lived and specific to this user's request.
+        location: fileUrl,
+        // The signed URL is specific to this user's request — do not cache it.
         "cache-control": "private, no-store",
       },
     });

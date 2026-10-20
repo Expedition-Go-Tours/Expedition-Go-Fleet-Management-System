@@ -2,6 +2,7 @@ import type { DocumentData } from "firebase-admin/firestore";
 
 import type { FuelType, OwnershipClass, Vehicle, VehicleStatus } from "@/lib/domain/vehicle";
 import { COLLECTIONS } from "@/lib/db/collections";
+import { DomainError } from "@/lib/domain/errors";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
 
@@ -63,12 +64,10 @@ export interface CreateVehicleInput {
 }
 
 /** Raised when atomic vehicle creation cannot proceed (duplicate plate). */
-export class VehicleCreationError extends Error {
-  readonly code: string;
+export class VehicleCreationError extends DomainError {
   constructor(code: string, message: string) {
-    super(message);
+    super(code, message);
     this.name = "VehicleCreationError";
-    this.code = code;
   }
 }
 

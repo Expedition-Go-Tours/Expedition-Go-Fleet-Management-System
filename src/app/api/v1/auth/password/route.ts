@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
+import { clearRateLimit, clientAddress, enforceRateLimit, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { assertCsrfAndOrigin, requireAuthContext } from "@/lib/auth/guards";
 import { validatePassword } from "@/lib/auth/passwords";
 import { toPublicUser } from "@/lib/auth/types";
@@ -30,6 +31,8 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
   try {
+    // Verifies the current password — throttle so it cannot be brute-forced.
+    enforceRateLimit(`password:${clientAddress(request)}`, RATE_LIMITS.passwordChange);
     await assertCsrfAndOrigin();
 
     const context = await requireAuthContext();
@@ -126,6 +129,9 @@ export async function POST(request: NextRequest) {
     // Credential change → revoke every session (including this one). The client
     // signs in again, which re-runs the MFA policy at session establishment.
     await revokeSessionsForUser(user.id, "password changed");
+
+    // Success does not consume the failure budget.
+    clearRateLimit(`password:${clientAddress(request)}`);
 
     return jsonOk({
       ok: true,

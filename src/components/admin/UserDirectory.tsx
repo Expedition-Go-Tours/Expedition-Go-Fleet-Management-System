@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 
 import { EditUserDialog } from "@/components/admin/EditUserDialog";
+import { ResetMfaButton } from "@/components/admin/ResetMfaButton";
 import { RoleEditor } from "@/components/admin/RoleEditor";
 import { UserStatusButton } from "@/components/admin/UserStatusButton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -24,6 +25,8 @@ export interface DirectoryUser {
   phone?: string | null;
   status: UserStatus;
   roles: RoleKey[];
+  /** Whether this account has an enrolled second factor. */
+  mfaEnabled?: boolean;
   lastLogin?: string;
 }
 
@@ -138,6 +141,7 @@ export function UserDirectory({
                   <span className="text-body-xs text-muted break-all">{user.email}</span>
                   <span className="text-body-xs text-muted">
                     {user.phone ? `${user.phone} · ` : ""}Last login: {user.lastLogin ?? "never"}
+                    {user.mfaEnabled ? " · 2FA on" : ""}
                     {user.id === currentUserId ? " · you" : ""}
                   </span>
                 </div>
@@ -161,6 +165,9 @@ export function UserDirectory({
 
               <div className="flex flex-wrap items-center gap-2">
                 {canUpdate && <EditUserDialog user={user} />}
+                {canUpdate && user.mfaEnabled && (
+                  <ResetMfaButton userId={user.id} userName={user.name} />
+                )}
                 {canDisable && user.id !== currentUserId && (
                   <UserStatusButton userId={user.id} disabled={user.status === "DISABLED"} />
                 )}

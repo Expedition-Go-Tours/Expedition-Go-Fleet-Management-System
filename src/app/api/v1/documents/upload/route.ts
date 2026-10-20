@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
+import { clientAddress, enforceRateLimit, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
@@ -37,6 +38,8 @@ const EXPIRY_WARNING_DAYS = Number(process.env.DOCUMENT_EXPIRY_WARNING_DAYS ?? 3
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
   try {
+    // Uploads hit a paid external service and consume storage — bound them.
+    enforceRateLimit(`upload:${clientAddress(request)}`, RATE_LIMITS.upload);
     await assertCsrfAndOrigin();
     const context = await requireAuthContext();
     requirePermission(context, PERMISSIONS.DOCUMENT_UPLOAD);

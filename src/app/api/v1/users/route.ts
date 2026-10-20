@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
+import { clientAddress, enforceRateLimit, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { generateTempPassword } from "@/lib/auth/passwords";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -39,6 +40,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
   try {
+    // Each invite issues credentials — bound how many one caller can send.
+    enforceRateLimit(`invite:${clientAddress(request)}`, RATE_LIMITS.invite);
     await assertCsrfAndOrigin();
 
     const context = await requireAuthContext();

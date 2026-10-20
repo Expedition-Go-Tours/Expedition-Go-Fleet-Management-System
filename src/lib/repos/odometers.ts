@@ -9,6 +9,7 @@ import {
   validateReading,
 } from "@/lib/domain/odometer";
 import { COLLECTIONS } from "@/lib/db/collections";
+import { DomainError } from "@/lib/domain/errors";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
 
@@ -21,12 +22,10 @@ import { toDate } from "@/lib/repos/timestamps";
  * finds the existing reading and returns it without a second write.
  */
 
-export class OdometerError extends Error {
-  readonly code: string;
+export class OdometerError extends DomainError {
   constructor(code: string, message: string) {
-    super(message);
+    super(code, message);
     this.name = "OdometerError";
-    this.code = code;
   }
 }
 

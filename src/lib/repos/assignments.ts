@@ -3,6 +3,7 @@ import type { DocumentData } from "firebase-admin/firestore";
 import type { VehicleAssignment, AssignmentStatus } from "@/lib/domain/assignment";
 import { computeTripDistance } from "@/lib/domain/assignment";
 import { COLLECTIONS } from "@/lib/db/collections";
+import { DomainError } from "@/lib/domain/errors";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
 
@@ -72,10 +73,9 @@ export interface StartAssignmentInput {
  * Raised when a vehicle/driver reservation cannot be acquired. The API layer
  * maps this to HTTP 409.
  */
-export class AssignmentConflictError extends Error {
-  readonly code = "ASSIGNMENT_CONFLICT";
+export class AssignmentConflictError extends DomainError {
   constructor(message: string) {
-    super(message);
+    super("ASSIGNMENT_CONFLICT", message);
     this.name = "AssignmentConflictError";
   }
 }

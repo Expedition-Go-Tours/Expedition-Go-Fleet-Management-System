@@ -31,10 +31,12 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://*.googleapis.com",
       // MapLibre GL injects inline styles for map rendering
       "style-src 'self' 'unsafe-inline'",
-      // MapLibre tiles, OpenFreeMap tiles, and Photon geocoding
-      "img-src 'self' data: blob: https://tiles.openfreemap.org https://*.tile.openstreetmap.org https://photon.komoot.io",
-      // Geoapify routing API, Photon geocoding, Firebase, Google Identity
-      "connect-src 'self' https://api.geoapify.com https://photon.komoot.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://apis.google.com https://accounts.google.com",
+      // MapLibre tiles, OpenFreeMap tiles, Photon geocoding, and Cloudinary
+      // document previews
+      "img-src 'self' data: blob: https://tiles.openfreemap.org https://*.tile.openstreetmap.org https://photon.komoot.io https://res.cloudinary.com",
+      // Geoapify routing API, Photon geocoding, Firebase, Google Identity,
+      // Cloudinary document delivery
+      "connect-src 'self' https://api.geoapify.com https://photon.komoot.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://apis.google.com https://accounts.google.com https://res.cloudinary.com https://api.cloudinary.com",
       // MapLibre GL uses blob workers
       "worker-src 'self' blob:",
       "font-src 'self'",

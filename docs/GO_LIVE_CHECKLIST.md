@@ -13,9 +13,12 @@ for real. Nothing here needs a developer except where it says so.
 | Vehicle safety holds can be released (Admin only, and only when no critical issue is open) | Done |
 | Expenses need approval — Pending → Approved / Rejected, with Void to reverse | Done |
 | Two-factor login for Admin and Operations | Built, needs one console switch (below) |
+| Two-factor recovery if someone loses their phone | Done — **Users → Reset 2FA** |
 | Document uploads (Cloudinary) | Built, needs your account keys (below) |
 | No demo or test data ships with the app | Done — and your database is already cleaned |
 | Trips work with no routing key (approximate distances, clearly labelled) | Done |
+| Rate limiting on sign-in, password change, invites and uploads | Done |
+| Security headers (HSTS, CSP, clickjacking, MIME sniffing) | Done |
 
 Every step was verified as it went: **320 tests pass**, type-checking clean,
 lint clean, and a production build succeeds.
@@ -126,19 +129,31 @@ Vercel → Project → Settings → Cron Jobs, pointing at the reminder endpoint
 
 Being straight about what is **not** finished:
 
-1. **No two-factor recovery codes.** If someone loses their authenticator app,
-   an administrator has to remove their second factor so they can set it up
-   again. Recovery codes are the recommended next addition.
-2. **Document URLs are tied to your Cloudinary secret.** If you ever rotate the
-   Cloudinary API secret, previously uploaded documents stop opening and need
-   re-signing (a small script). Do not rotate the secret casually.
-3. **No malware scanning on uploads.** File *type and size* are verified against
-   the real file contents, so an executable renamed to `.pdf` is rejected, but
-   there is no antivirus step. Add one if documents will come from outside your
-   team.
-4. **E2E suites are not run against production.** They need a running dev server
-   and they write test records. Run them in development first, then
-   `scripts/purge-demo-data.mjs --apply` afterwards.
+1. **No self-service two-factor recovery codes.** There *is* a recovery path:
+   an administrator opens **Users → Reset 2FA** on the affected account, which
+   clears the old factor so they can set up a new one. What is missing is
+   single-use backup codes the person could use without help. If your team is
+   small and you are reachable, the admin reset is enough; if staff work
+   unsociable hours, recovery codes are worth adding.
+2. **No malware scanning on uploads.** The file's *real* contents are checked
+   against its claimed type (a program renamed to `.pdf` is rejected) and size
+   is capped, but there is no antivirus step. Fine if only your own staff
+   upload; add a scanning service (e.g. VirusTotal) if documents will arrive
+   from customers or the public.
+3. **Rate limits are per server instance.** On Vercel each instance counts
+   separately, so the effective allowance is roughly `limit × instances`. It is
+   enough to blunt brute force and credential stuffing, but it is not a
+   bulletproof global limiter. Firebase's own throttling is the second layer.
+4. **E2E suites write test records.** They run against a development server,
+   never production. After running them, `scripts/purge-demo-data.mjs --apply`
+   removes everything they left behind.
+
+## If you rotate the Cloudinary API secret
+
+Documents keep working. The link stored on each record is the one Cloudinary
+signed at upload time; if a rotation invalidates it, opening the document
+re-resolves a fresh signed link automatically and stores it. You do not need to
+re-upload anything.
 
 ---
 
@@ -148,6 +163,7 @@ Being straight about what is **not** finished:
 |---|---|---|
 | Upload button says "not set up yet" | Cloudinary keys missing | Step 3 |
 | Admin can only reach Account & security | TOTP not enabled in Firebase | Step 2 |
-| Sign-in says "Multi-factor authentication is required" and gives no code box | Factor already enrolled but the code was skipped | Enter the code; if lost, an admin removes the factor |
+| Sign-in says "Multi-factor authentication is required" and gives no code box | Factor already enrolled but the code was skipped | Enter the code; if the phone is lost, an admin uses **Users → Reset 2FA** |
+| Someone cannot sign in after losing their phone | Their second factor is gone | **Users → Reset 2FA**, then they set up a new one |
 | Trip distances say "approximate" | No routing key | Step 4 (harmless) |
 | Everything is blank after sign-in | You ran the full purge | Re-enter data, step 7 |
