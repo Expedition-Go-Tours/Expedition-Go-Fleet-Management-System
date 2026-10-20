@@ -14,6 +14,7 @@ import {
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { documentState } from "@/lib/domain/document";
+import { isCloudinaryConfigured } from "@/lib/cloudinary";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
 import { VEHICLE_STATUS_ACTIONS } from "@/lib/domain/vehicle";
 import { formatDate, formatIsoDate, formatKm, humanizeEnum } from "@/lib/format";
@@ -136,6 +137,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   const tabData: VehicleDetailTabData = {
     vehicleId: vehicle.id,
+    canUploadDocuments: permissions.includes("document:upload"),
+    uploadsConfigured: isCloudinaryConfigured(),
     counts: {
       readings: readingCount,
       issues: issueTotals.total,
@@ -217,6 +220,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       // Domain-computed state — mandatory-with-upload is no longer MISSSING.
       state: documentState(d, now, EXPIRY_WARNING_DAYS),
       hasFile: Boolean(d.fileKey),
+      fileName: d.fileName ?? null,
+      fileSize: d.fileSize ?? null,
       mandatory: d.mandatory,
       expiryDate: formatIsoDate(d.expiryDate),
       notes: d.notes ?? null,

@@ -8,17 +8,17 @@ surface — the application ships the sign-in screen and the operations dashboar
 
 ## Stack
 
-| Concern        | Choice                                                                |
-| -------------- | --------------------------------------------------------------------- |
-| Framework      | Next.js 16 (App Router) + React 19 + TypeScript                       |
-| Styling        | Tailwind CSS v4 + design tokens in `src/design/tokens.css`            |
-| Fonts          | DM Sans (body) + Manrope (display), self-hosted via `next/font/local` |
-| Auth           | Firebase Authentication (email/password, TOTP MFA)                    |
-| Data           | Cloud Firestore (Admin SDK, server-only)                              |
-| Files          | Cloudflare R2 (S3-compatible) via signed URLs — Phase 3               |
-| Scheduled jobs | Vercel Cron → `/api/v1/cron/*`                                        |
-| Hosting        | Vercel                                                                |
-| Testing        | Vitest + Testing Library (unit), Playwright (e2e)                     |
+| Concern        | Choice                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| Framework      | Next.js 16 (App Router) + React 19 + TypeScript                            |
+| Styling        | Tailwind CSS v4 + design tokens in `src/design/tokens.css`                 |
+| Fonts          | DM Sans (body) + Manrope (display), self-hosted via `next/font/local`      |
+| Auth           | Firebase Authentication (email/password, TOTP MFA)                         |
+| Data           | Cloud Firestore (Admin SDK, server-only)                                   |
+| Files          | Cloudinary (`type=authenticated`, signed URLs behind our permission check) |
+| Scheduled jobs | Vercel Cron → `/api/v1/cron/*`                                             |
+| Hosting        | Vercel                                                                     |
+| Testing        | Vitest + Testing Library (unit), Playwright (e2e)                          |
 
 ## Getting started
 

@@ -65,6 +65,25 @@ export const serverEnv = {
   get geoapifyApiKey(): string | undefined {
     return process.env.GEOAPIFY_API_KEY;
   },
+  /**
+   * Cloudinary (document storage). All three must be present for uploads to
+   * work — `isCloudinaryConfigured()` checks them together so a half-configured
+   * environment degrades to a clear "not configured" message instead of a
+   * confusing 500.
+   */
+  get cloudinaryCloudName(): string | undefined {
+    return process.env.CLOUDINARY_CLOUD_NAME;
+  },
+  get cloudinaryApiKey(): string | undefined {
+    return process.env.CLOUDINARY_API_KEY;
+  },
+  get cloudinaryApiSecret(): string | undefined {
+    return process.env.CLOUDINARY_API_SECRET;
+  },
+  /** Folder (prefix) for stored documents — keeps them out of the account root. */
+  get cloudinaryFolder(): string {
+    return process.env.CLOUDINARY_FOLDER ?? "expedition-go/documents";
+  },
 } as const;
 
 /** True when the app is served over HTTPS (drives the Secure cookie flag). */

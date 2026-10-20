@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { FileWarning, Wrench } from "lucide-react";
 
+import { UploadDocumentDialog } from "@/components/documents/UploadDocumentDialog";
 import { StatusBadge, StatusDot, formatStatusLabel } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
+import { DOCUMENT_CATEGORIES } from "@/lib/domain/document";
 import { formatMoney } from "@/lib/format";
 import { checkReconciliation, type Trip } from "@/lib/domain/trip";
 
@@ -107,6 +109,9 @@ export interface TabDocumentData {
   /** Domain-computed state: VALID / EXPIRING_SOON / EXPIRED / MISSING. */
   state: string;
   hasFile: boolean;
+  /** Original filename, shown as the download label. */
+  fileName: string | null;
+  fileSize: number | null;
   mandatory: boolean;
   expiryDate: string;
   notes: string | null;
@@ -143,6 +148,10 @@ export interface VehicleHistoryCounts {
 
 export interface VehicleDetailTabData {
   vehicleId: string;
+  /** The signed-in user may upload documents (`document:upload`). */
+  canUploadDocuments: boolean;
+  /** Cloudinary is configured — false shows a "not set up yet" note instead of a broken form. */
+  uploadsConfigured: boolean;
   counts: VehicleHistoryCounts;
   overview: TabOverviewData;
   readings: TabReadingData[];
@@ -253,7 +262,14 @@ export function VehicleDetailTabs({ data }: { data: VehicleDetailTabData }) {
       id: "documents",
       label: "Documents",
       badge: <CountBadge count={data.counts.documents} />,
-      panel: <DocumentsPanel documents={data.documents} />,
+      panel: (
+        <DocumentsPanel
+          documents={data.documents}
+          vehicleId={data.vehicleId}
+          canUpload={data.canUploadDocuments}
+          uploadsConfigured={data.uploadsConfigured}
+        />
+      ),
     },
   ];
 
@@ -712,43 +728,84 @@ function FuelPanel({
   );
 }
 
-function DocumentsPanel({ documents }: { documents: TabDocumentData[] }) {
+function DocumentsPanel({
+  documents,
+  vehicleId,
+  canUpload,
+  uploadsConfigured,
+}: {
+  documents: TabDocumentData[];
+  vehicleId: string;
+  canUpload: boolean;
+  uploadsConfigured: boolean;
+}) {
   return (
-    <div className="border-hairline rounded-md border">
-      {documents.length === 0 ? (
-        <Empty label="No documents attached." />
-      ) : (
-        <ul className="divide-hairline divide-y">
-          {documents.map((d) => {
-            const label =
-              d.state === "MISSING" && d.hasFile
-                ? "Awaiting replacement"
-                : formatStatusLabel(d.state);
-            return (
-              <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <div className="flex min-w-0 flex-col">
-                  <span className="text-data text-ink flex items-center gap-2 font-medium capitalize">
-                    {d.category.toLowerCase()}
-                    {d.mandatory ? (
-                      <span className="font-ui text-data-xs text-muted uppercase"> · required</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-body-xs text-muted">
+          {canUpload
+            ? uploadsConfigured
+              ? "Attach scans or photos of registration, insurance and permits."
+              : "File uploads are not set up yet — an administrator needs to add the storage keys."
+            : "You can view documents but not upload them."}
+        </p>
+        {canUpload && uploadsConfigured && (
+          <UploadDocumentDialog
+            vehicleId={vehicleId}
+            categories={DOCUMENT_CATEGORIES}
+            canUpload={canUpload}
+          />
+        )}
+      </div>
+
+      <div className="border-hairline rounded-md border">
+        {documents.length === 0 ? (
+          <Empty label="No documents attached." />
+        ) : (
+          <ul className="divide-hairline divide-y">
+            {documents.map((d) => {
+              const label =
+                d.state === "MISSING" && d.hasFile
+                  ? "Awaiting replacement"
+                  : formatStatusLabel(d.state);
+              return (
+                <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-data text-ink flex items-center gap-2 font-medium capitalize">
+                      {d.category.toLowerCase()}
+                      {d.mandatory ? (
+                        <span className="font-ui text-data-xs text-muted uppercase">
+                          {" "}
+                          · required
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-data-xs text-muted mt-0.5">
+                      {d.expiryDate !== "—" ? `expires ${d.expiryDate}` : "no expiry"}
+                      {d.hasFile ? (d.fileName ? ` · ${d.fileName}` : "") : " · no file uploaded"}
+                      {d.notes ? ` · ${d.notes}` : ""}
+                    </span>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-3">
+                    {d.hasFile ? (
+                      <a
+                        href={`/api/v1/documents/${d.id}/file`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-link text-data-xs font-medium hover:underline"
+                      >
+                        View file
+                      </a>
                     ) : null}
-                  </span>
-                  <span className="text-data-xs text-muted mt-0.5">
-                    {d.expiryDate !== "—" ? `expires ${d.expiryDate}` : "no expiry"}
-                    {d.hasFile
-                      ? ""
-                      : d.expiryDate !== "—"
-                        ? " · no file uploaded"
-                        : " · no file uploaded"}
-                    {d.notes ? ` · ${d.notes}` : ""}
-                  </span>
-                </div>
-                <StatusDot status={label} />
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                    <StatusDot status={label} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

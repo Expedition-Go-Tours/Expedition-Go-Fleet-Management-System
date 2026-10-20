@@ -244,15 +244,41 @@ POST /fuel                         { vehicleId, odometerKm, litres, pricePerLitr
 ## 7. Documents
 
 ```
-POST /documents                    { vehicleId, kind, fileUrl, expiresAt? }
-PATCH /documents/:id               { name?, expiresAt?, notes?, status? }
+POST /documents                    { vehicleId, category, issueDate?, expiryDate?, fileKey?, notes?, mandatory }
+POST /documents/upload             multipart { file, vehicleId, category, issueDate?, expiryDate?, notes?, mandatory? }
+PATCH /documents/:id               { issueDate?, expiryDate?, fileKey?, notes?, mandatory? }
+GET  /documents/:id/file           → 302 to the signed delivery URL
 ```
 
+- `POST /documents/upload` is the normal path: the file and its metadata go in
+  one multipart request, so a rejected upload never leaves a half-registered
+  record. `POST /documents` remains for registering metadata without a file.
 - Upload is permission-gated (`document:upload`, OPERATIONS/DRIVER);
-  management (`document:manage`) adds rename/expiry handling.
+  viewing a file needs `document:read`; management (`document:manage`) adds
+  expiry/renewal handling.
+
+**Storage: Cloudinary, `type=authenticated`.** Files are not public — only a
+signed delivery URL works, and that URL is handed out by
+`GET /documents/:id/file` *after* the permission check. The file bytes never
+stream through our server; the CDN delivers them directly. Uploads accept
+PDF/JPG/PNG/WebP/HEIC up to 15 MB, and both type and size are enforced
+server-side.
+
+**Degradation.** If the Cloudinary keys are absent, the upload endpoint returns
+`503 UPLOADS_NOT_CONFIGURED` and the UI replaces the upload button with a note.
+Metadata and existing documents keep working.
+
+**Known limitation.** The signed delivery URL is stored on the record (as
+`fileUrl`, alongside `fileKey` = the Cloudinary public id). Rotating your
+Cloudinary API secret invalidates stored URLs, after which "View file" returns
+the record but no longer resolves. Regenerating them means re-signing each
+`fileKey` — a small script if it ever happens. This is deliberate: the signing
+maths lives in Cloudinary's own upload response rather than in code we cannot
+verify against a live account.
+
 - Derived states: `VALID | EXPIRING_SOON | EXPIRED | MISSING` from
-  `expiresAt` (30-day window). Vehicles with a missing/expired **mandatory**
-  document kind cannot be assigned; a driver starting an assignment on such a
+  `expiryDate` (30-day window). Vehicles with a missing/expired **mandatory**
+  document cannot be assigned; a driver starting an assignment on such a
   vehicle is blocked with a 409 naming the document.
 
 ---

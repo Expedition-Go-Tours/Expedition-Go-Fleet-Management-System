@@ -34,6 +34,10 @@ export class ApiError extends Error {
   static tooManyRequests(message = "Too many requests", code = "RATE_LIMITED") {
     return new ApiError(429, code, message);
   }
+  /** A dependency is unconfigured or unavailable — retryable, not the client's fault. */
+  static serviceUnavailable(message = "Service unavailable", code = "SERVICE_UNAVAILABLE") {
+    return new ApiError(503, code, message);
+  }
 }
 
 export interface ApiErrorBody {

@@ -28,9 +28,11 @@ lives in [`AUTHENTICATION_AUTHORIZATION.md`](./AUTHENTICATION_AUTHORIZATION.md).
   auth spec's Redis (sessions) and PostgreSQL/Prisma (data) recommendations are
   **not** used at MVP — Firestore stores sessions and domain data. Do not
   reintroduce Redis without an explicit decision.
-- **Object storage is Cloudflare R2** (S3-compatible), deferred to Phase 3.
-  Firebase Storage would force the paid Blaze plan; R2 keeps the project on the
-  free Spark plan with a 10 GB allowance and no egress fees.
+- **Document storage is Cloudinary** (signed REST upload, no SDK dependency).
+  Firebase Storage would force the paid Blaze plan; Cloudinary's free tier keeps
+  the project on Firebase's free Spark plan. Files are uploaded `type=authenticated`
+  so they are never public — delivery is via a signed URL behind our own
+  permission check.
 - **Vercel Cron** drives scheduled maintenance reminders, keeping Firebase on the
   free tier. The cron endpoint is protected by `CRON_SECRET`.
 

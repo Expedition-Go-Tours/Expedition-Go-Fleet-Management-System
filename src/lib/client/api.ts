@@ -61,4 +61,38 @@ export const api = {
   get: <T>(path: string) => apiRequest<T>("GET", path),
   post: <T>(path: string, body?: unknown) => apiRequest<T>("POST", path, body),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>("PATCH", path, body),
+  /**
+   * Multipart upload. Sends the browser's FormData untouched (so the file and
+   * its parts are encoded correctly) while still carrying the CSRF header and
+   * the same 401/403 handling as JSON calls.
+   */
+  upload: <T>(path: string, form: FormData) => apiUpload<T>(path, form),
 };
+
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "x-csrf-token": readCsrfToken() ?? "" },
+    body: form,
+  });
+
+  if (res.status === 401) {
+    // Full navigation so server-rendered caches for the old session are dropped.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/sign-in");
+    throw new ApiClientError(401, "UNAUTHENTICATED", "Your session has expired");
+  }
+
+  const data = (await res.json().catch(() => null)) as
+    (T & { error?: { code?: string; message?: string } }) | null;
+
+  if (!res.ok) {
+    throw new ApiClientError(
+      res.status,
+      data?.error?.code ?? "UNKNOWN",
+      data?.error?.message ?? `Upload failed (${res.status})`,
+    );
+  }
+
+  return data as T;
+}

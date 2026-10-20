@@ -27,8 +27,20 @@ export interface VehicleDocument {
   category: DocumentCategory | string;
   issueDate?: string;
   expiryDate?: string;
-  /** Private storage key — never a public URL. */
+  /** Private storage key (Cloudinary public id) — never a public URL. */
   fileKey?: string;
+  /**
+   * Signed delivery URL for the stored file. Cloudinary serves `authenticated`
+   * assets only through a signed URL, so this is not public — it is the value
+   * Cloudinary returned at upload time. Regenerate it if the API secret rotates.
+   */
+  fileUrl?: string;
+  /** Original filename, for display and for the download name. */
+  fileName?: string;
+  /** Size in bytes, so the list can show it without touching storage. */
+  fileSize?: number;
+  /** MIME type recorded at upload, so the viewer can render it safely. */
+  fileType?: string;
   notes?: string;
   /** Mandatory documents restrict assignment when expired/missing. */
   mandatory: boolean;

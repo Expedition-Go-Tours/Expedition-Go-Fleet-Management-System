@@ -19,6 +19,10 @@ function toDocument(id: string, data: DocumentData): VehicleDocument {
     issueDate: data.issueDate ? String(data.issueDate) : undefined,
     expiryDate: data.expiryDate ? String(data.expiryDate) : undefined,
     fileKey: data.fileKey ? String(data.fileKey) : undefined,
+    fileUrl: data.fileUrl ? String(data.fileUrl) : undefined,
+    fileName: data.fileName ? String(data.fileName) : undefined,
+    fileSize: typeof data.fileSize === "number" ? data.fileSize : undefined,
+    fileType: data.fileType ? String(data.fileType) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
     mandatory: data.mandatory === true,
     uploadedBy: String(data.uploadedBy ?? ""),
@@ -33,6 +37,10 @@ export interface UpsertDocumentInput {
   issueDate?: string;
   expiryDate?: string;
   fileKey?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
   notes?: string;
   mandatory: boolean;
   uploadedBy: string;
@@ -46,6 +54,10 @@ export async function createDocument(input: UpsertDocumentInput): Promise<Vehicl
     issueDate: input.issueDate ?? null,
     expiryDate: input.expiryDate ?? null,
     fileKey: input.fileKey ?? null,
+    fileUrl: input.fileUrl ?? null,
+    fileName: input.fileName ?? null,
+    fileSize: input.fileSize ?? null,
+    fileType: input.fileType ?? null,
     notes: input.notes ?? null,
     createdAt: now,
     updatedAt: now,
