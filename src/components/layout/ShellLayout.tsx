@@ -299,8 +299,10 @@ export function ShellLayout({
           </div>
           <div className="flex-1 md:hidden" />
 
-          <div className="ml-auto flex items-center gap-1.5">
-            <div className="md:hidden">
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            {/* Capped and shrinkable: the trigger cannot compress below its text,
+                which is what pushed the header sideways on small screens. */}
+            <div className="w-full max-w-[10rem] min-w-0 shrink md:hidden">
               <GlobalSearch enableHotkey={false} />
             </div>
             <HelpMenu />

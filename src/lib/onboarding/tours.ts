@@ -23,7 +23,7 @@ export const ROLE_TOUR_ORDER: readonly RoleKey[] = ["ADMIN", "OPERATIONS", "DRIV
 export const TOURS: readonly TourDefinition[] = [
   {
     id: "driver",
-    version: 2,
+    version: 3,
     title: "Driver tour",
     summary: "Trips, odometer readings, inspections and reporting from the driver workspace.",
     roles: ["DRIVER"],
@@ -68,7 +68,7 @@ export const TOURS: readonly TourDefinition[] = [
         target: "driver-report",
         title: "Report a problem or incident",
         description:
-          "Describe the vehicle, the trip context and any evidence you have. Operations and maintenance see it immediately.",
+          "Describe the vehicle, the trip context and any evidence you have. Operations and the workshop see it immediately.",
         side: "left",
       },
       {
@@ -92,7 +92,7 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "operations",
-    version: 2,
+    version: 3,
     title: "Operations tour",
     summary: "Run the dashboard, assign drivers, check availability and triage driver reports.",
     roles: ["OPERATIONS"],
@@ -103,6 +103,16 @@ export const TOURS: readonly TourDefinition[] = [
     ],
     startRoute: "/",
     steps: [
+      {
+        route: "/",
+        target: "header-account",
+        fallbacks: ["nav-mobile-menu"],
+        title: "Your account and sign-in security",
+        description:
+          "Operations handles money and dispatch, so this account needs two-factor authentication. Set it up once from Account & security — after that you type a short code from your authenticator app when you sign in. If a colleague loses their phone, Reset 2FA on the Users page gets them back in.",
+        side: "bottom",
+        required: true,
+      },
       {
         route: "/",
         target: "dashboard-overview",
@@ -150,7 +160,7 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "maintenance",
-    version: 2,
+    version: 3,
     title: "Maintenance tour",
     summary: "Reminders, open issues, work orders and recording repairs correctly.",
     roles: ["DRIVER"],
@@ -204,7 +214,7 @@ export const TOURS: readonly TourDefinition[] = [
         fallbacks: ["nav-mobile-menu"],
         title: "Vehicle history",
         description:
-          "Open a vehicle to see its odometer ledger, completed service and documents in one place.",
+          "Open a vehicle to see its odometer ledger, completed service and documents in one place. The Documents tab is also where you upload scans of registration, insurance, roadworthiness and permits.",
         side: "right",
       },
     ],
@@ -212,9 +222,9 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "finance",
-    version: 1,
-    title: "Finance tour",
-    summary: "The expense ledger, recording costs, fuel records and permitted exports.",
+    version: 2,
+    title: "Expenses and costs tour",
+    summary: "The expense ledger, signing costs off, fuel records and permitted exports.",
     roles: ["OPERATIONS"],
     requiresAnyOf: [PERMISSIONS.EXPENSE_CREATE, PERMISSIONS.EXPENSE_EXPORT],
     startRoute: "/expenses",
@@ -224,7 +234,7 @@ export const TOURS: readonly TourDefinition[] = [
         target: "expense-ledger",
         title: "The expense ledger",
         description:
-          "Every recorded cost with its vehicle, category and status. Recorded is the only state included in totals.",
+          "Every cost with its vehicle, category and status. Pending and approved costs are counted; rejected and voided ones stay in the ledger for the record but are left out of the totals.",
         side: "top",
       },
       {
@@ -232,9 +242,18 @@ export const TOURS: readonly TourDefinition[] = [
         target: "expense-create",
         title: "Record an expense",
         description:
-          "Choose the vehicle, link a work order or service when one applies, and add the supplier and date. Expenses are recorded here — approval happens outside this application.",
+          "Choose the vehicle, link a work order or service when one applies, and add the supplier and date. A new cost lands as Pending, waiting for a sign-off.",
         side: "left",
         requires: [PERMISSIONS.EXPENSE_CREATE],
+      },
+      {
+        route: "/expenses",
+        target: "expense-totals",
+        title: "Sign costs off",
+        description:
+          "Approve a cost to count it, or reject it with a reason — whoever recorded it sees why. Void reverses a cost that was already approved. The Awaiting approval figure is what still needs a decision from you.",
+        side: "left",
+        requires: [PERMISSIONS.EXPENSE_APPROVE],
       },
       {
         route: "/expenses",
@@ -242,7 +261,7 @@ export const TOURS: readonly TourDefinition[] = [
         fallbacks: ["expense-header"],
         title: "Find and export records",
         description:
-          "Use the headers to read the totals, ⌘K global search to locate a specific record, and export the permitted report as CSV.",
+          "Use the headers to read the totals, ⌘K global search to locate a specific record, and export the permitted report as CSV. The export counts exactly what the screen counts, so the two never disagree.",
         side: "bottom",
         requires: [PERMISSIONS.EXPENSE_EXPORT],
       },
@@ -269,13 +288,23 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "admin",
-    version: 2,
+    version: 3,
     title: "Admin tour",
     summary: "The fleet dashboard, vehicle history, employee accounts, audit records and reports.",
     roles: ["ADMIN"],
     requiresAnyOf: [PERMISSIONS.USER_READ, PERMISSIONS.AUDIT_READ, PERMISSIONS.VEHICLE_READ],
     startRoute: "/",
     steps: [
+      {
+        route: "/",
+        target: "header-account",
+        fallbacks: ["nav-mobile-menu"],
+        title: "Your account and sign-in security",
+        description:
+          "Set up two-factor authentication from Account & security. Admin and Operations accounts are asked for a code from an authenticator app at sign-in, so the account cannot be taken over with a password alone.",
+        side: "bottom",
+        required: true,
+      },
       {
         route: "/",
         target: "dashboard-overview",
@@ -308,6 +337,16 @@ export const TOURS: readonly TourDefinition[] = [
           "Invite people, review their roles and status, and edit a record directly when you need to correct a driver's details for them.",
         side: "top",
         requires: [PERMISSIONS.USER_READ],
+      },
+      {
+        route: "/users",
+        target: "admin-user-list",
+        fallbacks: ["admin-users"],
+        title: "Two-factor recovery",
+        description:
+          "Each row shows whether that person has two-factor authentication switched on. If someone loses their phone, Reset 2FA clears their old factor so they can set up a new one — it asks for a reason and is written to the audit log.",
+        side: "top",
+        requires: [PERMISSIONS.USER_UPDATE],
       },
       {
         route: "/audit",

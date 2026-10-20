@@ -173,8 +173,12 @@ export async function listSavedLocations(options?: {
   if (options?.category) {
     query = query.where("category", "==", options.category);
   }
-  const snap = await query.orderBy("label", "asc").limit(200).get();
-  let locations = snap.docs.map((d) => toSavedLocation(d.id, d.data()));
+  // No `orderBy` alongside the equality filter — the two together need a
+  // composite index this project does not deploy. Sort in memory instead.
+  const snap = await query.limit(200).get();
+  let locations = snap.docs
+    .map((d) => toSavedLocation(d.id, d.data()))
+    .sort((a, b) => a.label.localeCompare(b.label));
   if (options?.active !== undefined) {
     locations = locations.filter((l) => l.active === options.active);
   }

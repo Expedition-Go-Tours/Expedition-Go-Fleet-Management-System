@@ -26,6 +26,16 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(PASSWORD as string);
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"), { timeout: 20_000 });
+
+  // A brand-new account gets the onboarding welcome modal on first visit. It
+  // is a modal, so it intercepts every click and these tests would fail for a
+  // fresh user while passing for one that has seen it before.
+  await page.waitForTimeout(1_500);
+  const maybeLater = page.getByRole("button", { name: /maybe later/i });
+  if ((await maybeLater.count()) > 0) {
+    await maybeLater.click();
+    await page.waitForTimeout(300);
+  }
 }
 
 test.describe("trip management", () => {
@@ -96,7 +106,7 @@ test.describe("trip management", () => {
     const resultCount = await results.count();
     if (resultCount > 0) {
       // Select first result
-      const firstResult = results.locator("button").first();
+      const firstResult = results.getByRole("option").first();
       if ((await firstResult.count()) > 0) {
         await firstResult.click();
         await page.waitForTimeout(300);
@@ -126,25 +136,21 @@ test.describe("trip management", () => {
     await recordBtn.click();
     await page.waitForTimeout(500);
 
-    // Search and select origin
-    const originInput = page.getByPlaceholder("Starting point");
+    // Search and select origin. Scope each suggestion list to its own input —
+    // `getByRole("listbox")` matches every open row, so the destination step
+    // would otherwise click the *origin's* still-open suggestions.
+    const originInput = page.getByRole("textbox", { name: "Origin location" });
     await originInput.fill("Accra");
     await page.waitForTimeout(1_500);
-    const originResults = page.getByRole("listbox");
-    if ((await originResults.count()) > 0) {
-      await originResults.locator("button").first().click();
-      await page.waitForTimeout(300);
-    }
+    await originInput.locator("../..").getByRole("option").first().click();
+    await page.waitForTimeout(300);
 
     // Search and select destination
-    const destInput = page.getByPlaceholder("Destination");
+    const destInput = page.getByRole("textbox", { name: "Destination location" });
     await destInput.fill("Cape Coast");
     await page.waitForTimeout(1_500);
-    const destResults = page.getByRole("listbox");
-    if ((await destResults.count()) > 0) {
-      await destResults.locator("button").first().click();
-      await page.waitForTimeout(300);
-    }
+    await destInput.locator("../..").getByRole("option").first().click();
+    await page.waitForTimeout(300);
 
     // Calculate route
     const calcBtn = page.getByRole("button", { name: /calculate route/i });
@@ -182,48 +188,44 @@ test.describe("trip management", () => {
     await page.waitForTimeout(500);
 
     // Search and select origin
-    const originInput = page.getByPlaceholder("Starting point");
+    const originInput = page.getByRole("textbox", { name: "Origin location" });
     await originInput.fill("Accra");
     await page.waitForTimeout(1_500);
-    const originResults = page.getByRole("listbox");
-    if ((await originResults.count()) > 0) {
-      await originResults.locator("button").first().click();
-      await page.waitForTimeout(300);
-    }
+    await originInput.locator("../..").getByRole("option").first().click();
+    await page.waitForTimeout(300);
 
     // Search and select destination
-    const destInput = page.getByPlaceholder("Destination");
+    const destInput = page.getByRole("textbox", { name: "Destination location" });
     await destInput.fill("Kotoka Airport");
     await page.waitForTimeout(1_500);
-    const destResults = page.getByRole("listbox");
-    if ((await destResults.count()) > 0) {
-      await destResults.locator("button").first().click();
-      await page.waitForTimeout(300);
-    }
+    await destInput.locator("../..").getByRole("option").first().click();
+    await page.waitForTimeout(300);
 
     // Calculate route
     const calcBtn = page.getByRole("button", { name: /calculate route/i });
     await calcBtn.click();
     await page.waitForTimeout(5_000);
 
-    // Set a unique external reference to identify this test's trip
+    // Set a unique external reference to identify this test's trip. The field
+    // is labelled "Booking / Tour reference" — matching "external reference"
+    // found nothing and the old guard silently skipped the fill, so the trip
+    // was saved with no reference and the final check could never match it.
     const uniqueRef = `E2E-TEST-${Date.now()}`;
-    const refInput = page.getByLabel(/external reference/i).or(page.getByPlaceholder(/reference/i));
-    if ((await refInput.count()) > 0) {
-      await refInput.first().fill(uniqueRef);
-    }
+    const refInput = page.getByLabel(/booking \/ tour reference/i);
+    await expect(refInput).toBeVisible();
+    await refInput.fill(uniqueRef);
 
     // Save draft — fail immediately on error
     const draftBtn = page.getByRole("button", { name: /save draft/i });
     await draftBtn.click();
     await page.waitForTimeout(3_000);
 
-    // Check for errors — this MUST fail the test if present
-    const errorText = page.locator("[role='alert']").first();
-    const hasError = (await errorText.count()) > 0;
-    if (hasError) {
-      const errorContent = await errorText.textContent();
-      throw new Error(`Draft save failed: ${errorContent}`);
+    // Check for errors — this MUST fail the test if present. Only a non-empty
+    // alert counts: matching any `role="alert"` also trips over empty shells.
+    const alerts = page.getByRole("dialog").locator("[role='alert']");
+    for (let i = 0; i < (await alerts.count()); i += 1) {
+      const message = ((await alerts.nth(i).textContent()) ?? "").trim();
+      if (message) throw new Error(`Draft save failed: ${message}`);
     }
 
     // Complete trip — the button MUST exist for this test to be meaningful
@@ -241,9 +243,10 @@ test.describe("trip management", () => {
     const tripRow = page.locator(`text=${uniqueRef}`).first();
     await expect(tripRow).toBeVisible({ timeout: 5_000 });
 
-    // Verify it shows COMPLETED status
-    const completedBadge = page.locator("text=/COMPLETED/i").first();
-    await expect(completedBadge).toBeVisible({ timeout: 5_000 });
+    // Verify it shows COMPLETED status, scoped to the trip's own row — a bare
+    // `text=/COMPLETED/i` matches the hidden <option> in the status filter first.
+    const row = tripRow.locator("xpath=ancestor::*[self::li or self::tr][1]");
+    await expect(row).toContainText(/completed/i, { timeout: 5_000 });
   });
 
   test("vehicles page loads without errors", async ({ page }) => {

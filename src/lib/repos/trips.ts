@@ -60,6 +60,49 @@ function toIsoString(value: unknown): string | null {
   return d ? d.toISOString() : null;
 }
 
+/**
+ * GeoJSON stores `coordinates` as an array of `[lng, lat]` pairs — a nested
+ * array, which Firestore refuses to write ("Property ... contains an invalid
+ * nested entity"). Flattening to an array of `{ lng, lat }` maps at the storage
+ * boundary keeps the domain type a normal LineString and the route readable.
+ */
+function geometryForStorage(
+  geometry: { type: string; coordinates: [number, number][] } | null | undefined,
+): { type: string; points: { lng: number; lat: number }[] } | null {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return null;
+  return {
+    type: geometry.type,
+    points: geometry.coordinates
+      .map(([lng, lat]) => ({ lng: Number(lng), lat: Number(lat) }))
+      .filter((p) => Number.isFinite(p.lng) && Number.isFinite(p.lat)),
+  };
+}
+
+/** Restore the GeoJSON shape on read. Tolerates either stored form. */
+function geometryFromStorage(data: DocumentData): Trip["routeGeometry"] {
+  const raw = data.routeGeometry;
+  if (!raw || typeof raw !== "object") return null;
+
+  let coordinates: [number, number][] = [];
+  if (Array.isArray((raw as { points?: unknown }).points)) {
+    coordinates = ((raw as { points: { lng: number; lat: number }[] }).points ?? [])
+      .map((p) => [Number(p.lng), Number(p.lat)] as [number, number])
+      .filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat));
+  } else if (Array.isArray((raw as { coordinates?: unknown }).coordinates)) {
+    // Older/partially-written shape — rebuild pairs defensively.
+    const flat = (raw as { coordinates: unknown[] }).coordinates;
+    for (const entry of flat) {
+      if (Array.isArray(entry) && entry.length >= 2) {
+        const lng = Number(entry[0]);
+        const lat = Number(entry[1]);
+        if (Number.isFinite(lng) && Number.isFinite(lat)) coordinates.push([lng, lat]);
+      }
+    }
+  }
+  if (coordinates.length === 0) return null;
+  return { type: String((raw as { type?: unknown }).type ?? "LineString"), coordinates };
+}
+
 function toTrip(id: string, data: DocumentData): Trip & { routeGeometry?: unknown } {
   const stops = (data.stops ?? []) as TripStop[];
   // Read path: use the NON-throwing resolver. A legacy or hand-edited
@@ -109,7 +152,7 @@ function toTrip(id: string, data: DocumentData): Trip & { routeGeometry?: unknow
     manualDistanceReason: data.manualDistanceReason ? String(data.manualDistanceReason) : null,
 
     routeStale: Boolean(data.routeStale),
-    routeGeometry: data.routeGeometry ?? null,
+    routeGeometry: geometryFromStorage(data),
 
     startedAt: toIsoString(data.startedAt),
     completedAt: toIsoString(data.completedAt),
@@ -761,52 +804,46 @@ export async function listTripsPaginated(options?: {
   const page = Math.max(1, options?.page ?? 1);
   const pageSize = Math.min(Math.max(1, options?.pageSize ?? 25), 100);
 
-  // Build base query with server-side filters
-  let query = tripsRef().orderBy("tripDate", "desc").orderBy("createdAt", "desc");
-
+  // Equality-only filters + in-memory sort. A multi-field `orderBy` (or an
+  // `orderBy` on a field the query also filters on) needs a Firestore composite
+  // index, which this project deliberately does not deploy — see
+  // ARCHITECTURE.md, "Data access". Doing the sorting here also puts text
+  // search and plain listing on a single code path.
+  let query: import("firebase-admin/firestore").Query = tripsRef();
   if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
   if (options?.driverUserId) query = query.where("driverUserId", "==", options.driverUserId);
   if (options?.status) query = query.where("status", "==", options.status);
   if (options?.tripDate) query = query.where("tripDate", "==", options.tripDate);
   if (options?.purpose) query = query.where("purpose", "==", options.purpose);
 
-  // For text search, we need to fetch and filter in memory (Firestore lacks
-  // full-text search). But we fetch ALL matching records, not just one page.
+  const snap = await query.limit(2000).get();
+  let trips = snap.docs
+    .map((d) => toTrip(d.id, d.data()))
+    .sort((a, b) => {
+      // Newest trip date first, then newest record within that date.
+      const byDate = b.tripDate.localeCompare(a.tripDate);
+      return byDate !== 0
+        ? byDate
+        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+  // Firestore has no full-text search, so matching is done here.
   if (options?.search) {
     const searchLower = options.search.toLowerCase();
-    const allSnap = await query.get();
-    const allTrips = allSnap.docs
-      .map((d) => toTrip(d.id, d.data()))
-      .filter(
-        (t) =>
-          t.origin.label.toLowerCase().includes(searchLower) ||
-          t.destination.label.toLowerCase().includes(searchLower) ||
-          (t.externalReference ?? "").toLowerCase().includes(searchLower) ||
-          (t.notes ?? "").toLowerCase().includes(searchLower),
-      );
-    const total = allTrips.length;
-    const offset = (page - 1) * pageSize;
-    const trips = allTrips.slice(offset, offset + pageSize);
-    return {
-      trips,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.max(1, Math.ceil(total / pageSize)),
-    };
+    trips = trips.filter(
+      (t) =>
+        t.origin.label.toLowerCase().includes(searchLower) ||
+        t.destination.label.toLowerCase().includes(searchLower) ||
+        (t.externalReference ?? "").toLowerCase().includes(searchLower) ||
+        (t.notes ?? "").toLowerCase().includes(searchLower),
+    );
   }
 
-  // Get total count for the filtered query
-  const countSnap = await query.count().get();
-  const total = countSnap.data().count;
-
-  // Get paginated results using offset
+  const total = trips.length;
   const offset = (page - 1) * pageSize;
-  const snap = await query.offset(offset).limit(pageSize).get();
-  const trips = snap.docs.map((d) => toTrip(d.id, d.data()));
 
   return {
-    trips,
+    trips: trips.slice(offset, offset + pageSize),
     total,
     page,
     pageSize,
@@ -885,7 +922,7 @@ export async function saveRouteCalculation(
       routeCalculatedAt: route.calculatedAt,
       routeProviderMeta: route.providerMeta ?? null,
       routeLegs: legs,
-      routeGeometry: route.geometry ?? null,
+      routeGeometry: geometryForStorage(route.geometry),
       routeStale: false,
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -962,6 +999,10 @@ async function reconcileVehicleEstimatedKmInTx(
   // Fallback: full recompute using a cursor-based scan.
   // Firestore limits transaction queries; we fetch all COMPLETED trips
   // for the vehicle in batches so no trips are silently dropped.
+  //
+  // No `orderBy` here on purpose: combining one with equality filters on other
+  // fields needs a composite index this project does not deploy. The scan pages
+  // over document order instead and sorts at the end.
   const odometerKm = Number(vehicle.odometerKm ?? 0);
   const odometerAt = vehicle.odometerAt;
 
@@ -972,7 +1013,6 @@ async function reconcileVehicleEstimatedKmInTx(
     let q = tripsRef()
       .where("vehicleId", "==", vehicleId)
       .where("status", "==", "COMPLETED")
-      .orderBy("createdAt", "asc")
       .limit(BATCH);
     if (cursor) q = q.startAfter(cursor);
     const snap = await q.get();

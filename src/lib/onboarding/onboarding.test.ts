@@ -1,7 +1,11 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { ALL_PERMISSIONS, PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import { ROLE_KEYS } from "@/lib/auth/types";
+import { NAV_GROUPS, navTourId } from "@/components/layout/nav";
 import {
   TOURS,
   availableTours,
@@ -23,6 +27,75 @@ import {
   readOnboardingState,
 } from "@/lib/onboarding/state";
 import { TOUR_IDS, TOUR_STATUSES, type OnboardingState } from "@/lib/onboarding/types";
+
+/**
+ * Every anchor the UI actually declares, collected from source.
+ *
+ * Driver.js silently skips a step whose target is missing (and reports `required`
+ * steps as "stalled" rather than failing loudly), so renaming a `data-tour`
+ * would quietly break a tour and nobody would notice until a new starter hit a
+ * gap. This finds it at test time instead. Sidebar entries are tagged
+ * programmatically, so they are generated here too.
+ */
+function declaredAnchors(): Set<string> {
+  const anchors = new Set<string>();
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry)) continue;
+      const source = readFileSync(full, "utf8");
+      for (const match of source.matchAll(/data-?[Tt]our="([a-z0-9-]+)"/g)) {
+        anchors.add(match[1]!);
+      }
+    }
+  };
+  walk(join(process.cwd(), "src"));
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) anchors.add(navTourId(item.href));
+  }
+  return anchors;
+}
+
+describe("tour targets exist in the UI", () => {
+  const anchors = declaredAnchors();
+
+  it("finds the anchors in the first place (guard against a broken scan)", () => {
+    // If this fails the scanner is wrong, not the tours.
+    expect(anchors.size).toBeGreaterThan(15);
+    expect(anchors.has("header-account")).toBe(true);
+    expect(anchors.has("nav-vehicles")).toBe(true);
+  });
+
+  it("every step and fallback points at something the UI renders", () => {
+    const missing: string[] = [];
+    for (const tour of TOURS) {
+      for (const step of tour.steps) {
+        for (const target of [step.target, ...(step.fallbacks ?? [])]) {
+          if (!anchors.has(target)) missing.push(`${tour.id} → ${target}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("required steps only target always-visible anchors", () => {
+    // A `required` step reports the tour as stalled when its target is missing,
+    // so it must never point at something conditional like a row inside a list.
+    const conditional = new Set(["work-order-row", "admin-user-list"]);
+    const offenders: string[] = [];
+    for (const tour of TOURS) {
+      for (const step of tour.steps) {
+        if (step.required && conditional.has(step.target))
+          offenders.push(`${tour.id} → ${step.target}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
 import { tourSelector } from "@/components/onboarding/tourEngine";
 
 describe("tour catalogue", () => {
@@ -121,9 +194,11 @@ describe("role → tour selection", () => {
   it("hides steps whose permission the user does not hold", () => {
     const admin = getTour("admin")!;
     // An oversight reader holds every permission the admin steps require
-    // (user:read, audit:read) without holding user:role:assign or settings:update.
+    // (user:read, audit:read, user:update) without holding user:role:assign or
+    // settings:update.
     const readerPermissions: string[] = [
       PERMISSIONS.USER_READ,
+      PERMISSIONS.USER_UPDATE,
       PERMISSIONS.AUDIT_READ,
       PERMISSIONS.VEHICLE_READ,
     ];
@@ -135,6 +210,16 @@ describe("role → tour selection", () => {
         (step) => !step.requires || step.requires.some((key) => readerPermissions.includes(key)),
       ),
     ).toBe(true);
+
+    // A real step is dropped too, not just a synthetic one: someone without
+    // user:update never sees the two-factor recovery step.
+    const withoutUserUpdate = visibleSteps(admin, [
+      PERMISSIONS.USER_READ,
+      PERMISSIONS.AUDIT_READ,
+      PERMISSIONS.VEHICLE_READ,
+    ]);
+    expect(withoutUserUpdate.some((step) => step.target === "admin-user-list")).toBe(false);
+    expect(withoutUserUpdate.length).toBeLessThan(admin.steps.length);
 
     // A step guarded by an extra permission is dropped rather than shown to
     // someone who does not hold it.
