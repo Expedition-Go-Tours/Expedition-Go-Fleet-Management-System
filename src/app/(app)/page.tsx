@@ -21,7 +21,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { requireAuthContext } from "@/lib/auth/guards";
+import { assertMfaEnrollmentComplete, requireAuthContext } from "@/lib/auth/guards";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { loadControlCentre, type ActionItem } from "@/lib/dashboard/control-centre";
 import { formatMoney, formatNumber } from "@/lib/format";
@@ -38,6 +38,9 @@ const QUEUE_ICON = {
 
 export default async function DashboardPage() {
   const context = await requireAuthContext();
+  // This page is reachable without a specific permission, so it enforces the
+  // two-factor enrollment gate itself rather than via requirePagePermission.
+  assertMfaEnrollmentComplete(context);
   const permissions = [...permissionsForRoles(context.user.roles)];
   const centre = await loadControlCentre({
     userId: context.user.id,

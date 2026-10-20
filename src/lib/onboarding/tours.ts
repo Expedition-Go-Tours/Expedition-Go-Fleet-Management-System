@@ -113,16 +113,6 @@ export const TOURS: readonly TourDefinition[] = [
     steps: [
       {
         route: "/",
-        target: "header-account",
-        fallbacks: ["nav-mobile-menu"],
-        title: "Your account and sign-in security",
-        description:
-          "Operations handles money and dispatch, so this account needs two-factor authentication. Set it up once from Account & security — after that you type a short code from your authenticator app when you sign in. If a colleague loses their phone, Reset 2FA on the Users page gets them back in.",
-        side: "bottom",
-        required: true,
-      },
-      {
-        route: "/",
         target: "dashboard-overview",
         title: "Operations dashboard",
         description:
@@ -172,7 +162,17 @@ export const TOURS: readonly TourDefinition[] = [
         side: "right",
       },
       {
-        route: "/reports",
+        route: "/account",
+        target: "account-security",
+        fallbacks: ["account-header"],
+        title: "Your account and sign-in security",
+        description:
+          "Operations handles money and dispatch, so this account needs two-factor authentication. Set it up here once — after that you type a short code from your authenticator app when you sign in. If a colleague loses their phone, Reset 2FA on the Users page gets them back in.",
+        side: "top",
+        required: true,
+      },
+      {
+        route: "/account",
         target: "header-help",
         title: "Any time you need a reminder",
         description:
@@ -337,16 +337,6 @@ export const TOURS: readonly TourDefinition[] = [
     steps: [
       {
         route: "/",
-        target: "header-account",
-        fallbacks: ["nav-mobile-menu"],
-        title: "Your account and sign-in security",
-        description:
-          "Set up two-factor authentication from Account & security. Admin and Operations accounts are asked for a code from an authenticator app at sign-in, so the account cannot be taken over with a password alone.",
-        side: "bottom",
-        required: true,
-      },
-      {
-        route: "/",
         target: "dashboard-overview",
         title: "Fleet dashboard",
         description:
@@ -487,7 +477,17 @@ export const TOURS: readonly TourDefinition[] = [
         side: "top",
       },
       {
-        route: "/fuel",
+        route: "/account",
+        target: "account-security",
+        fallbacks: ["account-header"],
+        title: "Your account and sign-in security",
+        description:
+          "Set up two-factor authentication here. Admin and Operations accounts are asked for a code from an authenticator app at sign-in, so the account cannot be taken over with a password alone.",
+        side: "top",
+        required: true,
+      },
+      {
+        route: "/account",
         target: "header-help",
         title: "Any time you need a reminder",
         description:

@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 
 import { Button } from "@/components/ui/Button";
+import { Field, Input } from "@/components/ui/fields";
 import { api } from "@/lib/client/api";
 import { getFirebaseClientAuth } from "@/lib/firebase/client";
 import {
@@ -27,11 +28,6 @@ import {
  */
 
 type Intent = "enroll" | "remove";
-
-const INPUT_CLASS =
-  "border-on-dark-line bg-panel-1 text-on-dark focus:border-accent h-12 w-full rounded-md border px-4 transition-colors outline-none";
-const LABEL_CLASS =
-  "font-ui text-on-dark/60 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase";
 
 /** `otpauth://…` URIs open the authenticator app directly where one is linked. */
 function groupKey(key: string): string {
@@ -168,23 +164,23 @@ export function MfaSettings({
   if (intent && (setup || intent === "remove")) {
     return (
       <div className="flex flex-col gap-6">
-        <p className="text-on-dark/70 text-body-sm">
+        <p className="text-body-xs text-muted">
           {setup
             ? "Add this account to your authenticator app (Google Authenticator, Authy, 1Password…), then enter the code it shows."
             : "Confirm your password to change your two-factor settings."}
         </p>
 
         {setup && (
-          <div className="border-on-dark-line rounded-md border p-5">
-            <p className={LABEL_CLASS}>Secret key</p>
-            <p className="text-on-dark bg-panel-1 mt-2 rounded-md border border-white/10 px-3 py-2 font-mono text-[0.85rem] break-all">
+          <div className="border-hairline bg-subtle rounded-md border p-5">
+            <p className="field-label">Secret key</p>
+            <p className="bg-surface text-ink border-hairline mt-2 rounded-md border px-3 py-2 font-mono text-[0.85rem] break-all">
               {groupKey(setup.manualEntryKey)}
             </p>
-            <p className="text-on-dark/60 text-body-xs mt-3">
+            <p className="text-body-xs text-muted mt-3">
               Type this into your app, or{" "}
               <a
                 href={setup.qrCodeUrl}
-                className="text-accent underline underline-offset-2"
+                className="text-link font-medium underline underline-offset-2"
                 rel="noreferrer"
               >
                 open it in your authenticator app
@@ -196,28 +192,21 @@ export function MfaSettings({
 
         <form onSubmit={setup ? onSubmitCode : onSubmitPassword} className="flex flex-col gap-5">
           {!setup && (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="mfa-password" className={LABEL_CLASS}>
-                Confirm password
-              </label>
-              <input
+            <Field label="Confirm password" required htmlFor="mfa-password">
+              <Input
                 id="mfa-password"
                 type="password"
                 required
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={INPUT_CLASS}
               />
-            </div>
+            </Field>
           )}
 
           {setup && (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="mfa-code" className={LABEL_CLASS}>
-                6-digit code
-              </label>
-              <input
+            <Field label="6-digit code" required htmlFor="mfa-code">
+              <Input
                 id="mfa-code"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -227,19 +216,21 @@ export function MfaSettings({
                 placeholder="123456"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                className={INPUT_CLASS}
               />
-            </div>
+            </Field>
           )}
 
           {error && (
-            <p role="alert" className="text-body-xs text-error">
+            <p
+              role="alert"
+              className="bg-error/10 border-error/25 text-error text-body-xs rounded-md border p-3"
+            >
               {error}
             </p>
           )}
 
           <div className="flex items-center gap-3">
-            <Button variant="inverse" type="submit" disabled={busy}>
+            <Button variant="accent" type="submit" disabled={busy}>
               {busy ? "Working…" : setup ? "Confirm and enable" : "Continue"}
             </Button>
             <Button variant="ghost" type="button" onClick={reset} disabled={busy}>
@@ -257,7 +248,7 @@ export function MfaSettings({
       {mfaEnrollmentRequired && (
         <p
           role="alert"
-          className="border-warning/40 bg-warning/10 text-warning text-body-sm rounded-md border p-4"
+          className="border-warning/30 bg-warning/10 text-warning text-body-xs rounded-md border p-4"
         >
           Your role handles money and account access, so two-factor authentication is required. Set
           it up below to continue into the app.
@@ -267,7 +258,7 @@ export function MfaSettings({
       {notice && (
         <p
           role="status"
-          className="border-success/40 bg-success/10 text-success text-body-sm rounded-md border p-4"
+          className="border-success/30 bg-success/10 text-success text-body-xs rounded-md border p-4"
         >
           {notice}
         </p>
@@ -275,10 +266,10 @@ export function MfaSettings({
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-on-dark text-body-sm font-medium">
+          <p className="text-body-sm text-ink font-medium">
             {mfaEnabled ? "Two-factor authentication is on" : "Two-factor authentication is off"}
           </p>
-          <p className="text-on-dark/60 text-body-xs mt-1">
+          <p className="text-body-xs text-muted mt-1">
             {mfaEnabled
               ? "Signing in needs your password plus a code from your authenticator app."
               : "Anyone with your password can sign in."}
@@ -294,16 +285,15 @@ export function MfaSettings({
       </div>
 
       {factors.length > 0 && (
-        <ul className="border-on-dark-line divide-on-dark-line divide-y rounded-md border">
+        <ul className="border-hairline divide-hairline divide-y rounded-md border">
           {factors.map((factor) => (
             <li key={factor.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div>
-                <p className="text-on-dark text-body-sm">
-                  {factor.displayName || "Authenticator app"}
-                </p>
-                <p className="text-on-dark/50 text-body-xs">Added {factor.enrolledOn}</p>
+                <p className="text-body-sm text-ink">{factor.displayName || "Authenticator app"}</p>
+                <p className="text-data-xs text-muted">Added {factor.enrolledOn}</p>
               </div>
               <Button
+                size="sm"
                 variant="ghost"
                 type="button"
                 disabled={busy}
@@ -317,29 +307,32 @@ export function MfaSettings({
       )}
 
       {error && (
-        <p role="alert" className="text-body-xs text-error">
+        <p
+          role="alert"
+          className="bg-error/10 border-error/25 text-error text-body-xs rounded-md border p-3"
+        >
           {error}
         </p>
       )}
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor="mfa-quick-password" className={LABEL_CLASS}>
-          Confirm password to make a change
-        </label>
-        <input
+      <Field
+        label="Confirm password to make a change"
+        htmlFor="mfa-quick-password"
+        hint="Required before anything on this page can be changed."
+      >
+        <Input
           id="mfa-quick-password"
           type="password"
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className={INPUT_CLASS}
         />
-      </div>
+      </Field>
 
-      <div className="flex items-center gap-3">
+      <div>
         {mfaEnabled ? (
           <Button
-            variant="inverse"
+            variant="outline"
             type="button"
             disabled={busy}
             onClick={() => {
@@ -352,7 +345,7 @@ export function MfaSettings({
           </Button>
         ) : (
           <Button
-            variant="inverse"
+            variant="accent"
             type="button"
             disabled={busy}
             onClick={() => {

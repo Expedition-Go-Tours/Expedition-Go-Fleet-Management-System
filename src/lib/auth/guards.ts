@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { ApiError } from "@/lib/api/errors";
 import { isTrustedOrigin, verifyCsrfAny } from "@/lib/auth/csrf";
@@ -74,6 +75,18 @@ export async function requireAuthContext(): Promise<AuthContext> {
   const context = await getAuthContext();
   if (!context) throw ApiError.unauthorized();
   return context;
+}
+
+/**
+ * Confine a privileged user who has not yet set up a second factor to the
+ * account screen. Call this from every page except `/account` itself.
+ *
+ * It lives here rather than in the app layout because `/account` is inside that
+ * layout — redirecting from there would loop. Enforcement is per page so the
+ * account screen stays reachable while everything else sends the user to it.
+ */
+export function assertMfaEnrollmentComplete(context: AuthContext): void {
+  if (context.session.mfaEnrollmentRequired) redirect("/account");
 }
 
 /** Throw 403 unless the current user holds the permission. */

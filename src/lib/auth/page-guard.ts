@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { requireAuthContext } from "@/lib/auth/guards";
+import { assertMfaEnrollmentComplete, requireAuthContext } from "@/lib/auth/guards";
 import { rolesHavePermission, type PermissionKey } from "@/lib/auth/permissions";
 import type { AuthContext } from "@/lib/auth/types";
 
@@ -20,6 +20,8 @@ export async function requirePagePermission(
   permission: PermissionKey | readonly PermissionKey[],
 ): Promise<AuthContext> {
   const context = await requireAuthContext();
+  // A privileged account with no second factor may only reach /account.
+  assertMfaEnrollmentComplete(context);
   const required = typeof permission === "string" ? [permission] : permission;
   const allowed = required.some((key) => rolesHavePermission(context.user.roles, key));
   if (!allowed) notFound();

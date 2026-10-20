@@ -9,17 +9,24 @@ import { toPublicUser } from "@/lib/auth/types";
 /**
  * Authenticated application layout. Unauthenticated visitors go to /sign-in;
  * users mid-onboarding (restricted temp-password session) go to the password
- * screen, and privileged users who have not yet set up a second factor go to
- * the account screen — every guarded page inside inherits this protection.
- * `/account` lives in the `(auth)` group, so this redirect never loops.
+ * screen — every guarded page inside inherits this protection.
+ *
+ * Two-factor enrollment is *not* redirected from here: `/account` lives inside
+ * this layout, so redirecting would loop. It is enforced per page instead by
+ * `assertMfaEnrollmentComplete`, which sends the user to `/account` from
+ * everywhere else.
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const context = await getAuthContext();
   if (!context) redirect("/sign-in");
   if (context.session.mustChangePassword) redirect("/change-password");
-  if (context.session.mfaEnrollmentRequired) redirect("/account");
 
-  const permissions = [...permissionsForRoles(context.user.roles)];
+  // A session that exists only to enroll a second factor is shown a minimal
+  // shell — matching the empty permission set the session endpoint gives it —
+  // rather than a full sidebar whose links all bounce back here.
+  const permissions = context.session.mfaEnrollmentRequired
+    ? []
+    : [...permissionsForRoles(context.user.roles)];
 
   return (
     <AppShell user={toPublicUser(context.user)} permissions={permissions}>
