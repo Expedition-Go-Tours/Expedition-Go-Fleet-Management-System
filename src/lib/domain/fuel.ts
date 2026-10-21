@@ -1,4 +1,5 @@
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { toPesewas } from "@/lib/domain/expense";
 
 /*
  * Fuel purchase records.
@@ -73,6 +74,86 @@ export function isValidFuelEntry(input: {
     return { ok: false, message: "totalMinor must be a positive integer (pesewas)" };
   }
   return { ok: true };
+}
+
+/** Raw form values for a fuel purchase, as typed by the operator. */
+export interface FuelPurchaseFormValues {
+  vehicleId: string;
+  transactedOn: string;
+  odometerKm: string;
+  litres: string;
+  unitPrice: string;
+  fuelType: string;
+  station: string;
+  fullTank: boolean;
+}
+
+/** The validated POST /api/v1/fuel body. */
+export interface FuelCreatePayload {
+  vehicleId: string;
+  transactedOn: string;
+  odometerKm: number;
+  litres: number;
+  /** Unit price in major units (what the operator typed). */
+  unitPrice: number;
+  /** Cost in pesewas — authoritative: the API stores exactly this. */
+  totalMinor: number;
+  fuelType: string;
+  station?: string;
+  fullTank: boolean;
+}
+
+/**
+ * Form values → the fuel-entry request body, or the first message to show the
+ * operator. The server re-validates everything; this exists so the dialog can
+ * fail fast with the same rules and display the exact total that will be
+ * stored (unit price × litres, computed in integer pesewas).
+ */
+export function buildFuelCreatePayload(
+  values: FuelPurchaseFormValues,
+): { ok: true; payload: FuelCreatePayload } | { ok: false; message: string } {
+  const vehicleId = values.vehicleId.trim();
+  if (!vehicleId) return { ok: false, message: "Choose the vehicle that was filled up" };
+
+  const transactedOn = values.transactedOn.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(transactedOn)) {
+    return { ok: false, message: "transactedOn must be YYYY-MM-DD" };
+  }
+
+  const odometerRaw = values.odometerKm.trim();
+  if (!/^\d+$/.test(odometerRaw)) {
+    return { ok: false, message: "odometerKm is required (non-negative integer)" };
+  }
+
+  const litres = Number(values.litres);
+  const unitMinor = toPesewas(values.unitPrice);
+  if (unitMinor === null || unitMinor <= 0) {
+    return { ok: false, message: "unitPrice must be a positive amount" };
+  }
+  const totalMinor = Math.round(unitMinor * litres);
+  const amountCheck = isValidFuelEntry({ litres, totalMinor });
+  if (!amountCheck.ok) return amountCheck;
+
+  const fuelType = values.fuelType.trim() || "PETROL";
+  if (!FUEL_TYPES_SUPPORTED.some((type) => type === fuelType)) {
+    return { ok: false, message: "Unsupported fuel type" };
+  }
+
+  const station = values.station.trim();
+  return {
+    ok: true,
+    payload: {
+      vehicleId,
+      transactedOn,
+      odometerKm: Number(odometerRaw),
+      litres,
+      unitPrice: unitMinor / 100,
+      totalMinor,
+      fuelType,
+      ...(station ? { station } : {}),
+      fullTank: values.fullTank === true,
+    },
+  };
 }
 
 export const FUEL_CREATE_PERMISSION = PERMISSIONS.FUEL_CREATE;

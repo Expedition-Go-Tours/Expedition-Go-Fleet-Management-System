@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Droplets, Fuel, Gauge, ReceiptText } from "lucide-react";
 
+import { AddFuelDialog } from "@/components/fuel/AddFuelDialog";
 import { FuelFilters } from "@/components/fuel/FuelFilters";
 import { Card } from "@/components/ui/Card";
 import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
@@ -12,7 +13,7 @@ import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { listFuelEntries } from "@/lib/repos/fuel";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { requirePagePermission } from "@/lib/auth/page-guard";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 
 export const metadata = { title: "Fuel" };
 
@@ -28,11 +29,16 @@ export default async function FuelPage({
 }: {
   searchParams: Promise<{ vehicleId?: string }>;
 }) {
-  await requirePagePermission(PERMISSIONS.FUEL_READ);
+  const context = await requirePagePermission(PERMISSIONS.FUEL_READ);
+  const canCreate = permissionsForRoles(context.user.roles).has(PERMISSIONS.FUEL_CREATE);
   const { vehicleId } = await searchParams;
 
   const [entries, vehicles] = await Promise.all([listFuelEntries({ limit: 300 }), listVehicles()]);
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+  const vehicleOptions = vehicles
+    .slice()
+    .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
+    .map((v) => ({ id: v.id, label: v.regNumber }));
 
   const entriesForVehicle = vehicleId ? entries.filter((e) => e.vehicleId === vehicleId) : entries;
 
@@ -80,6 +86,7 @@ export default async function FuelPage({
         title="Fuel"
         description="Fuel ledger. Costs are mirrored into the canonical expense records; efficiency is only reported from consecutive full-tank fill-ups."
         crumbs={[{ label: "Finance & compliance" }, { label: "Fuel" }]}
+        actions={<AddFuelDialog canCreate={canCreate} vehicles={vehicleOptions} />}
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -112,12 +119,7 @@ export default async function FuelPage({
 
       <Card title="Fuel ledger" icon={Fuel} flush dataTour="fuel-ledger">
         <div className="border-hairline border-b px-4 py-3">
-          <FuelFilters
-            vehicles={vehicles
-              .slice()
-              .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
-              .map((v) => ({ id: v.id, label: v.regNumber }))}
-          />
+          <FuelFilters vehicles={vehicleOptions} />
         </div>
 
         <DataTable
