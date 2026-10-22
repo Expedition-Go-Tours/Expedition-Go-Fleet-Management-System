@@ -82,7 +82,10 @@ describe("buildFuelCreatePayload — form to POST /api/v1/fuel body", () => {
       ok: false,
       message: "odometerKm is required (non-negative integer)",
     });
-    expect(build({ litres: "0" })).toEqual({ ok: false, message: "litres must be a positive number" });
+    expect(build({ litres: "0" })).toEqual({
+      ok: false,
+      message: "litres must be a positive number",
+    });
     expect(build({ unitPrice: "abc" })).toEqual({
       ok: false,
       message: "unitPrice must be a positive amount",

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildIssueIntakePayload,
-  type IssueIntakeValues,
-} from "@/lib/domain/report";
+import { buildIssueIntakePayload, type IssueIntakeValues } from "@/lib/domain/report";
 
 const drivableForm: IssueIntakeValues = {
   vehicleId: "veh_1",

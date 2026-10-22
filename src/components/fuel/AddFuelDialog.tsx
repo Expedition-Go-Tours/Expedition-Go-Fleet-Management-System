@@ -182,7 +182,11 @@ export function AddFuelDialog({
               required
             />
           </Field>
-          <Field label="Station" hint="Optional — also becomes the expense supplier." htmlFor="af-station">
+          <Field
+            label="Station"
+            hint="Optional — also becomes the expense supplier."
+            htmlFor="af-station"
+          >
             <Input id="af-station" name="station" placeholder="e.g. Goil, Accra Central" />
           </Field>
           <div className="flex flex-col justify-end gap-1.5 sm:col-span-2">

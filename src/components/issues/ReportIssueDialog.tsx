@@ -94,7 +94,13 @@ export function ReportIssueDialog({
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" type="submit" form="issue-intake-form" isLoading={busy}>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              form="issue-intake-form"
+              isLoading={busy}
+            >
               Submit report
             </Button>
           </>
@@ -155,8 +161,8 @@ export function ReportIssueDialog({
             </label>
             {!drivable && (
               <p className="text-body-xs text-error">
-                This places the vehicle on safety hold immediately — it will not be assignable
-                until the repair is completed and it is confirmed back in service.
+                This places the vehicle on safety hold immediately — it will not be assignable until
+                the repair is completed and it is confirmed back in service.
               </p>
             )}
           </div>
