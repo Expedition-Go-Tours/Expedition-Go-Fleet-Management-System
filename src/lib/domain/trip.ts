@@ -327,6 +327,164 @@ export function validateTripCompletion(trip: Trip): TripValidation {
 }
 
 // ---------------------------------------------------------------------------
+// Trip draft + quick trip (record-only fast path)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fields every trip save needs. The fast path and the full route flow share
+ * this shape, so both persist exactly the same trip record.
+ */
+export interface TripDraftInput {
+  vehicleId: string;
+  driverUserId: string;
+  tripDate: string;
+  purpose: string;
+  stops: TripStop[];
+  assignmentId?: string;
+  externalReference?: string;
+  notes?: string;
+}
+
+export interface TripDraftErrors {
+  vehicleId?: string;
+  tripDate?: string;
+  purpose?: string;
+  origin?: string;
+  destination?: string;
+  stops?: string;
+}
+
+/** Body accepted by POST /api/v1/trips and PATCH /api/v1/trips/[id]. */
+export interface TripDraftBody {
+  vehicleId: string;
+  driverUserId: string;
+  assignmentId?: string;
+  tripDate: string;
+  purpose: string;
+  externalReference?: string;
+  notes?: string;
+  stops: TripStop[];
+}
+
+export type TripDraftResult =
+  { ok: true; draft: TripDraftBody } | { ok: false; errors: TripDraftErrors };
+
+/**
+ * Build the save body for a trip and report every missing fact at once, so a
+ * form can point at the offending field instead of failing on the first one.
+ */
+export function buildTripDraft(input: TripDraftInput): TripDraftResult {
+  const errors: TripDraftErrors = {};
+
+  const vehicleId = input.vehicleId.trim();
+  if (!vehicleId) errors.vehicleId = "Choose a vehicle.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.tripDate)) errors.tripDate = "Choose the trip date.";
+  if (!(TRIP_PURPOSES as readonly string[]).includes(input.purpose)) {
+    errors.purpose = "Choose a purpose.";
+  }
+
+  const ordered = input.stops.slice().sort((a, b) => a.sequence - b.sequence);
+  const origin = ordered[0];
+  const destination = ordered[ordered.length - 1];
+
+  if (!origin || origin.type !== "ORIGIN") {
+    errors.origin = "Add the place the trip started.";
+  } else if (!origin.label.trim()) {
+    errors.origin = "Where did the trip start?";
+  }
+
+  if (ordered.length < 2 || !destination || destination.type !== "DESTINATION") {
+    errors.destination = "Add the place the trip ended.";
+  } else if (!destination.label.trim()) {
+    errors.destination = "Where did the trip end?";
+  }
+
+  if (ordered.some((s) => s.type === "INTERMEDIATE" && !s.label.trim())) {
+    errors.stops = "Every stop on the route needs a name.";
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  // Sequence is normalised from the order the user arranged; types are kept
+  // as the builder assigned them (the API validates the same invariants).
+  const stops = ordered.map((stop, index) => ({
+    ...stop,
+    sequence: index,
+    label: stop.label.trim(),
+    address: stop.address?.trim() ? stop.address.trim() : null,
+  }));
+
+  return {
+    ok: true,
+    draft: {
+      vehicleId,
+      driverUserId: input.driverUserId,
+      assignmentId: input.assignmentId || undefined,
+      tripDate: input.tripDate,
+      purpose: input.purpose,
+      externalReference: input.externalReference?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
+      stops,
+    },
+  };
+}
+
+/** Parse a whole-kilometre odometer reading; null when absent or invalid. */
+export function parseOdometerReading(raw: string | number | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  const value = Number(text);
+  if (!Number.isSafeInteger(value) || value < 0) return null;
+  return value;
+}
+
+export interface QuickTripPlan {
+  ok: boolean;
+  errors: TripDraftErrors & { odometers?: string };
+  /** Odometer delta in whole kilometres for display — null when unusable. */
+  distanceKm: number | null;
+  draft: TripDraftBody | null;
+  /** Body for POST /api/v1/trips/[id]/complete (actual-distance basis). */
+  completion: { startOdometerKm: number; endOdometerKm: number } | null;
+}
+
+/**
+ * Plan the fast path: the driver supplies where the trip went and the two
+ * odometer readings; the pair gives the distance, so no routing provider is
+ * needed. Both readings are required here — without them the trip belongs in
+ * the route flow instead.
+ */
+export function planQuickTrip(
+  input: TripDraftInput & { startOdometerKm: string; endOdometerKm: string },
+): QuickTripPlan {
+  const draftResult = buildTripDraft(input);
+  const errors: QuickTripPlan["errors"] = draftResult.ok ? {} : { ...draftResult.errors };
+
+  const start = parseOdometerReading(input.startOdometerKm);
+  const end = parseOdometerReading(input.endOdometerKm);
+  if (start === null) {
+    errors.odometers = "Enter the start odometer in whole kilometres.";
+  } else if (end === null) {
+    errors.odometers = "Enter the end odometer in whole kilometres.";
+  } else if (end <= start) {
+    errors.odometers = `The end odometer must be higher than the start (${start} km) — the pair is what gives the trip its distance.`;
+  }
+
+  if (!draftResult.ok || Object.keys(errors).length > 0 || start === null || end === null) {
+    return { ok: false, errors, distanceKm: null, draft: null, completion: null };
+  }
+
+  return {
+    ok: true,
+    errors: {},
+    distanceKm: end - start,
+    draft: draftResult.draft,
+    completion: { startOdometerKm: start, endOdometerKm: end },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Idempotency key generation
 // ---------------------------------------------------------------------------
 

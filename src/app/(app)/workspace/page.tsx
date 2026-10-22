@@ -109,7 +109,11 @@ export default async function WorkspacePage() {
   const vehicleOptions = vehicles
     .slice()
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
-    .map((v) => ({ id: v.id, label: `${v.regNumber} — ${v.make} ${v.model}` }));
+    .map((v) => ({
+      id: v.id,
+      label: `${v.regNumber} — ${v.make} ${v.model}`,
+      odometerKm: v.odometerKm,
+    }));
 
   // Only in-service vehicles can be started; the server still bars safety
   // holds / conflicts, this just avoids offering an impossible choice.

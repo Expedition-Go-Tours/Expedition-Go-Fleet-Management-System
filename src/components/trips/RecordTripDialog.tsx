@@ -1,27 +1,42 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/Modal";
 import { RouteMapPreview } from "@/components/trips/RouteMapPreview";
 import { RouteSummary } from "@/components/trips/RouteSummary";
-import { TripStopBuilder } from "@/components/trips/TripStopBuilder";
+import { makeStop, TripStopBuilder } from "@/components/trips/TripStopBuilder";
 import { api } from "@/lib/client/api";
-import { TRIP_PURPOSES, type RouteLeg, type Trip, type TripStop } from "@/lib/domain/trip";
+import {
+  buildTripDraft,
+  planQuickTrip,
+  parseOdometerReading,
+  TRIP_PURPOSES,
+  type RouteLeg,
+  type Trip,
+  type TripDraftErrors,
+  type TripStop,
+} from "@/lib/domain/trip";
 import type { GeoJsonLineString } from "@/lib/routing/provider";
 
 /*
- * Record Trip dialog: multi-stop route builder with distance calculation,
- * draft saving, and trip completion. Mobile-first, accessible, and designed
- * for the end-of-day retrospective entry workflow.
+ * Record Trip dialog.
+ *
+ * The default path is three answers: where you went, and the start/end
+ * odometer. The odometer pair gives the distance (ACTUAL_ODOMETER), so no
+ * routing provider is needed and the trip can be completed in one step.
+ *
+ * Route planning — ordered stops, coordinates, map and booking reference —
+ * lives behind "More details" for the trips that need it; both paths persist
+ * the same trip record.
  */
 
 interface RecordTripDialogProps {
-  /** Vehicle options for the dropdown. */
-  vehicles: { id: string; label: string }[];
+  /** Vehicle options for the dropdown; odometerKm prefills the start reading. */
+  vehicles: { id: string; label: string; odometerKm?: number }[];
   /** Default vehicle (from active assignment). */
   defaultVehicleId?: string;
   /** Default driver user id (from auth). */
@@ -32,6 +47,10 @@ interface RecordTripDialogProps {
   assignmentId?: string;
   /** Pre-built button trigger. If omitted, renders a default button. */
   trigger?: React.ReactNode;
+}
+
+function seededStops(): TripStop[] {
+  return [makeStop(0, "ORIGIN"), makeStop(1, "DESTINATION")];
 }
 
 export function RecordTripDialog({
@@ -46,8 +65,10 @@ export function RecordTripDialog({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<TripDraftErrors & { odometers?: string }>({});
   const [calculating, setCalculating] = useState(false);
   const [calcError, setCalcError] = useState<string | null>(null);
+  const [advanced, setAdvanced] = useState(false);
 
   // Form state
   const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? vehicles[0]?.id ?? "");
@@ -55,7 +76,12 @@ export function RecordTripDialog({
   const [purpose, setPurpose] = useState<string>("OTHER");
   const [externalReference, setExternalReference] = useState("");
   const [notes, setNotes] = useState("");
-  const [stops, setStops] = useState<TripStop[]>([]);
+  const [stops, setStops] = useState<TripStop[]>(seededStops);
+  const [startOdometerKm, setStartOdometerKm] = useState("");
+  const [endOdometerKm, setEndOdometerKm] = useState("");
+  // Once the driver edits the start reading, changing vehicle must not
+  // overwrite it — their reading wins over the vehicle's last known value.
+  const [startOdometerTouched, setStartOdometerTouched] = useState(false);
   const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([]);
   const [routeDistanceM, setRouteDistanceM] = useState<number | null>(null);
   const [routeDurationS, setRouteDurationS] = useState<number | null>(null);
@@ -82,15 +108,27 @@ export function RecordTripDialog({
     [routeDistanceM],
   );
 
+  const vehicleOdometer = useCallback(
+    (id: string) => vehicles.find((v) => v.id === id)?.odometerKm ?? null,
+    [vehicles],
+  );
+
   const resetForm = useCallback(() => {
+    const firstVehicleId = defaultVehicleId ?? vehicles[0]?.id ?? "";
     setError(null);
     setCalcError(null);
-    setVehicleId(defaultVehicleId ?? vehicles[0]?.id ?? "");
+    setFieldErrors({});
+    setAdvanced(false);
+    setVehicleId(firstVehicleId);
     setTripDate(defaultDate);
     setPurpose("OTHER");
     setExternalReference("");
     setNotes("");
-    setStops([]);
+    setStops(seededStops());
+    const seededOdometer = vehicleOdometer(firstVehicleId);
+    setStartOdometerKm(seededOdometer === null ? "" : String(seededOdometer));
+    setStartOdometerTouched(false);
+    setEndOdometerKm("");
     setRouteLegs([]);
     setRouteDistanceM(null);
     setRouteDurationS(null);
@@ -101,7 +139,7 @@ export function RecordTripDialog({
     setRouteApproximate(false);
     setSavedTripId(null);
     prevStopsRef.current = "";
-  }, [defaultVehicleId, defaultDate, vehicles]);
+  }, [defaultVehicleId, defaultDate, vehicles, vehicleOdometer]);
 
   const handleOpen = useCallback(() => {
     resetForm();
@@ -114,58 +152,110 @@ export function RecordTripDialog({
     setError(null);
   }, [busy]);
 
-  // Save as draft.
-  const saveDraft = useCallback(async (): Promise<string | null> => {
-    setBusy(true);
-    setError(null);
-    try {
-      const origin = stops.find((s) => s.type === "ORIGIN");
-      const destination = stops.find((s) => s.type === "DESTINATION");
-      if (!origin?.label || !destination?.label) {
-        throw new Error("Origin and destination are required.");
-      }
+  const changeVehicle = useCallback(
+    (nextVehicleId: string) => {
+      setVehicleId(nextVehicleId);
+      if (startOdometerTouched) return;
+      const km = vehicleOdometer(nextVehicleId);
+      setStartOdometerKm(km === null ? "" : String(km));
+    },
+    [startOdometerTouched, vehicleOdometer],
+  );
 
-      const body = {
+  const origin = stops.find((s) => s.type === "ORIGIN") ?? null;
+  const destination = stops.find((s) => s.type === "DESTINATION") ?? null;
+
+  const setStopLabel = useCallback((type: "ORIGIN" | "DESTINATION", label: string) => {
+    setStops((prev) => prev.map((s) => (s.type === type ? { ...s, label } : s)));
+  }, []);
+
+  // Live distance from the odometer pair — the number the trip will be
+  // credited with. Invalid or reversed pairs show no value (and an error on
+  // submit), never a misleading one.
+  const quickPlan = useMemo(
+    () =>
+      planQuickTrip({
         vehicleId,
         driverUserId,
-        assignmentId: assignmentId || undefined,
         tripDate,
         purpose,
-        externalReference: externalReference || undefined,
-        notes: notes || undefined,
         stops,
-      };
+        startOdometerKm,
+        endOdometerKm,
+        assignmentId,
+        externalReference,
+        notes,
+      }),
+    [
+      vehicleId,
+      driverUserId,
+      tripDate,
+      purpose,
+      stops,
+      startOdometerKm,
+      endOdometerKm,
+      assignmentId,
+      externalReference,
+      notes,
+    ],
+  );
+  const hasOdometerPair =
+    parseOdometerReading(startOdometerKm) !== null && parseOdometerReading(endOdometerKm) !== null;
+  const distancePreview = hasOdometerPair ? quickPlan.distanceKm : null;
 
-      let tripId: string;
-      if (savedTripId) {
-        await api.patch(`/api/v1/trips/${savedTripId}`, body);
-        tripId = savedTripId;
-      } else {
-        const result = await api.post<{ trip: Trip }>("/api/v1/trips", body);
-        tripId = result.trip.id;
-        setSavedTripId(tripId);
+  // Persist the draft (shared by "Save draft" and the route flow).
+  const saveDraft = useCallback(
+    async (existingId: string | null): Promise<string | null> => {
+      setBusy(true);
+      setError(null);
+      try {
+        const built = buildTripDraft({
+          vehicleId,
+          driverUserId,
+          tripDate,
+          purpose,
+          stops,
+          assignmentId,
+          externalReference,
+          notes,
+        });
+        if (!built.ok) {
+          setFieldErrors(built.errors);
+          setError(Object.values(built.errors)[0] ?? "Complete the required fields.");
+          return null;
+        }
+
+        let tripId: string;
+        if (existingId) {
+          await api.patch(`/api/v1/trips/${existingId}`, built.draft);
+          tripId = existingId;
+        } else {
+          const result = await api.post<{ trip: Trip }>("/api/v1/trips", built.draft);
+          tripId = result.trip.id;
+          setSavedTripId(tripId);
+        }
+
+        router.refresh();
+        return tripId;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save trip");
+        return null;
+      } finally {
+        setBusy(false);
       }
-
-      router.refresh();
-      return tripId;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save trip");
-      return null;
-    } finally {
-      setBusy(false);
-    }
-  }, [
-    vehicleId,
-    driverUserId,
-    assignmentId,
-    tripDate,
-    purpose,
-    externalReference,
-    notes,
-    stops,
-    savedTripId,
-    router,
-  ]);
+    },
+    [
+      vehicleId,
+      driverUserId,
+      tripDate,
+      purpose,
+      stops,
+      assignmentId,
+      externalReference,
+      notes,
+      router,
+    ],
+  );
 
   // Calculate route — returns the result so callers can use it without waiting
   // for React state to propagate (avoids stale-closure bugs in async flows).
@@ -188,7 +278,7 @@ export function RecordTripDialog({
     // Always save first so the server calculates against persisted stops.
     // This ensures the calculated route matches exactly what will be completed.
     // For new trips this creates the draft; for edited drafts it persists changes.
-    const tripId = await saveDraft();
+    const tripId = await saveDraft(savedTripId);
     if (!tripId) {
       setCalcError("Save the trip before calculating the route.");
       setCalculating(false);
@@ -230,45 +320,56 @@ export function RecordTripDialog({
     } finally {
       setCalculating(false);
     }
-  }, [stops, saveDraft]);
+  }, [stops, saveDraft, savedTripId]);
 
-  // Complete the trip — handles first-time save, draft edits, and route
-  // persistence as a single coherent sequence.
-  const completeTrip = useCallback(async () => {
+  const finish = useCallback(() => {
+    setOpen(false);
+    resetForm();
+    router.refresh();
+  }, [resetForm, router]);
+
+  const showPlanErrors = useCallback((errors: TripDraftErrors & { odometers?: string }) => {
+    setFieldErrors(errors);
+    setError(Object.values(errors)[0] ?? "Complete the required fields.");
+  }, []);
+
+  // Fast path: save the draft, then complete with the odometer pair.
+  const completeQuickTrip = useCallback(async () => {
+    if (!quickPlan.ok || !quickPlan.completion) {
+      showPlanErrors(quickPlan.errors);
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
-      // Step 1: Always save the latest form state first. This ensures both
-      // new trips and edited drafts are persisted before route calculation.
-      const origin = stops.find((s) => s.type === "ORIGIN");
-      const destination = stops.find((s) => s.type === "DESTINATION");
-      if (!origin?.label || !destination?.label) {
-        throw new Error("Origin and destination are required.");
-      }
-
-      const saveBody = {
-        vehicleId,
-        driverUserId,
-        assignmentId: assignmentId || undefined,
-        tripDate,
-        purpose,
-        externalReference: externalReference || undefined,
-        notes: notes || undefined,
-        stops,
-      };
-
-      let tripId: string;
-      if (savedTripId) {
-        await api.patch(`/api/v1/trips/${savedTripId}`, saveBody);
-        tripId = savedTripId;
+      let tripId = savedTripId;
+      if (tripId) {
+        await api.patch(`/api/v1/trips/${tripId}`, quickPlan.draft);
       } else {
-        const result = await api.post<{ trip: Trip }>("/api/v1/trips", saveBody);
+        const result = await api.post<{ trip: Trip }>("/api/v1/trips", quickPlan.draft);
         tripId = result.trip.id;
         setSavedTripId(tripId);
       }
 
-      // Step 2: Calculate route against the saved trip (server persists it).
-      // Always recalculate — the saved stops must match the route.
+      await api.post(`/api/v1/trips/${tripId}/complete`, quickPlan.completion);
+      finish();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to complete trip");
+    } finally {
+      setBusy(false);
+    }
+  }, [quickPlan, savedTripId, showPlanErrors, finish]);
+
+  // Route path: only used when the odometer pair is absent (driver does not
+  // have the readings) — the distance then comes from the calculated route.
+  const completeViaRoute = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const tripId = await saveDraft(savedTripId);
+      if (!tripId) return;
+
       const calcResult = await api.post<{
         route: { totalDistanceM: number };
         legs: RouteLeg[];
@@ -282,7 +383,7 @@ export function RecordTripDialog({
       setRouteLegs(calcResult.legs);
       setRouteStale(false);
 
-      // Step 3: Verify the server has a valid persisted distance.
+      // Verify the server has a valid persisted distance before completing.
       const tripCheck = await api.get<{ trip: Trip }>(`/api/v1/trips/${tripId}`);
       if (tripCheck.trip.routeStale) {
         throw new Error("Route is stale on the server — please recalculate");
@@ -297,31 +398,45 @@ export function RecordTripDialog({
         );
       }
 
-      // Step 4: Complete the trip.
       await api.post(`/api/v1/trips/${tripId}/complete`, {});
-      setOpen(false);
-      resetForm();
-      router.refresh();
+      finish();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to complete trip");
     } finally {
       setBusy(false);
     }
-  }, [
-    savedTripId,
-    stops,
-    vehicleId,
-    driverUserId,
-    assignmentId,
-    tripDate,
-    purpose,
-    externalReference,
-    notes,
-    resetForm,
-    router,
-  ]);
+  }, [saveDraft, savedTripId, finish]);
+
+  const handleSubmit = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault();
+      // Odometer pair present and valid → the accurate, one-step path.
+      if (quickPlan.ok) {
+        completeQuickTrip();
+        return;
+      }
+      // No readings: the route (advanced) is the remaining distance basis.
+      // Anything typed but invalid is reported instead of silently ignored.
+      const odometersBlank = !startOdometerKm.trim() && !endOdometerKm.trim();
+      if (advanced && odometersBlank) {
+        completeViaRoute();
+        return;
+      }
+      showPlanErrors(quickPlan.errors);
+    },
+    [
+      quickPlan,
+      completeQuickTrip,
+      advanced,
+      startOdometerKm,
+      endOdometerKm,
+      completeViaRoute,
+      showPlanErrors,
+    ],
+  );
 
   const totalKm = routeDistanceM ? (routeDistanceM / 1000).toFixed(1) : null;
+  const startOdometerValue = parseOdometerReading(startOdometerKm);
 
   return (
     <>
@@ -336,14 +451,17 @@ export function RecordTripDialog({
       <Modal
         open={open}
         onClose={handleClose}
-        title="Record Trip"
-        description="Enter your journey details. Route distance is calculated from the coordinates you provide."
+        title="Record trip"
+        description="Two places and the odometer pair — the difference is the distance. Vehicle, date and start reading are prefilled."
         size="lg"
         footer={
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
             <div className="text-body-xs text-muted">
-              {totalKm && !routeStale && (
-                <span className="text-ink font-medium">{totalKm} km estimated</span>
+              {distancePreview !== null && (
+                <span className="text-ink font-medium">{distancePreview} km from the odometer</span>
+              )}
+              {distancePreview === null && totalKm && !routeStale && (
+                <span className="text-ink font-medium">{totalKm} km estimated from the route</span>
               )}
               {routeStale && (
                 <span className="text-warning font-medium">Route stale — recalculate</span>
@@ -353,18 +471,21 @@ export function RecordTripDialog({
               <Button variant="ghost" onClick={handleClose} disabled={busy}>
                 Cancel
               </Button>
-              <Button
-                variant="secondary"
-                onClick={saveDraft}
-                disabled={busy}
-                isLoading={busy && !calculating}
-              >
-                Save draft
-              </Button>
+              {advanced && (
+                <Button
+                  variant="secondary"
+                  onClick={() => saveDraft(savedTripId)}
+                  disabled={busy || calculating}
+                  isLoading={busy && !calculating}
+                >
+                  Save draft
+                </Button>
+              )}
               <Button
                 variant="accent"
-                onClick={completeTrip}
-                disabled={busy || (routeStale && routeDistanceM === null)}
+                type="submit"
+                form="record-trip-form"
+                disabled={busy || calculating}
                 isLoading={busy}
               >
                 Complete trip
@@ -373,26 +494,20 @@ export function RecordTripDialog({
           </div>
         }
       >
-        <form
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            calculateRoute();
-          }}
-          className="flex flex-col gap-5"
-        >
+        <form id="record-trip-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
           {error && (
             <div className="border-error/30 bg-error/10 text-error text-body-xs rounded-md border p-3">
               {error}
             </div>
           )}
 
-          {/* Vehicle + Date */}
+          {/* Who / when */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Vehicle" required htmlFor="trip-vehicle">
+            <Field label="Vehicle" required htmlFor="trip-vehicle" error={fieldErrors.vehicleId}>
               <Select
                 id="trip-vehicle"
                 value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
+                onChange={(e) => changeVehicle(e.target.value)}
                 required
               >
                 {vehicles.map((v) => (
@@ -402,7 +517,7 @@ export function RecordTripDialog({
                 ))}
               </Select>
             </Field>
-            <Field label="Trip date" required htmlFor="trip-date">
+            <Field label="Date" required htmlFor="trip-date" error={fieldErrors.tripDate}>
               <Input
                 id="trip-date"
                 type="date"
@@ -413,9 +528,81 @@ export function RecordTripDialog({
             </Field>
           </div>
 
-          {/* Purpose + Reference */}
+          {/* Where — two names, no coordinates needed for the fast path */}
+          {!advanced && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="From" required htmlFor="trip-origin" error={fieldErrors.origin}>
+                <Input
+                  id="trip-origin"
+                  value={origin?.label ?? ""}
+                  onChange={(e) => setStopLabel("ORIGIN", e.target.value)}
+                  placeholder="e.g. Kotoka Airport"
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="To" required htmlFor="trip-destination" error={fieldErrors.destination}>
+                <Input
+                  id="trip-destination"
+                  value={destination?.label ?? ""}
+                  onChange={(e) => setStopLabel("DESTINATION", e.target.value)}
+                  placeholder="e.g. Cape Coast"
+                  autoComplete="off"
+                />
+              </Field>
+            </div>
+          )}
+
+          {/* Distance evidence */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Purpose" required htmlFor="trip-purpose">
+            <Field
+              label="Start odometer (km)"
+              htmlFor="trip-start-odometer"
+              hint={
+                startOdometerTouched
+                  ? undefined
+                  : startOdometerValue !== null
+                    ? "Prefilled from the vehicle's last recorded reading"
+                    : "Enter the reading before the trip"
+              }
+              error={fieldErrors.odometers}
+            >
+              <Input
+                id="trip-start-odometer"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                value={startOdometerKm}
+                onChange={(e) => {
+                  setStartOdometerTouched(true);
+                  setStartOdometerKm(e.target.value);
+                }}
+              />
+            </Field>
+            <Field
+              label="End odometer (km)"
+              htmlFor="trip-end-odometer"
+              hint={
+                distancePreview !== null
+                  ? `${distancePreview} km covered`
+                  : "The reading after the trip"
+              }
+              error={fieldErrors.odometers}
+            >
+              <Input
+                id="trip-end-odometer"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                value={endOdometerKm}
+                onChange={(e) => setEndOdometerKm(e.target.value)}
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Purpose" required htmlFor="trip-purpose" error={fieldErrors.purpose}>
               <Select
                 id="trip-purpose"
                 value={purpose}
@@ -429,69 +616,78 @@ export function RecordTripDialog({
                 ))}
               </Select>
             </Field>
-            <Field
-              label="Booking / Tour reference"
-              hint="Optional OTA booking, tour or transfer reference"
-              htmlFor="trip-ref"
-            >
-              <Input
-                id="trip-ref"
-                value={externalReference}
-                onChange={(e) => setExternalReference(e.target.value)}
-                placeholder="e.g. BK-2026-0042"
-              />
-            </Field>
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={() => setAdvanced((v) => !v)}
+                className="text-body-xs text-link pb-2 font-medium hover:underline"
+                aria-expanded={advanced}
+              >
+                {advanced ? "Hide route and details" : "Add stops, route and booking reference"}
+              </button>
+            </div>
           </div>
 
-          {/* Stops */}
-          <TripStopBuilder
-            stops={stops}
-            onStopsChange={handleStopsChange}
-            routeLegs={routeLegs}
-            routeStale={routeStale}
-            onCalculateRoute={calculateRoute}
-            calculating={calculating}
-          />
-
-          {calcError && <p className="text-body-xs text-error">{calcError}</p>}
-
-          {/* Route summary */}
-          {routeDistanceM !== null && routeLegs.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <RouteMapPreview
+          {advanced && (
+            <div className="border-hairline flex flex-col gap-4 border-t pt-4">
+              <TripStopBuilder
                 stops={stops}
-                legs={routeLegs}
-                totalDistanceKm={routeDistanceM / 1000}
-                totalDurationS={routeDurationS}
-                provider={routeProvider}
-                routeGeometry={routeGeometry}
+                onStopsChange={handleStopsChange}
+                routeLegs={routeLegs}
+                routeStale={routeStale}
+                onCalculateRoute={calculateRoute}
+                calculating={calculating}
               />
-              <RouteSummary
-                stops={stops}
-                legs={routeLegs}
-                totalDistanceM={routeDistanceM}
-                totalDurationS={routeDurationS}
-                provider={routeProvider}
-                calculatedAt={routeCalculatedAt}
-                stale={routeStale}
-                approximate={routeApproximate}
-              />
+
+              {calcError && <p className="text-body-xs text-error">{calcError}</p>}
+
+              {routeDistanceM !== null && routeLegs.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <RouteMapPreview
+                    stops={stops}
+                    legs={routeLegs}
+                    totalDistanceKm={routeDistanceM / 1000}
+                    totalDurationS={routeDurationS}
+                    provider={routeProvider}
+                    routeGeometry={routeGeometry}
+                  />
+                  <RouteSummary
+                    stops={stops}
+                    legs={routeLegs}
+                    totalDistanceM={routeDistanceM}
+                    totalDurationS={routeDurationS}
+                    provider={routeProvider}
+                    calculatedAt={routeCalculatedAt}
+                    stale={routeStale}
+                    approximate={routeApproximate}
+                  />
+                </div>
+              )}
+
+              <Field
+                label="Booking / Tour reference"
+                hint="Optional OTA booking, tour or transfer reference"
+                htmlFor="trip-ref"
+              >
+                <Input
+                  id="trip-ref"
+                  value={externalReference}
+                  onChange={(e) => setExternalReference(e.target.value)}
+                  placeholder="e.g. BK-2026-0042"
+                />
+              </Field>
+
+              <Field label="Notes" hint="Optional notes about the journey" htmlFor="trip-notes">
+                <Textarea
+                  id="trip-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Any relevant details about the trip…"
+                  rows={2}
+                />
+              </Field>
             </div>
           )}
-
-          {/* Notes */}
-          <Field label="Notes" hint="Optional notes about the journey" htmlFor="trip-notes">
-            <Textarea
-              id="trip-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any relevant details about the trip…"
-              rows={2}
-            />
-          </Field>
-
-          {/* Hidden submit for Enter key in route calculation */}
-          <button type="submit" className="hidden" aria-hidden="true" />
         </form>
       </Modal>
     </>
