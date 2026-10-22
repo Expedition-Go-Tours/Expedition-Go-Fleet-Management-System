@@ -30,6 +30,7 @@ import {
   WORK_ORDER_ACTIONS,
   WORK_ORDER_ACTION_LABELS,
 } from "@/lib/domain/work-order";
+import { expenseStatusLabel } from "@/lib/domain/expense";
 import { formatDate, formatMoney, humanizeEnum } from "@/lib/format";
 import { listExpenses } from "@/lib/repos/expenses";
 import { getScheduleById, getServiceRecordById } from "@/lib/repos/maintenance";
@@ -225,7 +226,16 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
                         <span className="text-data text-ink tabular-nums">
                           {formatMoney(expense.amountMinor, expense.currency)}
                         </span>
-                        <StatusBadge status={expense.status} />
+                        <StatusBadge
+                          status={expenseStatusLabel(expense.status)}
+                          tone={
+                            expense.status === "VOID"
+                              ? "danger"
+                              : expense.status === "REJECTED"
+                                ? "muted"
+                                : "success"
+                          }
+                        />
                       </span>
                     </Link>
                   </li>

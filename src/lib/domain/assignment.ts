@@ -59,6 +59,22 @@ export const ASSIGNMENT_ACTIONS = {
 } as const satisfies ActionMap<AssignmentStatus>;
 
 /**
+ * The only safe default for a logging quick action: the vehicle of the user's
+ * ACTIVE assignment, and only if it is in the authoritative vehicle list.
+ * With no assignment the caller must choose deliberately — never vehicles[0].
+ */
+export function defaultVehicleForLogging(input: {
+  assignment?: Pick<VehicleAssignment, "vehicleId" | "status"> | null;
+  vehicles: readonly { id: string }[];
+}): string {
+  const assignment = input.assignment;
+  if (!assignment || assignment.status !== "ACTIVE") return "";
+  return input.vehicles.some((vehicle) => vehicle.id === assignment.vehicleId)
+    ? assignment.vehicleId
+    : "";
+}
+
+/**
  * Trip distance from accepted readings. Returns null (incomplete) rather
  * than fabricating a number when either reading is missing or contradictory.
  */

@@ -266,7 +266,7 @@ export const TOURS: readonly TourDefinition[] = [
         target: "expense-ledger",
         title: "The expense ledger",
         description:
-          "Every cost with its vehicle, category and status. Pending and approved costs are counted; rejected and voided ones stay in the ledger for the record but are left out of the totals.",
+          "Every cost with its vehicle, category and date. Recorded costs are counted; voided ones stay in the ledger for the record but are left out of the totals.",
         side: "top",
       },
       {
@@ -274,18 +274,18 @@ export const TOURS: readonly TourDefinition[] = [
         target: "expense-create",
         title: "Record an expense",
         description:
-          "Choose the vehicle, link a work order or service when one applies, and add the supplier and date. A new cost lands as Pending, waiting for a sign-off.",
+          "Choose the vehicle, link a work order or service when one applies, and add the supplier and date. The cost is recorded immediately — no approval step in this app.",
         side: "left",
         requires: [PERMISSIONS.EXPENSE_CREATE],
       },
       {
         route: "/expenses",
         target: "expense-totals",
-        title: "Sign costs off",
+        title: "Correct a cost",
         description:
-          "Approve a cost to count it, or reject it with a reason — whoever recorded it sees why. Void reverses a cost that was already approved. The Awaiting approval figure is what still needs a decision from you.",
+          "If an entry is wrong, void it with a reason. The record stays for audit, is excluded from the totals, and can be corrected immediately without waiting for approval.",
         side: "left",
-        requires: [PERMISSIONS.EXPENSE_APPROVE],
+        requires: [PERMISSIONS.EXPENSE_VOID],
       },
       {
         route: "/expenses",

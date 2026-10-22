@@ -71,7 +71,7 @@ export function RecordTripDialog({
   const [advanced, setAdvanced] = useState(false);
 
   // Form state
-  const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? vehicles[0]?.id ?? "");
+  const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? "");
   const [tripDate, setTripDate] = useState(defaultDate);
   const [purpose, setPurpose] = useState<string>("OTHER");
   const [externalReference, setExternalReference] = useState("");
@@ -114,7 +114,7 @@ export function RecordTripDialog({
   );
 
   const resetForm = useCallback(() => {
-    const firstVehicleId = defaultVehicleId ?? vehicles[0]?.id ?? "";
+    const firstVehicleId = defaultVehicleId ?? "";
     setError(null);
     setCalcError(null);
     setFieldErrors({});
@@ -139,7 +139,7 @@ export function RecordTripDialog({
     setRouteApproximate(false);
     setSavedTripId(null);
     prevStopsRef.current = "";
-  }, [defaultVehicleId, defaultDate, vehicles, vehicleOdometer]);
+  }, [defaultVehicleId, defaultDate, vehicleOdometer]);
 
   const handleOpen = useCallback(() => {
     resetForm();
@@ -510,6 +510,9 @@ export function RecordTripDialog({
                 onChange={(e) => changeVehicle(e.target.value)}
                 required
               >
+                <option value="" disabled>
+                  Choose the vehicle
+                </option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.label}

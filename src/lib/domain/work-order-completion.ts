@@ -37,6 +37,12 @@ export interface CompleteWorkOrderInput {
   /** Issue ids this work resolves. */
   resolvedIssueIds: string[];
   recordedByUserId: string;
+  /**
+   * Optional repair cost the caller wants recorded. Stored as intent on the
+   * service record (never as money) so a retry can create the linked expense
+   * if the first attempt failed after completion.
+   */
+  repairCost?: { amountMinor: number; currency: string };
 }
 
 export interface CompleteWorkOrderResult {
@@ -248,6 +254,8 @@ export async function completeWorkOrder(
     technicianName: input.technicianName,
     notes: input.notes,
     expenseIds: [],
+    repairCostMinor: input.repairCost?.amountMinor,
+    repairCostCurrency: input.repairCost?.currency,
     resolvedIssueIds: input.resolvedIssueIds,
     recordedByUserId: input.recordedByUserId,
     createdAt: now,

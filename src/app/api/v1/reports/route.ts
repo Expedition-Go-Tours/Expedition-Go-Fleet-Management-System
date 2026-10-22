@@ -8,6 +8,7 @@ import { PERMISSIONS, rolesHavePermission } from "@/lib/auth/permissions";
 import {
   ISSUE_CATEGORIES,
   REPORT_SEVERITIES,
+  resolveIssueSafety,
   type IssueCategory,
   type ReportSeverity,
 } from "@/lib/domain/report";
@@ -75,10 +76,20 @@ export async function POST(request: NextRequest) {
     const vehicleId = typeof body.vehicleId === "string" ? body.vehicleId : "";
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const description = typeof body.description === "string" ? body.description.trim() : "";
-    const severity = typeof body.severity === "string" ? body.severity : "MEDIUM";
+    const severityInput = typeof body.severity === "string" ? body.severity : "MEDIUM";
     const category = typeof body.category === "string" ? body.category : undefined;
-    const safetyCritical = body.safetyCritical === true || severity === "CRITICAL";
-    const immobilized = body.immobilized === true;
+    if (body.drivable !== undefined && typeof body.drivable !== "boolean") {
+      throw ApiError.badRequest("drivable must be true or false");
+    }
+    const safety = resolveIssueSafety({
+      drivable: typeof body.drivable === "boolean" ? body.drivable : undefined,
+      severity: severityInput,
+      safetyCritical: body.safetyCritical === true,
+      immobilized: body.immobilized === true,
+    });
+    const severity = safety.severity;
+    const safetyCritical = safety.safetyCritical;
+    const immobilized = safety.immobilized;
     const odometerKm =
       typeof body.odometerKm === "number" && Number.isSafeInteger(body.odometerKm)
         ? body.odometerKm
@@ -94,7 +105,7 @@ export async function POST(request: NextRequest) {
     if (!description || description.length > 5000) {
       throw ApiError.badRequest("Description is required (max 5000 chars)");
     }
-    if (!(REPORT_SEVERITIES as readonly string[]).includes(severity)) {
+    if (!(REPORT_SEVERITIES as readonly string[]).includes(severityInput)) {
       throw ApiError.badRequest(`Severity must be one of: ${REPORT_SEVERITIES.join(", ")}`);
     }
     if (category && !(ISSUE_CATEGORIES as readonly string[]).includes(category)) {

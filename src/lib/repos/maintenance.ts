@@ -247,6 +247,13 @@ export interface ServiceRecord {
   notes?: string;
   /** Expense ids for parts/labour — referenced, never copied into totals. */
   expenseIds: string[];
+  /**
+   * Cost the person completing the service asked to record. Persisted in the
+   * same transaction as the service record so a retry can finish the linked
+   * expense even if the first request died between the two writes.
+   */
+  repairCostMinor?: number;
+  repairCostCurrency?: string;
   /** Issue ids this service resolved. */
   resolvedIssueIds: string[];
   recordedByUserId: string;
@@ -275,6 +282,11 @@ function toServiceRecord(id: string, data: DocumentData): ServiceRecord {
     technicianName: data.technicianName ? String(data.technicianName) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
     expenseIds: Array.isArray(data.expenseIds) ? data.expenseIds.map(String) : [],
+    repairCostMinor:
+      data.repairCostMinor === undefined || data.repairCostMinor === null
+        ? undefined
+        : Number(data.repairCostMinor),
+    repairCostCurrency: data.repairCostCurrency ? String(data.repairCostCurrency) : undefined,
     resolvedIssueIds: Array.isArray(data.resolvedIssueIds) ? data.resolvedIssueIds.map(String) : [],
     recordedByUserId: String(data.recordedByUserId ?? ""),
     createdAt: toDate(data.createdAt) ?? new Date(0),

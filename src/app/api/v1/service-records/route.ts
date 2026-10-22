@@ -12,7 +12,12 @@ import {
 } from "@/lib/repos/maintenance";
 import { ServiceLogError, logService } from "@/lib/domain/service-logging";
 import { resolveRepairCost } from "@/lib/domain/work-order-completion";
-import { createExpense } from "@/lib/repos/expenses";
+import {
+  ensureServiceExpense,
+  findExpenseByServiceRecordId,
+  getExpenseById,
+} from "@/lib/repos/expenses";
+import { recordServiceCost } from "@/lib/domain/service-cost";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { ApiError } from "@/lib/api/errors";
 
@@ -109,9 +114,10 @@ export async function POST(request: NextRequest) {
       scheduleIds,
       recordedByUserId: context.user.id,
       clientToken: typeof body.clientToken === "string" ? body.clientToken : undefined,
+      repairCost: repairCost ?? undefined,
     });
 
-    let expense: Awaited<ReturnType<typeof createExpense>> | null = null;
+    let expense: Awaited<ReturnType<typeof getExpenseById>> = null;
     if (!result.duplicate) {
       await writeAuditEvent({
         eventType: AUDIT_EVENTS.SERVICE_RECORDED,
@@ -126,35 +132,91 @@ export async function POST(request: NextRequest) {
         },
         requestId,
       });
+    }
 
-      if (repairCost) {
-        expense = await createExpense({
-          vehicleId,
-          category: "MAINTENANCE",
-          amountMinor: repairCost.amountMinor,
-          currency: repairCost.currency,
-          description: workPerformed.slice(0, 200),
-          supplierName:
-            typeof body.providerName === "string" ? body.providerName.slice(0, 200) : undefined,
-          serviceRecordId: result.serviceRecord.id,
-          incurredOn: completedAt,
-          createdBy: context.user.id,
-        });
-        await linkExpenseToServiceRecord(result.serviceRecord.id, expense.id);
-        await writeAuditEvent({
-          eventType: AUDIT_EVENTS.EXPENSE_CREATED,
-          actorId: context.user.id,
-          entityType: "expense",
-          entityId: expense.id,
-          after: {
-            vehicleId,
-            category: "MAINTENANCE",
-            amountMinor: repairCost.amountMinor,
-            currency: repairCost.currency,
-            serviceRecordId: result.serviceRecord.id,
+    // Reconcile the optional cost on every attempt (see the work-order route).
+    // A duplicate log or a retried failed request reuses the same expense.
+    const effectiveCost =
+      repairCost ??
+      (result.serviceRecord.repairCostMinor !== undefined && result.serviceRecord.repairCostCurrency
+        ? {
+            amountMinor: result.serviceRecord.repairCostMinor,
+            currency: result.serviceRecord.repairCostCurrency,
+          }
+        : null);
+
+    if (effectiveCost) {
+      try {
+        const existingExpenseId =
+          result.serviceRecord.expenseIds[0] ??
+          (await findExpenseByServiceRecordId(result.serviceRecord.id))?.id;
+        const cost = await recordServiceCost(
+          {
+            ensureExpense: async (record) => {
+              const ensured = await ensureServiceExpense({
+                id: record.id,
+                vehicleId: record.vehicleId,
+                workOrderId: record.workOrderId,
+                serviceRecordId: record.serviceRecordId,
+                category: record.category,
+                amountMinor: record.amountMinor,
+                currency: record.currency,
+                description: record.description,
+                supplierName: record.supplierName,
+                providerId: record.providerId,
+                incurredOn: record.incurredOn,
+                createdBy: record.createdBy,
+              });
+              return { expenseId: ensured.expense.id, created: ensured.created };
+            },
+            linkServiceRecord: linkExpenseToServiceRecord,
           },
-          requestId,
-        });
+          {
+            serviceRecordId: result.serviceRecord.id,
+            vehicleId,
+            amountMinor: effectiveCost.amountMinor,
+            currency: effectiveCost.currency,
+            description: workPerformed,
+            supplierName:
+              typeof body.providerName === "string" ? body.providerName.slice(0, 200) : undefined,
+            incurredOn: completedAt,
+            createdBy: context.user.id,
+            existingExpenseId,
+          },
+        );
+        expense = await getExpenseById(cost.expenseId);
+
+        if (cost.created) {
+          await writeAuditEvent({
+            eventType: AUDIT_EVENTS.EXPENSE_CREATED,
+            actorId: context.user.id,
+            entityType: "expense",
+            entityId: cost.expenseId,
+            after: {
+              vehicleId,
+              category: "MAINTENANCE",
+              amountMinor: effectiveCost.amountMinor,
+              currency: effectiveCost.currency,
+              serviceRecordId: result.serviceRecord.id,
+            },
+            requestId,
+          });
+        }
+      } catch (costError) {
+        console.error("[service-logging] cost not recorded; retry will recover", costError);
+        return NextResponse.json(
+          {
+            error: {
+              code: "COST_NOT_RECORDED",
+              message:
+                "The service was recorded, but its cost could not be saved. Submit it again to finish the cost — the service will not be duplicated.",
+            },
+            serviceRecord: result.serviceRecord,
+            duplicate: result.duplicate,
+            retryable: true,
+          },
+          { status: 502 },
+        );
       }
     }
 

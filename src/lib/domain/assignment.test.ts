@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeTripDistance } from "@/lib/domain/assignment";
+import { computeTripDistance, defaultVehicleForLogging } from "@/lib/domain/assignment";
 
 describe("trip distance from accepted odometer readings", () => {
   it("is end − start when both readings exist", () => {
@@ -44,5 +44,44 @@ describe("trip distance from accepted odometer readings", () => {
     const result = computeTripDistance(80325, 80000);
     expect(result).toEqual({ distanceKm: null, complete: false, conflict: true });
     expect(result.distanceKm).toBeNull();
+  });
+});
+
+describe("defaultVehicleForLogging — authoritative assignment, never a guess", () => {
+  const vehicles = [{ id: "veh_1" }, { id: "veh_2" }];
+
+  it("uses the vehicle of the driver's active assignment", () => {
+    expect(
+      defaultVehicleForLogging({
+        assignment: { vehicleId: "veh_2", status: "ACTIVE" },
+        vehicles,
+      }),
+    ).toBe("veh_2");
+  });
+
+  it("requires an intentional choice when there is no active assignment", () => {
+    // Never fall back to the first vehicle in the list.
+    expect(defaultVehicleForLogging({ assignment: null, vehicles })).toBe("");
+    expect(
+      defaultVehicleForLogging({
+        assignment: { vehicleId: "veh_2", status: "COMPLETED" },
+        vehicles,
+      }),
+    ).toBe("");
+    expect(
+      defaultVehicleForLogging({
+        assignment: { vehicleId: "veh_2", status: "CANCELLED" },
+        vehicles,
+      }),
+    ).toBe("");
+  });
+
+  it("ignores an assignment whose vehicle is not in the authoritative list", () => {
+    expect(
+      defaultVehicleForLogging({
+        assignment: { vehicleId: "veh_missing", status: "ACTIVE" },
+        vehicles,
+      }),
+    ).toBe("");
   });
 });

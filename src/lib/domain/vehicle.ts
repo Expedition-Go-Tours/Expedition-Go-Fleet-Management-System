@@ -89,3 +89,19 @@ export const VEHICLE_STATUS_ACTIONS = {
     to: "ARCHIVED",
   },
 } as const satisfies ActionMap<VehicleStatus>;
+
+/**
+ * Server-side safety invariant for returning a held vehicle to service.
+ * Holding `vehicle:release` is necessary but never sufficient: any unresolved
+ * critical issue blocks the release. Returns the refusal message, or null when
+ * the release may proceed.
+ */
+export function releaseBlockReason(openCriticalIssues: number): string | null {
+  if (!Number.isSafeInteger(openCriticalIssues) || openCriticalIssues < 0) {
+    // Fail closed: an unknown count must never read as "nothing outstanding".
+    return "Cannot release: the open safety issues could not be checked.";
+  }
+  return openCriticalIssues > 0
+    ? `Cannot release: ${openCriticalIssues} open critical issue(s) must be resolved first.`
+    : null;
+}

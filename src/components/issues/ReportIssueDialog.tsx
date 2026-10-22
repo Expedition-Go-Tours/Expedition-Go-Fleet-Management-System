@@ -39,12 +39,15 @@ export function ReportIssueDialog({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [drivable, setDrivable] = useState(true);
+  const [drivable, setDrivable] = useState<boolean | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const clientTokenRef = useRef<string>("");
 
   function openDialog() {
     clientTokenRef.current = crypto.randomUUID();
+    setDrivable(null);
+    setShowDetail(false);
+    setError(null);
     setOpen(true);
   }
 
@@ -66,7 +69,7 @@ export function ReportIssueDialog({
       });
       setOpen(false);
       (event.target as HTMLFormElement).reset();
-      setDrivable(true);
+      setDrivable(null);
       setShowDetail(false);
       router.refresh();
     } catch (err) {
@@ -148,30 +151,69 @@ export function ReportIssueDialog({
             />
           </Field>
 
-          <div className="flex flex-col gap-2">
-            <label className="hover:bg-subtle border-hairline flex cursor-pointer items-center gap-2 rounded-md border p-2.5">
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-body-xs text-muted mb-1">
+              Can this vehicle be driven safely right now?{" "}
+              <span className="text-error" aria-hidden="true">
+                *
+              </span>
+            </legend>
+            <label
+              className={`hover:bg-subtle flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors ${
+                drivable === true ? "border-success/50 bg-success/5" : "border-hairline"
+              }`}
+            >
               <input
-                type="checkbox"
+                type="radio"
                 name="drivable"
-                checked={drivable}
-                onChange={(event) => setDrivable(event.target.checked)}
-                className="accent-orange h-4 w-4"
+                value="yes"
+                checked={drivable === true}
+                onChange={() => setDrivable(true)}
+                className="accent-orange mt-0.5 h-4 w-4"
               />
-              <span className="text-data text-ink">The vehicle can still be driven</span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-data text-ink font-medium">Yes, it is safe to drive</span>
+                <span className="text-body-xs text-muted">
+                  Keep using the vehicle while the problem is repaired.
+                </span>
+              </span>
             </label>
-            {!drivable && (
+            <label
+              className={`hover:bg-subtle flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors ${
+                drivable === false ? "border-error/50 bg-error/5" : "border-hairline"
+              }`}
+            >
+              <input
+                type="radio"
+                name="drivable"
+                value="no"
+                checked={drivable === false}
+                onChange={() => setDrivable(false)}
+                className="accent-orange mt-0.5 h-4 w-4"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-data text-ink font-medium">
+                  No, do not drive this vehicle
+                </span>
+                <span className="text-body-xs text-muted">
+                  We will take it out of service until the problem is fixed.
+                </span>
+              </span>
+            </label>
+            {drivable === false && (
               <p className="text-body-xs text-error">
-                This places the vehicle on safety hold immediately — it will not be assignable until
-                the repair is completed and it is confirmed back in service.
+                This report is recorded as critical. The vehicle goes on safety hold immediately and
+                cannot be assigned until the repair is completed and an administrator confirms it is
+                back in service.
               </p>
             )}
-          </div>
+          </fieldset>
 
-          {!drivable ? (
+          {drivable === false ? (
             <p className="text-body-xs text-muted">
               Reported as critical — severity is set automatically for an undrivable vehicle.
             </p>
-          ) : (
+          ) : drivable === true ? (
             <>
               <button
                 type="button"
@@ -206,14 +248,14 @@ export function ReportIssueDialog({
                 </div>
               )}
             </>
-          )}
+          ) : null}
         </form>
       </Modal>
     </>
   );
 }
 
-function readValues(form: FormData, drivable: boolean): IssueIntakeValues {
+function readValues(form: FormData, drivable: boolean | null): IssueIntakeValues {
   return {
     vehicleId: String(form.get("vehicleId") ?? ""),
     title: String(form.get("title") ?? ""),

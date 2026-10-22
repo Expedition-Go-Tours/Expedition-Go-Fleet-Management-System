@@ -9,14 +9,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
-import { availableExpenseActions, EXPENSE_CATEGORIES } from "@/lib/domain/expense";
-import { formatMoney, humanizeEnum } from "@/lib/format";
 import {
-  listExpenses,
-  countExpenses,
-  pendingExpensesMinor,
-  totalExpensesMinor,
-} from "@/lib/repos/expenses";
+  availableExpenseActions,
+  expenseStatusLabel,
+  EXPENSE_CATEGORIES,
+  summarizeExpenses,
+} from "@/lib/domain/expense";
+import { formatDate, formatMoney, humanizeEnum } from "@/lib/format";
+import { listExpenses } from "@/lib/repos/expenses";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { listWorkOrders } from "@/lib/repos/work-orders";
 import Link from "next/link";
@@ -45,15 +45,23 @@ export default async function ExpensesPage({
   const pageRaw = Number(params.page);
   const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
 
-  const [expenses, workOrders, vehicles, expenseTotal, countedMinor, awaitingMinor] =
-    await Promise.all([
-      listExpenses({ category, vehicleId, limit: 500 }),
-      listWorkOrders({ limit: 200 }),
-      listVehicles(),
-      countExpenses({ vehicleId }),
-      totalExpensesMinor({ vehicleId }),
-      pendingExpensesMinor({ vehicleId }),
-    ]);
+  const [allExpenses, workOrders, vehicles] = await Promise.all([
+    listExpenses({ limit: 2000 }),
+    listWorkOrders({ limit: 200 }),
+    listVehicles(),
+  ]);
+
+  // Category narrows the visible ledger only; vehicle narrows the ledger and
+  // the totals, matching the filter the user applied.
+  const expenses = allExpenses.filter(
+    (expense) =>
+      (!category || expense.category === category) &&
+      (!vehicleId || expense.vehicleId === vehicleId),
+  );
+  const summary = summarizeExpenses(
+    vehicleId ? allExpenses.filter((expense) => expense.vehicleId === vehicleId) : allExpenses,
+  );
+  const expenseTotal = expenses.length;
 
   const totalPages = Math.max(1, Math.ceil(expenses.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -115,11 +123,13 @@ export default async function ExpensesPage({
               <ul className="divide-hairline divide-y">
                 {rows.map((expense) => {
                   // Record-only ledger: availableExpenseActions() applies the
-                  // business rule, so approve/reject never reach a screen.
+                  // business rule, so void is the only action a screen can show.
                   const actions = availableExpenseActions(expense.status, permissions).map(
                     (action) => ({ action, label: LABELS[action] ?? action }),
                   );
                   const workOrderLabel = woTitle(expense.workOrderId);
+                  const linkedWork =
+                    workOrderLabel ?? (expense.serviceRecordId ? "Service log" : null);
 
                   return (
                     <li key={expense.id} className="flex flex-col gap-3 px-5 py-4">
@@ -133,15 +143,24 @@ export default async function ExpensesPage({
                             >
                               {vehicleName(expense.vehicleId)}
                             </Link>{" "}
-                            · {humanizeEnum(expense.category)}
-                            {workOrderLabel ? ` · ${workOrderLabel}` : ""}
+                            · {humanizeEnum(expense.category)} · {formatDate(expense.incurredOn)}
+                            {linkedWork ? ` · ${linkedWork}` : ""}
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
                           <span className="font-heading text-heading-sm font-semibold">
                             {formatMoney(expense.amountMinor, expense.currency)}
                           </span>
-                          <StatusBadge status={expense.status} />
+                          <StatusBadge
+                            status={expenseStatusLabel(expense.status)}
+                            tone={
+                              expense.status === "VOID"
+                                ? "danger"
+                                : expense.status === "REJECTED"
+                                  ? "muted"
+                                  : "success"
+                            }
+                          />
                         </div>
                       </div>
                       {actions.length > 0 && (
@@ -193,28 +212,67 @@ export default async function ExpensesPage({
         </div>
 
         <div className="flex flex-col gap-6">
-          {canExport && (
-            <Card title="Totals" icon={ReceiptText} dataTour="expense-totals">
-              <dl className="divide-hairline divide-y">
-                <div className="flex items-baseline justify-between gap-3 px-5 py-3">
-                  <dt className="text-body-xs text-muted">Counted total</dt>
-                  <dd className="font-heading text-heading-sm font-semibold">
-                    {formatMoney(countedMinor, "GHS")}
-                  </dd>
-                </div>
-                <div className="flex items-baseline justify-between gap-3 px-5 py-3">
-                  <dt className="text-body-xs text-muted">Awaiting approval</dt>
-                  <dd className="font-heading text-heading-sm font-semibold">
-                    {formatMoney(awaitingMinor, "GHS")}
-                  </dd>
-                </div>
-              </dl>
-              <p className="text-body-xs text-muted border-hairline border-t px-5 py-3">
-                Expenses are recorded here and approved outside the app. Voided entries are kept for
-                audit but excluded from totals.
-              </p>
-            </Card>
-          )}
+          <Card title="Recorded totals" icon={ReceiptText} dataTour="expense-totals">
+            <dl className="divide-hairline divide-y">
+              <div className="flex items-baseline justify-between gap-3 px-5 py-3">
+                <dt className="text-body-xs text-muted">Recorded total</dt>
+                <dd className="font-heading text-heading-sm font-semibold">
+                  {formatMoney(summary.countedMinor, "GHS")}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3 px-5 py-3">
+                <dt className="text-body-xs text-muted">This month</dt>
+                <dd className="font-heading text-heading-sm font-semibold">
+                  {formatMoney(summary.monthMinor, "GHS")}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3 px-5 py-3">
+                <dt className="text-body-xs text-muted">Entries</dt>
+                <dd className="font-heading text-heading-sm font-semibold">{summary.count}</dd>
+              </div>
+            </dl>
+
+            {summary.byCategory.length > 0 && (
+              <div className="border-hairline border-t px-5 py-3">
+                <p className="text-body-xs text-muted mb-2 font-medium">By category</p>
+                <ul className="flex flex-col gap-1.5">
+                  {summary.byCategory.slice(0, 5).map((row) => (
+                    <li key={row.key} className="flex items-baseline justify-between gap-3">
+                      <span className="text-body-xs">
+                        {humanizeEnum(row.key)} <span className="text-muted">({row.count})</span>
+                      </span>
+                      <span className="text-data-xs font-medium tabular-nums">
+                        {formatMoney(row.amountMinor)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {summary.byVehicle.length > 0 && (
+              <div className="border-hairline border-t px-5 py-3">
+                <p className="text-body-xs text-muted mb-2 font-medium">By vehicle</p>
+                <ul className="flex flex-col gap-1.5">
+                  {summary.byVehicle.slice(0, 5).map((row) => (
+                    <li key={row.key} className="flex items-baseline justify-between gap-3">
+                      <span className="text-body-xs">
+                        {vehicleName(row.key)} <span className="text-muted">({row.count})</span>
+                      </span>
+                      <span className="text-data-xs font-medium tabular-nums">
+                        {formatMoney(row.amountMinor)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <p className="text-body-xs text-muted border-hairline border-t px-5 py-3">
+              Expenses are recorded here and approved outside the app. Voided entries are kept for
+              audit but excluded from totals.
+            </p>
+          </Card>
           {canCreate && (
             <Card title="Record expense" icon={FilePlus2} dataTour="expense-create">
               <div className="p-5">

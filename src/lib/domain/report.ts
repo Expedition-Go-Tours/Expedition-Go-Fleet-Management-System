@@ -36,8 +36,12 @@ export interface IssueIntakeValues {
   vehicleId: string;
   title: string;
   description: string;
-  /** False means the vehicle must not be driven → server applies a safety hold. */
-  drivable: boolean;
+  /**
+   * The reporter's explicit answer: true = safe to drive, false = do not
+   * drive. Null means they have not answered — submission is refused rather
+   * than defaulting to "safe".
+   */
+  drivable: boolean | null;
   /** Advanced ("More detail") controls — both optional. */
   severity: string;
   category: string;
@@ -78,6 +82,9 @@ export function buildIssueIntakePayload(
     return { ok: false, message: "Describe the problem (max 5000 characters)." };
   }
 
+  if (values.drivable !== true && values.drivable !== false) {
+    return { ok: false, message: "Tell us whether the vehicle is safe to drive." };
+  }
   const drivable = values.drivable === true;
   if (!drivable) {
     return {
@@ -93,9 +100,11 @@ export function buildIssueIntakePayload(
     };
   }
 
-  const severity = (REPORT_SEVERITIES as readonly string[]).includes(values.severity)
-    ? (values.severity as ReportSeverity)
-    : "MEDIUM";
+  const safety = resolveIssueSafety({
+    drivable: true,
+    severity: values.severity,
+    safetyCritical: values.severity === "CRITICAL",
+  });
   const category = (ISSUE_CATEGORIES as readonly string[]).includes(values.category)
     ? (values.category as IssueCategory)
     : undefined;
@@ -106,13 +115,41 @@ export function buildIssueIntakePayload(
       vehicleId,
       title,
       description,
-      severity,
+      severity: safety.severity,
       ...(category ? { category } : {}),
       // The server treats either flag as safety-critical; keep them in step so
       // an advanced CRITICAL report still restricts the vehicle.
-      safetyCritical: severity === "CRITICAL",
-      immobilized: false,
+      safetyCritical: safety.safetyCritical,
+      immobilized: safety.immobilized,
     },
+  };
+}
+
+/**
+ * Server-side safety decision. The UI asks the question, but the API must not
+ * let a request claim "safe" while carrying an unsafe signal: any explicit
+ * "do not drive", CRITICAL severity, safety-critical or immobilized flag keeps
+ * the vehicle restricted. A `drivable: false` answer always wins and is
+ * recorded as CRITICAL + safety-critical + immobilized.
+ */
+export function resolveIssueSafety(signals: {
+  drivable?: boolean | null;
+  severity?: string;
+  safetyCritical?: boolean;
+  immobilized?: boolean;
+}): { severity: ReportSeverity; safetyCritical: boolean; immobilized: boolean } {
+  const severity = (REPORT_SEVERITIES as readonly string[]).includes(String(signals.severity))
+    ? (signals.severity as ReportSeverity)
+    : "MEDIUM";
+  const declaredUndrivable = signals.drivable === false;
+  return {
+    severity: declaredUndrivable ? "CRITICAL" : severity,
+    safetyCritical:
+      declaredUndrivable ||
+      signals.safetyCritical === true ||
+      signals.immobilized === true ||
+      severity === "CRITICAL",
+    immobilized: declaredUndrivable || signals.immobilized === true,
   };
 }
 

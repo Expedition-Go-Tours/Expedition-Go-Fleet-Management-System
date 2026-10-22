@@ -19,7 +19,7 @@ Terminology is fixed here; code uses these names.
 | `WorkOrderIssueLink` | `workOrderIssues` | Many-to-many issue↔work-order links |
 | `VehicleAssignment` | `assignments` | Who used which vehicle, when, for what (trip/journey) |
 | `Inspection` | `inspections` | Structured pre-trip/return checklist results |
-| `Expense` | `expenses` | Recorded financial cost (PENDING until approved) |
+| `Expense` | `expenses` | Recorded financial cost (stored PENDING, presented as Recorded) |
 | `FuelEntry` | `fuelEntries` | Fuel purchase; links to canonical `Expense` for cost |
 | `VehicleDocument` | `vehicleDocuments` | Registration/insurance/permit + expiry |
 | `Notification` | `notifications` | In-app actionable notification (idempotent via `dedupeKey`) |
@@ -84,12 +84,21 @@ Release: `vehicle:release` + reason + server check of open critical issues.
   incident and in `incident.updated` audit events. Status is the only
   action-gated field — descriptive fields edit via `incident:manage` PATCH.
 
-## Expense model (recorded in-app, approved outside)
+## Expense model (recorded in-app; approval is external)
 
-The app records; approval is an **external decision**. Statuses remain
-`PENDING → APPROVED | REJECTED`, with `APPROVED → VOID(reason, actor)` as the
-only in-app correction. The `approve`/`reject` API actions remain behind
-`expense:approve` (from `PENDING`, rejection with a reason) for an external
-process or integration — **no screen exposes them**. Reports count `PENDING`
-and `APPROVED` only. Fuel entries create/reference one canonical expense;
-reports count each pesewa once via `expenseId`.
+The app records; approval is an **external decision that does not happen in
+this app**. Statuses `PENDING → APPROVED | REJECTED` remain only as legacy
+storage compatibility: a newly recorded cost is stored as `PENDING` and shown
+as **Recorded**, never as "awaiting approval". The only lifecycle action is
+`PENDING | APPROVED → VOID(reason, actor)` behind `expense:void`, available
+immediately after recording. The former `approve`/`reject` API actions were
+removed with the unused `expense:approve` permission; no external consumer
+existed. Reports count `PENDING` and `APPROVED` only, so legacy rows keep
+their historical meaning. Fuel entries create/reference one canonical
+expense; reports count each pesewa once via `expenseId`.
+
+Service completions and direct service logs may each carry at most one linked
+MAINTENANCE expense. The expense id is deterministic
+(`svc_<serviceRecordId>`), and the service record stores the requested cost
+as intent until the expense is linked, so a retry after a partial failure
+finishes the cost instead of silently losing it.

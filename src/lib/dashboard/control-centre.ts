@@ -24,6 +24,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { summariseFleet, type FleetSummary } from "@/lib/dashboard/fleet-summary";
 import { computeScheduleStatus, type ScheduleStatus } from "@/lib/domain/maintenance";
 import { documentState, DOCUMENT_CATEGORIES } from "@/lib/domain/document";
+import { isCountedExpense } from "@/lib/domain/expense";
 import { listAssignments } from "@/lib/repos/assignments";
 import { listDocuments } from "@/lib/repos/documents";
 import { listExpenses } from "@/lib/repos/expenses";
@@ -63,7 +64,7 @@ export interface ControlCentre {
   queue: ActionItem[];
   /** Open issues by severity (unprivileged users see only their own). */
   issuesBySeverity?: { severity: string; count: number }[];
-  /** Counted expenses (PENDING + APPROVED) this calendar month. */
+  /** Recorded expenses (stored PENDING or legacy APPROVED) this month. */
   monthExpenses?: { count: number; totalMinor: number };
 }
 
@@ -288,12 +289,12 @@ export async function loadControlCentre(input: {
     result.issuesBySeverity = countBySeverity(mine.filter((i) => i.status !== "CLOSED"));
   }
 
-  // ---- Counted expenses this calendar month ----------------------------------
-  // REJECTED and VOID are not real costs, so they are excluded here too.
+  // ---- Recorded expenses this calendar month --------------------------------
+  // Voided (and legacy rejected) rows are not real costs, so they are excluded.
   if (canReadExpenses) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const counted = expenses.filter(
-      (e) => (e.status === "PENDING" || e.status === "APPROVED") && e.incurredOn >= monthStart,
+      (e) => isCountedExpense(e.status) && e.incurredOn >= monthStart,
     );
     result.monthExpenses = {
       count: counted.length,

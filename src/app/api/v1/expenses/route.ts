@@ -58,10 +58,12 @@ export async function GET(request: NextRequest) {
  *
  * The VEHICLE is the primary association; a work order is optional context
  * (repair costs may be logged before/without a work order, and general costs
- * like insurance never have one). A new expense is always PENDING — an
- * approver (Operations/Admin) signs it off via
- * `POST /api/v1/expenses/[id]/status`. Amount is given as a decimal
- * string/number in major units and stored as integer minor units (never floats).
+ * like insurance never have one). The expense is recorded immediately as
+ * PENDING (stored status kept for backward compatibility, presented as
+ * "Recorded"); approval happens outside the app and a mistake is corrected via
+ * `POST /api/v1/expenses/[id]/status { action: "void", reason }`. Amount is
+ * given as a decimal string/number in major units and stored as integer minor
+ * units (never floats).
  */
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();

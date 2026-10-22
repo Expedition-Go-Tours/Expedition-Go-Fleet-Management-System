@@ -24,9 +24,11 @@ import { formatMoney } from "@/lib/format";
 export function AddFuelDialog({
   canCreate,
   vehicles,
+  defaultVehicleId,
 }: {
   canCreate: boolean;
   vehicles: { id: string; label: string }[];
+  defaultVehicleId?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -112,7 +114,7 @@ export function AddFuelDialog({
             </p>
           )}
           <Field label="Vehicle" required htmlFor="af-vehicle">
-            <Select id="af-vehicle" name="vehicleId" defaultValue="" required>
+            <Select id="af-vehicle" name="vehicleId" defaultValue={defaultVehicleId ?? ""} required>
               <option value="" disabled>
                 Choose a vehicle
               </option>

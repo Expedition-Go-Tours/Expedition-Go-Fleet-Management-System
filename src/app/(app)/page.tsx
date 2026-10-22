@@ -25,8 +25,10 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { assertMfaEnrollmentComplete, requireAuthContext } from "@/lib/auth/guards";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { loadControlCentre, type ActionItem } from "@/lib/dashboard/control-centre";
+import { defaultVehicleForLogging } from "@/lib/domain/assignment";
 import { listAllSchedules } from "@/lib/repos/maintenance";
 import { listVehicles } from "@/lib/repos/vehicles";
+import { getActiveAssignmentForDriver } from "@/lib/repos/assignments";
 import { formatMoney, formatNumber } from "@/lib/format";
 
 export const metadata = { title: "Fleet control centre" };
@@ -60,10 +62,14 @@ export default async function DashboardPage() {
   const canRecordFuel = permissions.includes(PERMISSIONS.FUEL_CREATE);
   const canRecordTrip = permissions.includes(PERMISSIONS.TRIP_CREATE);
   const hasQuickAction = canReportIssue || canLogService || canRecordFuel || canRecordTrip;
-  const [vehicles, schedules] = await Promise.all([
+  const [assignment, vehicles, schedules] = await Promise.all([
+    hasQuickAction ? getActiveAssignmentForDriver(context.user.id) : Promise.resolve(null),
     hasQuickAction ? listVehicles() : Promise.resolve([]),
     canLogService ? listAllSchedules() : Promise.resolve([]),
   ]);
+  // The driver's assigned vehicle is the only safe default. Operations/admin
+  // users without an active assignment choose deliberately — never vehicles[0].
+  const assignedVehicleId = defaultVehicleForLogging({ assignment, vehicles });
   const vehicleOptions = vehicles
     .slice()
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
@@ -115,18 +121,36 @@ export default async function DashboardPage() {
       {hasQuickAction && (
         <Card title="Quick actions" icon={Zap} data-tour="dashboard-actions">
           <div className="flex flex-wrap gap-2 p-5">
-            {canReportIssue && <ReportIssueDialog variant="primary" vehicles={vehicleOptions} />}
+            {canReportIssue && (
+              <ReportIssueDialog
+                variant="primary"
+                vehicles={vehicleOptions}
+                defaultVehicleId={assignedVehicleId}
+              />
+            )}
             {canRecordTrip && (
               <RecordTripDialog
                 vehicles={vehicleOptions}
+                defaultVehicleId={assignedVehicleId}
                 driverUserId={context.user.id}
                 defaultDate={todayDate}
+                assignmentId={assignment?.id}
               />
             )}
             {canLogService && (
-              <LogServiceDialog vehicles={vehicleOptions} schedules={scheduleOptions} />
+              <LogServiceDialog
+                vehicles={vehicleOptions}
+                schedules={scheduleOptions}
+                defaultVehicleId={assignedVehicleId}
+              />
             )}
-            {canRecordFuel && <AddFuelDialog canCreate vehicles={vehicleOptions} />}
+            {canRecordFuel && (
+              <AddFuelDialog
+                canCreate
+                vehicles={vehicleOptions}
+                defaultVehicleId={assignedVehicleId}
+              />
+            )}
           </div>
         </Card>
       )}
@@ -226,7 +250,7 @@ export default async function DashboardPage() {
         {centre.monthExpenses && (
           <Card
             title="Recorded expenses"
-            description="This calendar month (pending + approved)"
+            description="Recorded this calendar month"
             icon={ReceiptText}
             action={
               <Link href="/expenses" className="text-body-xs text-link font-medium hover:underline">

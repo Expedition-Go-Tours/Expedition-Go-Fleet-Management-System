@@ -1,7 +1,12 @@
 import { makeActionHandler } from "@/lib/api/action";
 import { ApiError } from "@/lib/api/errors";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { VEHICLE_STATUS_ACTIONS, type Vehicle, type VehicleStatus } from "@/lib/domain/vehicle";
+import {
+  VEHICLE_STATUS_ACTIONS,
+  releaseBlockReason,
+  type Vehicle,
+  type VehicleStatus,
+} from "@/lib/domain/vehicle";
 import { AUDIT_EVENTS } from "@/lib/repos/audit";
 import { applyVehicleStatus, countOpenCriticalIssues, getVehicleById } from "@/lib/repos/vehicles";
 import { countOpenWorkOrders } from "@/lib/repos/work-orders";
@@ -44,11 +49,8 @@ export const POST = makeActionHandler<VehicleStatus, Vehicle>({
     // holding the permission is not enough to bypass the safety invariant.
     if (def.permission === PERMISSIONS.VEHICLE_RELEASE) {
       const openCritical = await countOpenCriticalIssues(entity.id);
-      if (openCritical > 0) {
-        throw ApiError.conflict(
-          `Cannot release: ${openCritical} open critical issue(s) must be resolved first.`,
-        );
-      }
+      const blocked = releaseBlockReason(openCritical);
+      if (blocked) throw ApiError.conflict(blocked);
     }
   },
 });

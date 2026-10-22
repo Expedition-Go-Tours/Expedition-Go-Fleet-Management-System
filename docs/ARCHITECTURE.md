@@ -113,12 +113,19 @@ AUTHENTICATION_AUTHORIZATION.md §3.3 for the decision table).
     `OPEN → IN_PROGRESS ⇄ WAITING → COMPLETED → VERIFIED → CLOSED →(reopen) OPEN`;
     completion is evidence-gated (`workPerformed` + `odometerKm`) and
     idempotent per work order (replays return the existing service record).
-  - Expenses are **recorded in the app and approved outside it** (business
-    rule). The API retains `approve`/`reject` behind `expense:approve`
-    (OPERATIONS/ADMIN, from `PENDING`) so an external process or integration
-    can apply decisions, but **no screen offers them**. The only in-app
-    correction is `void` (`expense:void`, from `APPROVED`, reason + audit).
+  - Expenses are **recorded in the app; approval happens outside it**. A new
+    expense is stored as `PENDING` (backward-compatible, presented as
+    Recorded) and can be voided immediately with a reason and audit. The
+    former `approve`/`reject` API actions and `expense:approve` permission
+    were removed because no external consumer used them; legacy
+    `APPROVED`/`REJECTED` rows still read correctly.
     `PENDING`/`APPROVED` count in reports, `REJECTED`/`VOID` do not.
+  - Service costs are reconciled, not trusted to a single write: a completed
+    service stores its optional cost intent, and the linked MAINTENANCE
+    expense uses a deterministic id (`svc_<serviceRecordId>`). A retry after a
+    failure between writes recovers the missing expense/link; concurrent
+    requests cannot create two monetary rows. A missing cost is reported as a
+    retryable partial failure, never as a fully successful completion.
   - Report ownership: `report:read:own` scoping enforced in the list and
     get endpoints; `report:read:all` reads everything. Closing an issue
     requires a resolution, a duplicate link, or a not-actionable reason.

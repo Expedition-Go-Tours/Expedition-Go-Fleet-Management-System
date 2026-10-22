@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIssueIntakePayload, type IssueIntakeValues } from "@/lib/domain/report";
+import {
+  buildIssueIntakePayload,
+  resolveIssueSafety,
+  type IssueIntakeValues,
+} from "@/lib/domain/report";
 
 const drivableForm: IssueIntakeValues = {
   vehicleId: "veh_1",
@@ -65,6 +69,18 @@ describe("buildIssueIntakePayload — one intake for every entry point", () => {
     });
   });
 
+  it("refuses to submit until the safety question is answered", () => {
+    expect(intake({ drivable: null })).toEqual({
+      ok: false,
+      message: "Tell us whether the vehicle is safe to drive.",
+    });
+    // A missing value is unanswered too — it must never default to "safe".
+    expect(intake({ drivable: undefined })).toEqual({
+      ok: false,
+      message: "Tell us whether the vehicle is safe to drive.",
+    });
+  });
+
   it("names the first problem instead of submitting a bad body", () => {
     expect(intake({ vehicleId: "   " })).toEqual({
       ok: false,
@@ -84,5 +100,39 @@ describe("buildIssueIntakePayload — one intake for every entry point", () => {
     expect(intake({ title: "x".repeat(201) }).ok).toBe(false);
     expect(intake({ description: "x".repeat(5001) }).ok).toBe(false);
     expect(intake({ title: "x".repeat(200) }).ok).toBe(true);
+  });
+});
+
+describe("resolveIssueSafety — the server cannot be talked out of a hold", () => {
+  it("treats an explicit 'do not drive' as critical, safety-critical and immobilized", () => {
+    expect(resolveIssueSafety({ drivable: false, severity: "LOW", safetyCritical: false })).toEqual(
+      {
+        severity: "CRITICAL",
+        safetyCritical: true,
+        immobilized: true,
+      },
+    );
+  });
+
+  it("keeps an unsafe signal even when the request also claims the vehicle is drivable", () => {
+    expect(resolveIssueSafety({ drivable: true, immobilized: true })).toMatchObject({
+      immobilized: true,
+      safetyCritical: true,
+    });
+    expect(resolveIssueSafety({ drivable: true, safetyCritical: true })).toMatchObject({
+      safetyCritical: true,
+    });
+  });
+
+  it("honours a safe answer and the reporter's own severity", () => {
+    expect(resolveIssueSafety({ drivable: true, severity: "HIGH" })).toEqual({
+      severity: "HIGH",
+      safetyCritical: false,
+      immobilized: false,
+    });
+  });
+
+  it("falls back to MEDIUM for unknown severities on a safe report", () => {
+    expect(resolveIssueSafety({ drivable: true, severity: "URGENT" }).severity).toBe("MEDIUM");
   });
 });

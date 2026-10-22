@@ -36,6 +36,8 @@ export interface LogServiceInput {
   recordedByUserId: string;
   /** Makes retried submissions idempotent. */
   clientToken?: string;
+  /** Cost to record as the linked MAINTENANCE expense, persisted as intent. */
+  repairCost?: { amountMinor: number; currency: string };
 }
 
 export interface LogServiceResult {
@@ -150,6 +152,8 @@ export async function logService(input: LogServiceInput): Promise<LogServiceResu
     technicianName: input.technicianName,
     notes: input.notes,
     expenseIds: [],
+    repairCostMinor: input.repairCost?.amountMinor,
+    repairCostCurrency: input.repairCost?.currency,
     resolvedIssueIds: [],
     recordedByUserId: input.recordedByUserId,
     createdAt: now,

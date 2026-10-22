@@ -43,14 +43,21 @@ to service while critical defects are unresolved.
 ### 1.1 Report an issue (driver/any employee)
 
 ```
-POST /reports                      { vehicleId, title, description, severity }
+POST /reports                      { vehicleId, title, description, drivable,
+                                     severity?, category? }
 ```
 
 - Any authenticated employee with `report:create` can report (drivers do this
   from their workspace). The issue is persisted as a `VehicleIssue` in
   `maintenanceReports` (collection name retained for audit continuity).
-- State: `OPEN`. Severity `CRITICAL` automatically lifts a vehicle to
-  `SAFETY_HOLD` and raises a notification (§1.5).
+- `drivable` is the reporter's explicit answer and is required by the shared
+  intake: `true` = safe to drive, `false` = do not drive. Neither option is
+  preselected, so "safe" is never submitted by default.
+- The server is authoritative: `drivable: false` is recorded as `CRITICAL` +
+  safety-critical + immobilized regardless of other flags, and lifts the
+  vehicle to `SAFETY_HOLD` with a notification (§1.5). A CRITICAL severity or
+  an immobilized/safety-critical flag also restricts the vehicle.
+- State: `OPEN`. The client token makes retries idempotent.
 
 ### 1.2 Triage (operations)
 
@@ -80,7 +87,8 @@ POST /work-orders/:id/status       { action: "start" }        → IN_PROGRESS
 POST /work-orders/:id/status       { action: "wait", reason } → WAITING
 POST /work-orders/:id/status       { action: "resume" }       → IN_PROGRESS
 POST /work-orders/:id/complete     { workPerformed, odometerKm, scheduleIds?,
-                                     resolvedIssueIds?, providerName?, notes? }
+                                     resolvedIssueIds?, providerName?, notes?,
+                                     costMinor?, currency? }
 POST /work-orders/:id/status       { action: "verify" }       → VERIFIED
 POST /work-orders/:id/status       { action: "close" }        → CLOSED
 POST /work-orders/:id/status       { action: "reopen" }       → OPEN
@@ -101,6 +109,14 @@ POST /work-orders/:id/status       { action: "reopen" }       → OPEN
     (`source: SERVICE_COMPLETION`, `clientToken: svc:<woId>` → idempotent);
   - replays are idempotent: a completed/verified/closed work order returns
     the existing service record with `duplicate: true`.
+- **Cost recovery:** an optional `costMinor` is stored as intent on the
+  service record and reconciled on every completion attempt. The linked
+  MAINTENANCE expense uses a deterministic id (`svc_<serviceRecordId>`), so
+  retries and concurrent requests converge on one monetary record. If the
+  expense or its link cannot be written, the response is an explicit,
+  retryable `502 COST_NOT_RECORDED` — the completion is never reported as
+  fully costed when the money is missing, and a retry finishes the same
+  expense without duplicating the repair.
 - Completion **never releases a safety hold** — releasing is a separate,
   permission-gated `vehicle:release` action (§1.5).
 - `verify` (`work_order:verify`, DRIVER/ADMIN) and `close` complete the
@@ -169,6 +185,9 @@ GET  /odometer/recent              → recent readings across the fleet
 - Only a recorded `ServiceRecord` (work-order completion or
   `POST /service-records` with `service:record`) resets a baseline — reminder
   acknowledgements never do.
+- Direct service logging follows the same cost rule as completion: one
+  linked MAINTENANCE expense per service record, deterministic id, retryable
+  partial failure, and the same odometer-ledger entry shape.
 - Standard fixtures (`oil-change` 5,000 km / 500 km) are seeded by the
   migration/bootstrap scripts.
 
@@ -224,20 +243,23 @@ POST /fuel                         { vehicleId, odometerKm, litres, pricePerLitr
   back on the fuel entry. Money is never figured twice.
 - Consumption is only recorded on **full-tank purchases** (fuel level
   semantics); the odometer flows into the ledger (`FUEL_PURCHASE`).
-- Expenses observe the lifecycle `PENDING → APPROVED | REJECTED`, with `VOID`
-  as a reversal of an approved cost
-  (`POST /expenses/:id/status { action: "approve" | "reject" | "void", reason? }`).
-  - `approve` and `reject` are **API-only** (they require `expense:approve`,
-    OPERATIONS/ADMIN, and only run from `PENDING`): approval happens outside
-    the system, so no screen offers these buttons. Rejecting requires a reason.
-  - The only expense action a user sees in the app is `void`, with a required
-    reason and an audit entry.
-  - `void` requires `expense:void` (OPERATIONS/ADMIN) and only runs from
-    `APPROVED` — it reverses a cost that was already signed off. Voiding and
-    rejecting are permanent-audited and never delete the record.
-  - `PENDING` and `APPROVED` count in reports; `REJECTED` and `VOID` do not, so
-    no pesewa is ever counted twice or lost. The expenses page shows the
-    outstanding "Awaiting approval" total alongside the counted total.
+- Expenses are **recorded here; approval happens outside the app**. A new
+  expense is stored as `PENDING` (kept for backward compatibility, presented
+  as **Recorded**) and can be corrected immediately — there is no approval
+  step to wait for.
+  - The only expense action is `void`
+    (`POST /expenses/:id/status { action: "void", reason }`), available from
+    `PENDING` or legacy `APPROVED`, requiring `expense:void`
+    (OPERATIONS/ADMIN), a reason and an audit entry. The record is never
+    deleted.
+  - The former `approve`/`reject` API actions and the `expense:approve`
+    permission were removed: no external process or integration consumed
+    them. Legacy `APPROVED`/`REJECTED` rows remain readable and are counted
+    or excluded exactly as before.
+  - `PENDING` and `APPROVED` count in reports; `REJECTED` and `VOID` do not,
+    so no pesewa is ever counted twice or lost. The expenses page shows the
+    recorded total, this month, and breakdowns by category and vehicle — not
+    an "Awaiting approval" figure.
   - Export (`GET /expenses/export`) requires `expense:export` and exports the
     same counted set, so an exported total never disagrees with the screen.
 
@@ -379,6 +401,6 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
 | No repair without a traceable record | work-order completion evidence gate + immutable ServiceRecord |
 | No release from a hold by same-party fixers | `vehicle:release` held only by ADMIN, and only after open critical issues are closed |
 | Money recorded once, never double-counted | integer pesewas; fuel → canonical Expense in one transaction |
-| No expense "approval" drift | the app records and voids only — approve/reject exist on the API for the external approval process, never as UI steps; void requires a reason and is audited |
+| No expense "approval" drift | the app records and voids only; the former approve/reject API actions were removed because nothing consumed them. Void requires a reason and is audited, and works immediately on a recorded cost |
 | Reminders/journaling survive reruns | `dedupeKey` idempotency + Firestore transactions |
 | Write payloads never fail on `undefined` | `definedOnly` stripping in every repo write path |

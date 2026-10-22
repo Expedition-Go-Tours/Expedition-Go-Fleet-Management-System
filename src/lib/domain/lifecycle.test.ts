@@ -8,7 +8,12 @@ import {
   type ActionMap,
 } from "@/lib/domain/lifecycle";
 import { REPORT_ACTIONS, type ReportStatus } from "@/lib/domain/report";
-import { VEHICLE_STATUS_ACTIONS, VEHICLE_STATUSES, type VehicleStatus } from "@/lib/domain/vehicle";
+import {
+  VEHICLE_STATUS_ACTIONS,
+  releaseBlockReason,
+  VEHICLE_STATUSES,
+  type VehicleStatus,
+} from "@/lib/domain/vehicle";
 import { WORK_ORDER_ACTIONS, type WorkOrderStatus } from "@/lib/domain/work-order";
 import {
   EXPENSE_ACTIONS,
@@ -58,6 +63,26 @@ describe("vehicle status machine (§6.5 safety-hold invariant)", () => {
     }
   });
 
+  it("release requires the dedicated admin permission, not the routine status permission", () => {
+    const result = resolveAction(VEHICLES, "release");
+    if (result.ok) {
+      expect(result.def.permission).toBe(PERMISSIONS.VEHICLE_RELEASE);
+      expect(result.def.permission).not.toBe(PERMISSIONS.VEHICLE_STATUS_UPDATE);
+    }
+  });
+
+  it("refuses release while any critical safety issue is open", () => {
+    expect(releaseBlockReason(1)).toContain("1 open critical issue");
+    expect(releaseBlockReason(3)).toContain("3 open critical issue");
+    expect(releaseBlockReason(0)).toBeNull();
+  });
+
+  it("fails closed when the critical-issue count is unknown", () => {
+    expect(releaseBlockReason(-1)).not.toBeNull();
+    expect(releaseBlockReason(Number.NaN)).not.toBeNull();
+    expect(releaseBlockReason(1.5)).not.toBeNull();
+  });
+
   it("every vehicle status is reachable from some action", () => {
     const targets = new Set(Object.values(VEHICLES).map((def) => def.to));
     for (const status of VEHICLE_STATUSES) {
@@ -104,41 +129,25 @@ describe("work order lifecycle", () => {
   });
 });
 
-describe("expense model (recorded in-app, approved outside)", () => {
-  it("has approve, reject and void — and no others", () => {
-    expect(Object.keys(EXPENSES).sort()).toEqual(["approve", "reject", "void"]);
+describe("expense model (recorded in-app, corrected in-app, no approval step)", () => {
+  it("has void and no other lifecycle action", () => {
+    expect(Object.keys(EXPENSES)).toEqual(["void"]);
   });
 
-  it("approve and reject are only valid from PENDING", () => {
-    for (const action of ["approve", "reject"] as const) {
-      const result = resolveAction(EXPENSES, action);
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(transitionAllowed(result.def, "PENDING")).toBe(true);
-        expect(transitionAllowed(result.def, "APPROVED")).toBe(false);
-        expect(transitionAllowed(result.def, "REJECTED")).toBe(false);
-        expect(transitionAllowed(result.def, "VOID")).toBe(false);
-      }
-    }
-  });
-
-  it("void is only valid from APPROVED — a reversal of an approved cost", () => {
+  it("void is valid from a freshly recorded or legacy approved cost", () => {
     const result = resolveAction(EXPENSES, "void");
     expect(result.ok).toBe(true);
     if (result.ok) {
+      expect(transitionAllowed(result.def, "PENDING")).toBe(true);
       expect(transitionAllowed(result.def, "APPROVED")).toBe(true);
-      expect(transitionAllowed(result.def, "PENDING")).toBe(false);
+      expect(transitionAllowed(result.def, "REJECTED")).toBe(false);
       expect(transitionAllowed(result.def, "VOID")).toBe(false);
     }
   });
 
-  it("approving is permission-gated and separate from voiding", () => {
-    const approve = resolveAction(EXPENSES, "approve");
-    const reject = resolveAction(EXPENSES, "reject");
+  it("voiding is permission-gated", () => {
     const voidIt = resolveAction(EXPENSES, "void");
-    if (approve.ok && reject.ok && voidIt.ok) {
-      expect(approve.def.permission).toBe(PERMISSIONS.EXPENSE_APPROVE);
-      expect(reject.def.permission).toBe(PERMISSIONS.EXPENSE_APPROVE);
+    if (voidIt.ok) {
       expect(voidIt.def.permission).toBe(PERMISSIONS.EXPENSE_VOID);
     }
   });

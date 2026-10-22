@@ -1,32 +1,20 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
 import type { Expense, ExpenseStatus } from "@/lib/domain/expense";
-import { EXPENSE_STATUSES } from "@/lib/domain/expense";
+import { normalizeExpenseStatus as normalizeStatus } from "@/lib/domain/expense";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
 
 /*
  * Firestore-backed expense repository. Amounts are integer pesewas.
- * Approval happens in-app: new expenses are PENDING, then approve/reject/void.
+ * Expenses are recorded here; approval happens outside the app. `PENDING` is
+ * the stored status of a newly recorded row (kept for backward compatibility)
+ * and can be voided immediately.
  */
 
 function expensesRef() {
   return getAdminDb().collection(COLLECTIONS.expenses);
-}
-
-/**
- * Map a stored status onto the current lifecycle. Legacy pre-approval records
- * carry `RECORDED`, which becomes `PENDING` — they are already in the ledger,
- * so they simply wait for a sign-off like anything else. Anything unrecognised
- * falls back to `PENDING` rather than an invalid state.
- */
-function normalizeStatus(raw: unknown): ExpenseStatus {
-  const status = raw == null ? "" : String(raw);
-  if (status === "RECORDED") return "PENDING"; // pre-approval data
-  return (EXPENSE_STATUSES as readonly string[]).includes(status)
-    ? (status as ExpenseStatus)
-    : "PENDING";
 }
 
 function toExpense(id: string, data: DocumentData): Expense {
@@ -80,7 +68,14 @@ export interface CreateExpenseInput {
 export async function createExpense(input: CreateExpenseInput): Promise<Expense> {
   const { FieldValue } = await import("firebase-admin/firestore");
   const now = FieldValue.serverTimestamp();
-  const doc = await expensesRef().add({
+  const doc = await expensesRef().add(expenseDocument(input, now));
+  const created = await getExpenseById(doc.id);
+  if (!created) throw new Error("Expense not found after creation");
+  return created;
+}
+
+function expenseDocument(input: CreateExpenseInput, now: unknown): Record<string, unknown> {
+  return {
     ...input,
     workOrderId: input.workOrderId ?? null,
     serviceRecordId: input.serviceRecordId ?? null,
@@ -93,10 +88,72 @@ export async function createExpense(input: CreateExpenseInput): Promise<Expense>
     status: "PENDING",
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+export interface EnsureServiceExpenseInput extends CreateExpenseInput {
+  /** Deterministic id (`svc_<serviceRecordId>`) — one cost per service record. */
+  id: string;
+}
+
+/**
+ * Create the linked repair expense at most once, even when two requests race.
+ *
+ * The deterministic document id is the idempotency key: both requests target
+ * the same document, and Firestore's transaction retry makes the second one
+ * observe the first. An existing document is reused, never duplicated.
+ */
+export async function ensureServiceExpense(
+  input: EnsureServiceExpenseInput,
+): Promise<{ expense: Expense; created: boolean }> {
+  const { FieldValue } = await import("firebase-admin/firestore");
+  const db = getAdminDb();
+  const ref = expensesRef().doc(input.id);
+  const now = FieldValue.serverTimestamp();
+
+  const created = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) {
+      // Heal a relationship a failed request may have left incomplete.
+      if (String(snap.data()?.serviceRecordId ?? "") !== input.serviceRecordId) {
+        tx.update(ref, { serviceRecordId: input.serviceRecordId, updatedAt: now });
+      }
+      return false;
+    }
+    // The document id is not a field; only the expense data is written.
+    const data: CreateExpenseInput = {
+      vehicleId: input.vehicleId,
+      workOrderId: input.workOrderId,
+      serviceRecordId: input.serviceRecordId,
+      fuelEntryId: input.fuelEntryId,
+      category: input.category,
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      description: input.description,
+      supplierName: input.supplierName,
+      providerId: input.providerId,
+      receiptKey: input.receiptKey,
+      externalReference: input.externalReference,
+      incurredOn: input.incurredOn,
+      createdBy: input.createdBy,
+    };
+    tx.set(ref, expenseDocument(data, now));
+    return true;
   });
-  const created = await getExpenseById(doc.id);
-  if (!created) throw new Error("Expense not found after creation");
-  return created;
+
+  const expense = await getExpenseById(input.id);
+  if (!expense) throw new Error("Expense not found after creation");
+  return { expense, created };
+}
+
+/** Legacy healing: find an expense already attached to this service record. */
+export async function findExpenseByServiceRecordId(
+  serviceRecordId: string,
+): Promise<Expense | null> {
+  const snap = await expensesRef().where("serviceRecordId", "==", serviceRecordId).limit(1).get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0]!;
+  return toExpense(doc.id, doc.data());
 }
 
 export async function getExpenseById(id: string): Promise<Expense | null> {
@@ -149,44 +206,10 @@ export async function listExpenses(options?: {
 }
 
 /**
- * Sign an expense off: PENDING → APPROVED. Records who approved it and when.
- */
-export async function approveExpense(id: string, actorId: string): Promise<Expense> {
-  const { FieldValue } = await import("firebase-admin/firestore");
-  await expensesRef().doc(id).update({
-    status: "APPROVED",
-    approvedBy: actorId,
-    approvedAt: new Date().toISOString(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  const updated = await getExpenseById(id);
-  if (!updated) throw new Error("Expense not found after approve");
-  return updated;
-}
-
-/**
- * Reject an expense: PENDING → REJECTED. Requires a reason so the person who
- * recorded it understands why, and the record stays for accountability.
- */
-export async function rejectExpense(id: string, actorId: string, reason: string): Promise<Expense> {
-  const { FieldValue } = await import("firebase-admin/firestore");
-  await expensesRef()
-    .doc(id)
-    .update({
-      status: "REJECTED",
-      rejectedBy: actorId,
-      rejectedAt: new Date().toISOString(),
-      rejectReason: reason.slice(0, 1000),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  const updated = await getExpenseById(id);
-  if (!updated) throw new Error("Expense not found after reject");
-  return updated;
-}
-
-/**
  * Void an expense: keep the record, mark it VOID with actor + reason.
- * Never a hard delete — financial history is accountability.
+ * Available for a freshly recorded (PENDING) or legacy APPROVED cost — there
+ * is no approval step to wait for. Never a hard delete — financial history is
+ * accountability.
  */
 export async function voidExpense(id: string, actorId: string, reason: string): Promise<Expense> {
   const { FieldValue } = await import("firebase-admin/firestore");
@@ -204,7 +227,7 @@ export async function voidExpense(id: string, actorId: string, reason: string): 
   return updated;
 }
 
-/** Update descriptive (non-amount) fields on an unapproved expense. */
+/** Update descriptive (non-amount) fields on a recorded expense. */
 export async function updateExpenseDetails(
   id: string,
   fields: {
@@ -240,10 +263,11 @@ export async function linkExpenseToServiceRecord(
 }
 
 /**
- * Sum of counted expenses in pesewas — PENDING and APPROVED only. REJECTED and
- * VOID are excluded (they are not real costs). Fuel entries count once: entries
- * whose `fuelEntryId` is set are counted only if they are the canonical expense
- * for that fuel purchase (the fuel repo links exactly one).
+ * Sum of counted expenses in pesewas — recorded (PENDING) and legacy APPROVED
+ * only. REJECTED and VOID are excluded (they are not real costs). Fuel entries
+ * count once: entries whose `fuelEntryId` is set are counted only if they are
+ * the canonical expense for that fuel purchase (the fuel repo links exactly
+ * one).
  */
 export async function totalExpensesMinor(options?: {
   vehicleId?: string;
@@ -258,22 +282,5 @@ export async function totalExpensesMinor(options?: {
       const status = normalizeStatus(doc.data().status);
       return status === "PENDING" || status === "APPROVED";
     })
-    .reduce((sum, doc) => sum + Number(doc.data().amountMinor ?? 0), 0);
-}
-
-/**
- * Sum of expenses still awaiting a sign-off (status PENDING), in pesewas.
- * Shown next to the total so an approver can see what is outstanding.
- */
-export async function pendingExpensesMinor(options?: {
-  vehicleId?: string;
-  workOrderId?: string;
-}): Promise<number> {
-  let query: import("firebase-admin/firestore").Query = expensesRef();
-  if (options?.vehicleId) query = query.where("vehicleId", "==", options.vehicleId);
-  if (options?.workOrderId) query = query.where("workOrderId", "==", options.workOrderId);
-  const snap = await query.limit(5000).get();
-  return snap.docs
-    .filter((doc) => normalizeStatus(doc.data().status) === "PENDING")
     .reduce((sum, doc) => sum + Number(doc.data().amountMinor ?? 0), 0);
 }

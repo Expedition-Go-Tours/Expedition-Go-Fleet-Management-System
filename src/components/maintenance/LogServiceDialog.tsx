@@ -33,7 +33,9 @@ export function LogServiceDialog({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? vehicles[0]?.id ?? "");
+  const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? "");
+  const [odometerKm, setOdometerKm] = useState("");
+  const [odometerTouched, setOdometerTouched] = useState(false);
   const [scheduleIds, setScheduleIds] = useState<string[]>([]);
   const clientTokenRef = useRef<string>("");
 
@@ -43,9 +45,26 @@ export function LogServiceDialog({
     [schedules, vehicleId],
   );
 
+  function readingFor(id: string): string {
+    const vehicle = vehicles.find((v) => v.id === id);
+    return vehicle ? String(vehicle.odometerKm) : "";
+  }
+
   function openDialog() {
     clientTokenRef.current = crypto.randomUUID();
+    const initialVehicleId = defaultVehicleId ?? "";
+    setVehicleId(initialVehicleId);
+    setOdometerKm(readingFor(initialVehicleId));
+    setOdometerTouched(false);
+    setError(null);
     setOpen(true);
+  }
+
+  function changeVehicle(id: string) {
+    setVehicleId(id);
+    // The last accepted reading is a helpful default, but a deliberate edit
+    // must survive a vehicle change (the user's reading wins).
+    if (!odometerTouched) setOdometerKm(readingFor(id));
   }
 
   function toggleSchedule(id: string) {
@@ -58,13 +77,18 @@ export function LogServiceDialog({
     setError(null);
     const form = new FormData(event.currentTarget);
     const workPerformed = String(form.get("workPerformed") ?? "").trim();
-    const odometerKm = Number(form.get("odometerKm"));
+    if (!vehicleId) {
+      setError("Choose the vehicle.");
+      setBusy(false);
+      return;
+    }
+    const odometerValue = Number(odometerKm);
     if (!workPerformed) {
       setError("Describe the work performed — this becomes the service record.");
       setBusy(false);
       return;
     }
-    if (!Number.isSafeInteger(odometerKm) || odometerKm < 0) {
+    if (!Number.isSafeInteger(odometerValue) || odometerValue < 0) {
       setError("A valid odometer (km) is required.");
       setBusy(false);
       return;
@@ -81,7 +105,7 @@ export function LogServiceDialog({
       const body: Record<string, unknown> = {
         vehicleId,
         completedAt: String(form.get("completedAt") ?? "") || undefined,
-        odometerKm,
+        odometerKm: odometerValue,
         workPerformed,
         providerName: String(form.get("providerName") ?? "").trim() || undefined,
         taskName: String(form.get("taskName") ?? "").trim() || undefined,
@@ -93,6 +117,9 @@ export function LogServiceDialog({
       setOpen(false);
       (event.target as HTMLFormElement).reset();
       setScheduleIds([]);
+      setVehicleId(defaultVehicleId ?? "");
+      setOdometerKm("");
+      setOdometerTouched(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not record the service.");
@@ -147,9 +174,12 @@ export function LogServiceDialog({
                 id="ls-vehicle"
                 name="vehicleId"
                 value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
+                onChange={(e) => changeVehicle(e.target.value)}
                 required
               >
+                <option value="" disabled>
+                  Choose a vehicle
+                </option>
                 {vehicles.map((vehicle) => (
                   <option key={vehicle.id} value={vehicle.id}>
                     {vehicle.label}
@@ -175,7 +205,9 @@ export function LogServiceDialog({
               required
               hint={
                 selected
-                  ? `Current accepted reading: ${formatNumber(selected.odometerKm)} km`
+                  ? `Prefilled with the last accepted reading (${formatNumber(
+                      selected.odometerKm,
+                    )} km). Correct it if the garage recorded a different value.`
                   : undefined
               }
               htmlFor="ls-odo"
@@ -188,6 +220,11 @@ export function LogServiceDialog({
                 step={1}
                 inputMode="numeric"
                 required
+                value={odometerKm}
+                onChange={(event) => {
+                  setOdometerKm(event.target.value);
+                  setOdometerTouched(true);
+                }}
                 placeholder="e.g. 128500"
               />
             </Field>

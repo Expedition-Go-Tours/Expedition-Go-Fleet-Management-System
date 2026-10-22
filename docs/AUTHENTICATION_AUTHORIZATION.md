@@ -258,7 +258,6 @@ work_order:reopen
 expense:read
 expense:create
 expense:update
-expense:approve
 expense:void
 expense:export
 

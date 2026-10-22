@@ -2,20 +2,19 @@ import { makeActionHandler } from "@/lib/api/action";
 import { ApiError } from "@/lib/api/errors";
 import { EXPENSE_ACTIONS, type Expense, type ExpenseStatus } from "@/lib/domain/expense";
 import { AUDIT_EVENTS } from "@/lib/repos/audit";
-import { approveExpense, getExpenseById, rejectExpense, voidExpense } from "@/lib/repos/expenses";
+import { getExpenseById, voidExpense } from "@/lib/repos/expenses";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/v1/expenses/[id]/status
- * Expense lifecycle actions: approve | reject | void.
+ * The single expense correction: void (expense:void, reason required).
  *
- *   approve  PENDING  → APPROVED   (expense:approve)
- *   reject   PENDING  → REJECTED   (expense:approve, reason required)
- *   void     APPROVED → VOID       (expense:void,    reason required)
+ *   void  PENDING | APPROVED → VOID
  *
- * A recorded expense is never deleted; every transition is audited with
- * before/after status, so the financial history stays complete.
+ * A newly recorded expense can be corrected immediately — there is no approval
+ * step to wait for. The record is never deleted; the transition is audited
+ * with before/after status so the financial history stays complete.
  */
 export const POST = makeActionHandler<ExpenseStatus, Expense>({
   actions: EXPENSE_ACTIONS,
@@ -23,20 +22,14 @@ export const POST = makeActionHandler<ExpenseStatus, Expense>({
   entityType: "expense",
   jsonKey: "expense",
   load: getExpenseById,
-  assertAllowed: async (_entity, def, body) => {
-    if (def.to === "REJECTED" || def.to === "VOID") {
-      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
-      if (!reason || reason.length > 1000) {
-        throw ApiError.badRequest(
-          `${def.to === "VOID" ? "Voiding" : "Rejecting"} an expense requires a reason (max 1000 chars)`,
-        );
-      }
+  assertAllowed: async (_entity, _def, body) => {
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (!reason || reason.length > 1000) {
+      throw ApiError.badRequest("Voiding an expense requires a reason (max 1000 chars)");
     }
   },
-  apply: async (entity, def, body, actorId) => {
+  apply: async (entity, _def, body, actorId) => {
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
-    if (def.to === "APPROVED") return approveExpense(entity.id, actorId);
-    if (def.to === "REJECTED") return rejectExpense(entity.id, actorId, reason);
     return voidExpense(entity.id, actorId, reason);
   },
 });
