@@ -4,6 +4,7 @@ import { AlertTriangle, CalendarClock, Gauge, Wrench, type LucideIcon } from "lu
 
 import { StatusActions } from "@/components/actions/StatusActions";
 import { StartAssignmentDialog } from "@/components/assignments/StartAssignmentDialog";
+import { LogServiceDialog } from "@/components/maintenance/LogServiceDialog";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { VehicleHero } from "@/components/vehicles/VehicleHero";
@@ -125,6 +126,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   // vehicle. The server re-checks reservations, safety hold and permissions;
   // this only decides whether the control is offered at all.
   const canAssign = permissions.includes(PERMISSIONS.ASSIGNMENT_CREATE);
+  const canLogService = permissions.includes(PERMISSIONS.SERVICE_RECORD);
   const hasActiveAssignment = assignments.some((a) => a.status === "ACTIVE");
   const driverOptions = users
     .filter((u) => u.roles.includes("DRIVER") && u.status === "ACTIVE")
@@ -271,6 +273,23 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                     odometerKm: vehicle.odometerKm,
                   },
                 ]}
+              />
+            )}
+            {canLogService && (
+              <LogServiceDialog
+                defaultVehicleId={vehicle.id}
+                vehicles={[
+                  {
+                    id: vehicle.id,
+                    label: `${vehicle.regNumber} — ${vehicle.make} ${vehicle.model}`,
+                    odometerKm: vehicle.odometerKm,
+                  },
+                ]}
+                schedules={schedules.map((s) => ({
+                  id: s.id,
+                  vehicleId: s.vehicleId,
+                  taskName: s.taskName,
+                }))}
               />
             )}
             {actions.length > 0 && (

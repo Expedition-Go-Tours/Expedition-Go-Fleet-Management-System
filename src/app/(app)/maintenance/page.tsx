@@ -13,7 +13,8 @@ import { formatDate, formatIsoDate, formatKm, humanizeEnum } from "@/lib/format"
 import { listAllSchedules, type MaintenanceSchedule } from "@/lib/repos/maintenance";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { requirePagePermission } from "@/lib/auth/page-guard";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
+import { LogServiceDialog } from "@/components/maintenance/LogServiceDialog";
 
 export const metadata = { title: "Maintenance" };
 
@@ -42,7 +43,8 @@ export default async function MaintenancePage({
 }: {
   searchParams: Promise<{ state?: string; vehicleId?: string }>;
 }) {
-  await requirePagePermission(PERMISSIONS.SCHEDULE_READ);
+  const context = await requirePagePermission(PERMISSIONS.SCHEDULE_READ);
+  const canLogService = permissionsForRoles(context.user.roles).has(PERMISSIONS.SERVICE_RECORD);
   const { state, vehicleId } = await searchParams;
   const validState = STATE_ORDER.includes(state as ScheduleStatus)
     ? (state as ScheduleStatus)
@@ -115,6 +117,27 @@ export default async function MaintenancePage({
         title="Maintenance"
         description="Preventive maintenance across the fleet, computed from the documented schedule engine against accepted odometer readings."
         crumbs={[{ label: "Fleet" }, { label: "Maintenance" }]}
+        actions={
+          canLogService ? (
+            <LogServiceDialog
+              variant="accent"
+              defaultVehicleId={vehicleId}
+              vehicles={vehicles
+                .slice()
+                .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
+                .map((v) => ({
+                  id: v.id,
+                  label: `${v.regNumber} — ${v.make} ${v.model}`,
+                  odometerKm: v.odometerKm,
+                }))}
+              schedules={schedules.map((s) => ({
+                id: s.id,
+                vehicleId: s.vehicleId,
+                taskName: s.taskName,
+              }))}
+            />
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5" data-tour="maintenance-kpis">
