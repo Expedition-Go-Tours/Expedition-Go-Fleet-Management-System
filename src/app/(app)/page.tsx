@@ -2,20 +2,21 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
-  CalendarClock,
-  Car,
   CheckCircle2,
-  ClipboardList,
   Clock3,
   KeyRound,
   ListChecks,
   ReceiptText,
-  Route,
   ShieldAlert,
   Wrench,
+  Zap,
 } from "lucide-react";
 
 import { DashboardHero } from "@/components/dashboard/DashboardHero";
+import { AddFuelDialog } from "@/components/fuel/AddFuelDialog";
+import { LogServiceDialog } from "@/components/maintenance/LogServiceDialog";
+import { RecordTripDialog } from "@/components/trips/RecordTripDialog";
+import { ReportIssueDialog } from "@/components/issues/ReportIssueDialog";
 import { ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -24,6 +25,8 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { assertMfaEnrollmentComplete, requireAuthContext } from "@/lib/auth/guards";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import { loadControlCentre, type ActionItem } from "@/lib/dashboard/control-centre";
+import { listAllSchedules } from "@/lib/repos/maintenance";
+import { listVehicles } from "@/lib/repos/vehicles";
 import { formatMoney, formatNumber } from "@/lib/format";
 
 export const metadata = { title: "Fleet control centre" };
@@ -49,6 +52,32 @@ export default async function DashboardPage() {
 
   const canReadVehicles = permissions.includes(PERMISSIONS.VEHICLE_READ);
   const canReadSchedules = permissions.includes(PERMISSIONS.SCHEDULE_READ);
+
+  // Quick actions load exactly what their dialogs need — nothing when the
+  // user cannot perform any of them.
+  const canReportIssue = permissions.includes(PERMISSIONS.REPORT_CREATE);
+  const canLogService = permissions.includes(PERMISSIONS.SERVICE_RECORD);
+  const canRecordFuel = permissions.includes(PERMISSIONS.FUEL_CREATE);
+  const canRecordTrip = permissions.includes(PERMISSIONS.TRIP_CREATE);
+  const hasQuickAction = canReportIssue || canLogService || canRecordFuel || canRecordTrip;
+  const [vehicles, schedules] = await Promise.all([
+    hasQuickAction ? listVehicles() : Promise.resolve([]),
+    canLogService ? listAllSchedules() : Promise.resolve([]),
+  ]);
+  const vehicleOptions = vehicles
+    .slice()
+    .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
+    .map((v) => ({
+      id: v.id,
+      label: `${v.regNumber} — ${v.make} ${v.model}`,
+      odometerKm: v.odometerKm,
+    }));
+  const scheduleOptions = schedules.map((s) => ({
+    id: s.id,
+    vehicleId: s.vehicleId,
+    taskName: s.taskName,
+  }));
+  const todayDate = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Accra" });
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,16 +112,28 @@ export default async function DashboardPage() {
         </Card>
       )}
 
+      {hasQuickAction && (
+        <Card title="Quick actions" icon={Zap} data-tour="dashboard-actions">
+          <div className="flex flex-wrap gap-2 p-5">
+            {canReportIssue && <ReportIssueDialog variant="primary" vehicles={vehicleOptions} />}
+            {canRecordTrip && (
+              <RecordTripDialog
+                vehicles={vehicleOptions}
+                driverUserId={context.user.id}
+                defaultDate={todayDate}
+              />
+            )}
+            {canLogService && (
+              <LogServiceDialog vehicles={vehicleOptions} schedules={scheduleOptions} />
+            )}
+            {canRecordFuel && <AddFuelDialog canCreate vehicles={vehicleOptions} />}
+          </div>
+        </Card>
+      )}
+
       {centre.fleet && (
         <section aria-label="Fleet overview" data-tour="dashboard-kpis">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <KpiCard
-              label="Total vehicles"
-              value={formatNumber(centre.fleet.total)}
-              href="/vehicles"
-              context="Non-archived"
-              icon={<Car aria-hidden="true" className="h-4 w-4" />}
-            />
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <KpiCard
               label="Available now"
               value={formatNumber(centre.fleet.available)}
@@ -102,21 +143,6 @@ export default async function DashboardPage() {
               icon={<KeyRound aria-hidden="true" className="h-4 w-4" />}
             />
             <KpiCard
-              label="In use"
-              value={formatNumber(centre.fleet.inUse)}
-              href="/vehicles?availability=in_use"
-              context="Active with a current assignment"
-              icon={<Route aria-hidden="true" className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="In workshop"
-              value={formatNumber(centre.fleet.inWorkshop)}
-              href="/vehicles?status=IN_SERVICE"
-              tone={centre.fleet.inWorkshop > 0 ? "warning" : "default"}
-              context="Out of service for work"
-              icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
-            />
-            <KpiCard
               label="Safety holds"
               value={formatNumber(centre.fleet.safetyHolds)}
               href="/vehicles?status=SAFETY_HOLD"
@@ -124,156 +150,122 @@ export default async function DashboardPage() {
               context="Barred from service"
               icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}
             />
-          </div>
-        </section>
-      )}
-
-      {centre.maintenance && (
-        <section aria-label="Maintenance health" data-tour="dashboard-maintenance">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <KpiCard
-              label="Overdue tasks"
-              value={formatNumber(centre.maintenance.overdue)}
+              label="Overdue maintenance"
+              value={formatNumber(centre.maintenance?.overdue ?? 0)}
               href="/maintenance?state=OVERDUE"
-              tone={centre.maintenance.overdue > 0 ? "danger" : "success"}
+              tone={(centre.maintenance?.overdue ?? 0) > 0 ? "danger" : "success"}
+              context={
+                centre.maintenance?.due ? `${centre.maintenance.due} due now` : "Schedules healthy"
+              }
               icon={<AlertTriangle aria-hidden="true" className="h-4 w-4" />}
             />
             <KpiCard
-              label="Due now"
-              value={formatNumber(centre.maintenance.due)}
-              href="/maintenance?state=DUE"
-              tone={centre.maintenance.due > 0 ? "accent" : "default"}
-              icon={<CalendarClock aria-hidden="true" className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="Due soon"
-              value={formatNumber(centre.maintenance.dueSoon)}
-              href="/maintenance?state=DUE_SOON"
-              tone={centre.maintenance.dueSoon > 0 ? "warning" : "default"}
-              icon={<Clock3 aria-hidden="true" className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="Open work orders"
-              value={formatNumber(centre.maintenance.openWorkOrders)}
+              label="Active repairs"
+              value={formatNumber(centre.maintenance?.openWorkOrders ?? 0)}
               href="/work-orders?open=1"
               context={
-                centre.maintenance.waitingWorkOrders > 0
-                  ? `${centre.maintenance.waitingWorkOrders} waiting`
-                  : "No waiting orders"
+                (centre.maintenance?.waitingWorkOrders ?? 0) > 0
+                  ? `${centre.maintenance?.waitingWorkOrders} waiting on parts`
+                  : "None waiting"
               }
-              tone={centre.maintenance.waitingWorkOrders > 0 ? "warning" : "default"}
+              tone={(centre.maintenance?.waitingWorkOrders ?? 0) > 0 ? "warning" : "default"}
               icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="Schedules evaluated"
-              value={formatNumber(centre.maintenance.evaluated)}
-              context={`${formatNumber(centre.maintenance.notConfigured)} not configured`}
-              href="/maintenance"
-              icon={<ClipboardList aria-hidden="true" className="h-4 w-4" />}
             />
           </div>
         </section>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <section
-          aria-label="Priority action queue"
-          className="min-w-0 xl:col-span-2"
-          data-tour="dashboard-queue"
+      <section aria-label="Priority action queue" data-tour="dashboard-queue">
+        <Card
+          title="Priority action queue"
+          description="What needs attention right now, ordered by risk."
+          icon={ListChecks}
+          flush
         >
-          <Card
-            title="Priority action queue"
-            description="What needs attention right now, ordered by risk."
-            icon={ListChecks}
-            flush
-          >
-            {centre.queue.length === 0 ? (
-              <EmptyState
-                icon={CheckCircle2}
-                title="Nothing needs attention"
-                description="No critical issues, safety holds, overdue maintenance or expired mandatory documents right now."
-                compact
-              />
+          {centre.queue.length === 0 ? (
+            <EmptyState
+              icon={CheckCircle2}
+              title="Nothing needs attention"
+              description="No critical issues, safety holds, overdue maintenance or expired mandatory documents right now."
+              compact
+            />
+          ) : (
+            <ul className="divide-hairline divide-y">
+              {centre.queue.map((item) => (
+                <QueueRow key={item.id} item={item} />
+              ))}
+            </ul>
+          )}
+        </Card>
+      </section>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        {centre.issuesBySeverity && (
+          <Card title="Open issues by severity" icon={AlertTriangle} flush>
+            {centre.issuesBySeverity.length === 0 ? (
+              <p className="text-body-xs text-muted px-5 py-6">No open issues.</p>
             ) : (
               <ul className="divide-hairline divide-y">
-                {centre.queue.map((item) => (
-                  <QueueRow key={item.id} item={item} />
+                {centre.issuesBySeverity.map((row) => (
+                  <li
+                    key={row.severity}
+                    className="flex items-center justify-between gap-3 px-5 py-3"
+                  >
+                    <StatusBadge status={row.severity} />
+                    <span className="font-heading text-heading-md text-ink font-semibold tabular-nums">
+                      {formatNumber(row.count)}
+                    </span>
+                  </li>
                 ))}
               </ul>
             )}
           </Card>
-        </section>
+        )}
 
-        <div className="flex min-w-0 flex-col gap-6">
-          {centre.issuesBySeverity && (
-            <Card title="Open issues by severity" icon={AlertTriangle} flush>
-              {centre.issuesBySeverity.length === 0 ? (
-                <p className="text-body-xs text-muted px-5 py-6">No open issues.</p>
-              ) : (
-                <ul className="divide-hairline divide-y">
-                  {centre.issuesBySeverity.map((row) => (
-                    <li
-                      key={row.severity}
-                      className="flex items-center justify-between gap-3 px-5 py-3"
-                    >
-                      <StatusBadge status={row.severity} />
-                      <span className="font-heading text-heading-md text-ink font-semibold tabular-nums">
-                        {formatNumber(row.count)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          )}
+        {centre.monthExpenses && (
+          <Card
+            title="Recorded expenses"
+            description="This calendar month (pending + approved)"
+            icon={ReceiptText}
+            action={
+              <Link href="/expenses" className="text-body-xs text-link font-medium hover:underline">
+                Open ledger
+              </Link>
+            }
+          >
+            <div className="flex items-end justify-between gap-4">
+              <p className="font-heading text-heading-lg text-ink font-semibold tabular-nums">
+                {formatMoney(centre.monthExpenses.totalMinor)}
+              </p>
+              <p className="text-body-xs text-muted">
+                {formatNumber(centre.monthExpenses.count)} entr
+                {centre.monthExpenses.count === 1 ? "y" : "ies"}
+              </p>
+            </div>
+          </Card>
+        )}
 
-          {centre.monthExpenses && (
-            <Card
-              title="Recorded expenses"
-              description="This calendar month (pending + approved)"
-              icon={ReceiptText}
-              action={
-                <Link
-                  href="/expenses"
-                  className="text-body-xs text-link font-medium hover:underline"
-                >
-                  Open ledger
-                </Link>
-              }
-            >
-              <div className="flex items-end justify-between gap-4">
-                <p className="font-heading text-heading-lg text-ink font-semibold tabular-nums">
-                  {formatMoney(centre.monthExpenses.totalMinor)}
-                </p>
-                <p className="text-body-xs text-muted">
-                  {formatNumber(centre.monthExpenses.count)} entr
-                  {centre.monthExpenses.count === 1 ? "y" : "ies"}
-                </p>
-              </div>
-            </Card>
-          )}
-
-          {canReadSchedules && (
-            <Link
-              href="/maintenance"
-              className="hover:bg-panel-2 group bg-panel-1 text-on-dark flex flex-col gap-2 rounded-lg p-5 transition-colors"
-            >
-              <span className="font-heading text-card-title font-semibold text-white">
-                Maintenance centre
-              </span>
-              <span className="text-body-xs text-on-dark-muted">
-                Fleet-wide preventive maintenance schedules, due dates and history.
-              </span>
-              <span className="text-body-xs text-accent mt-1 inline-flex items-center gap-1.5 font-medium">
-                Open maintenance{" "}
-                <ArrowRight
-                  aria-hidden="true"
-                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                />
-              </span>
-            </Link>
-          )}
-        </div>
+        {canReadSchedules && (
+          <Link
+            href="/maintenance"
+            className="hover:bg-panel-2 group bg-panel-1 text-on-dark flex flex-col gap-2 rounded-lg p-5 transition-colors"
+          >
+            <span className="font-heading text-card-title font-semibold text-white">
+              Maintenance centre
+            </span>
+            <span className="text-body-xs text-on-dark-muted">
+              Fleet-wide preventive maintenance schedules, due dates and history.
+            </span>
+            <span className="text-body-xs text-accent mt-1 inline-flex items-center gap-1.5 font-medium">
+              Open maintenance{" "}
+              <ArrowRight
+                aria-hidden="true"
+                className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+              />
+            </span>
+          </Link>
+        )}
       </div>
     </div>
   );

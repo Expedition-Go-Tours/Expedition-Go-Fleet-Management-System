@@ -184,7 +184,7 @@ export const TOURS: readonly TourDefinition[] = [
 
   {
     id: "maintenance",
-    version: 4,
+    version: 5,
     title: "Maintenance tour",
     summary: "Reminders, open issues, work orders and recording repairs correctly.",
     roles: ["DRIVER"],
@@ -193,10 +193,10 @@ export const TOURS: readonly TourDefinition[] = [
     steps: [
       {
         route: "/",
-        target: "dashboard-maintenance",
+        target: "dashboard-kpis",
         title: "Maintenance health",
         description:
-          "Overdue, due and due-soon tasks across the fleet, computed against accepted odometer readings.",
+          "Overdue tasks and active repairs sit on the home row, with due-now count alongside; the full due and due-soon breakdown is one click away on the maintenance board.",
         side: "top",
       },
       {
