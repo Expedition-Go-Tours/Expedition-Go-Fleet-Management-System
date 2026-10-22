@@ -1,7 +1,7 @@
-import { AlertTriangle, ChevronLeft, ChevronRight, FileWarning } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { CreateForm } from "@/components/actions/CreateForm";
 import { CreateWorkOrderButton } from "@/components/actions/CreateWorkOrderButton";
+import { ReportIssueDialog } from "@/components/issues/ReportIssueDialog";
 import { StatusActions } from "@/components/actions/StatusActions";
 import { CloseIssueDialog } from "@/components/reports/CloseIssueDialog";
 import { Container } from "@/components/layout/Container";
@@ -10,7 +10,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
-import { ISSUE_CATEGORIES, REPORT_SEVERITIES } from "@/lib/domain/report";
 import { formatDate } from "@/lib/format";
 import { countIssueTotals, listIssues } from "@/lib/repos/reports";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -87,6 +86,18 @@ export default async function IssuesPage({
       <PageHeader
         title={canReadAll ? "Vehicle issues" : "My reported issues"}
         crumbs={[{ label: "Fleet" }, { label: "Issues" }]}
+        actions={
+          canCreate ? (
+            <ReportIssueDialog
+              variant="primary"
+              vehicles={vehicles
+                .slice()
+                .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
+                .map((v) => ({ id: v.id, label: `${v.regNumber} — ${v.make} ${v.model}` }))}
+              defaultVehicleId={vehicleId}
+            />
+          ) : undefined
+        }
       />
 
       {(filteredVehicle || openOnly) && (
@@ -203,45 +214,6 @@ export default async function IssuesPage({
             )}
           </Card>
         </div>
-
-        {canCreate && (
-          <Card title="Report a problem" icon={FileWarning}>
-            <div className="p-5">
-              <CreateForm
-                endpoint="/api/v1/reports"
-                submitLabel="Submit report"
-                fields={[
-                  {
-                    name: "vehicleId",
-                    label: "Vehicle",
-                    type: "select",
-                    required: true,
-                    options: vehicles.map((v) => ({
-                      value: v.id,
-                      label: `${v.regNumber} — ${v.make} ${v.model}`,
-                    })),
-                  },
-                  { name: "title", label: "Title", required: true, placeholder: "Brake noise" },
-                  {
-                    name: "category",
-                    label: "Category",
-                    type: "select",
-                    options: ISSUE_CATEGORIES.map((c) => ({ value: c, label: c })),
-                  },
-                  { name: "description", label: "Description", type: "textarea", required: true },
-                  {
-                    name: "severity",
-                    label: "Severity",
-                    type: "select",
-                    required: true,
-                    defaultValue: "MEDIUM",
-                    options: REPORT_SEVERITIES.map((s) => ({ value: s, label: s })),
-                  },
-                ]}
-              />
-            </div>
-          </Card>
-        )}
       </div>
     </Container>
   );

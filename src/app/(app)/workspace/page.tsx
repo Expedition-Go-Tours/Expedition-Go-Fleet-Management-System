@@ -23,8 +23,8 @@ import {
   NotificationList,
   type WorkspaceNotification,
 } from "@/components/workspace/NotificationList";
+import { ReportIssueDialog } from "@/components/issues/ReportIssueDialog";
 import { ReportIncidentDialog } from "@/components/workspace/ReportIncidentDialog";
-import { ReportProblemDialog } from "@/components/workspace/ReportProblemDialog";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
 import { defaultChecklist } from "@/lib/domain/inspection";
@@ -430,7 +430,7 @@ export default async function WorkspacePage() {
             <Card title="Report" icon={Megaphone} dataTour="driver-report">
               <div className="flex flex-wrap gap-2 p-5">
                 {canCreateReport && (
-                  <ReportProblemDialog vehicles={vehicleOptions} defaultVehicleId={vehicle?.id} />
+                  <ReportIssueDialog vehicles={vehicleOptions} defaultVehicleId={vehicle?.id} />
                 )}
                 {canCreateIncident && (
                   <ReportIncidentDialog vehicles={vehicleOptions} defaultVehicleId={vehicle?.id} />

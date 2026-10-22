@@ -31,6 +31,91 @@ export const ISSUE_CATEGORIES = [
 ] as const;
 export type IssueCategory = (typeof ISSUE_CATEGORIES)[number];
 
+/** Raw values from the unified issue-intake form, as typed by the reporter. */
+export interface IssueIntakeValues {
+  vehicleId: string;
+  title: string;
+  description: string;
+  /** False means the vehicle must not be driven → server applies a safety hold. */
+  drivable: boolean;
+  /** Advanced ("More detail") controls — both optional. */
+  severity: string;
+  category: string;
+}
+
+/** The validated POST /api/v1/reports body. */
+export interface IssueIntakePayload {
+  vehicleId: string;
+  title: string;
+  description: string;
+  severity: ReportSeverity;
+  category?: IssueCategory;
+  safetyCritical: boolean;
+  immobilized: boolean;
+}
+
+/**
+ * Form values → the issue-report body, or the first message to show the
+ * reporter. One intake for every entry point: the only safety-critical input
+ * a driver makes is "can this vehicle still be driven?" — an undrivable
+ * vehicle is reported CRITICAL + immobilized (the server applies the hold and
+ * the driver cannot bypass it), while a drivable one keeps the advanced
+ * severity and category choices for optional use.
+ */
+export function buildIssueIntakePayload(
+  values: IssueIntakeValues,
+): { ok: true; payload: IssueIntakePayload } | { ok: false; message: string } {
+  const vehicleId = values.vehicleId.trim();
+  if (!vehicleId) return { ok: false, message: "Choose the vehicle." };
+
+  const title = values.title.trim();
+  if (!title || title.length > 200) {
+    return { ok: false, message: "A short title is required (max 200 characters)." };
+  }
+
+  const description = values.description.trim();
+  if (!description || description.length > 5000) {
+    return { ok: false, message: "Describe the problem (max 5000 characters)." };
+  }
+
+  const drivable = values.drivable === true;
+  if (!drivable) {
+    return {
+      ok: true,
+      payload: {
+        vehicleId,
+        title,
+        description,
+        severity: "CRITICAL",
+        safetyCritical: true,
+        immobilized: true,
+      },
+    };
+  }
+
+  const severity = (REPORT_SEVERITIES as readonly string[]).includes(values.severity)
+    ? (values.severity as ReportSeverity)
+    : "MEDIUM";
+  const category = (ISSUE_CATEGORIES as readonly string[]).includes(values.category)
+    ? (values.category as IssueCategory)
+    : undefined;
+
+  return {
+    ok: true,
+    payload: {
+      vehicleId,
+      title,
+      description,
+      severity,
+      ...(category ? { category } : {}),
+      // The server treats either flag as safety-critical; keep them in step so
+      // an advanced CRITICAL report still restricts the vehicle.
+      safetyCritical: severity === "CRITICAL",
+      immobilized: false,
+    },
+  };
+}
+
 export interface IssueFollowUp {
   byUserId: string;
   text: string;
