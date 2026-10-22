@@ -288,6 +288,23 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecord | 
   return toServiceRecord(snap.id, snap.data() ?? {});
 }
 
+/**
+ * Link a recorded expense to a service record. Additive only: the work
+ * performed stays immutable, and costs are referenced rather than copied so
+ * reports count each pesewa once (through the expense).
+ */
+export async function linkExpenseToServiceRecord(
+  serviceRecordId: string,
+  expenseId: string,
+): Promise<void> {
+  const { FieldValue } = await import("firebase-admin/firestore");
+  await serviceRecordsRef()
+    .doc(serviceRecordId)
+    .update({
+      expenseIds: FieldValue.arrayUnion(expenseId),
+    });
+}
+
 export async function listServiceRecords(vehicleId: string): Promise<ServiceRecord[]> {
   const snap = await serviceRecordsRef().where("vehicleId", "==", vehicleId).limit(1000).get();
   return snap.docs

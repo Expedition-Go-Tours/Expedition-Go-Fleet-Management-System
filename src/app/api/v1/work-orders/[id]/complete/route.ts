@@ -5,8 +5,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { CompletionError, completeWorkOrder } from "@/lib/domain/work-order-completion";
-import { getScheduleById } from "@/lib/repos/maintenance";
+import {
+  CompletionError,
+  completeWorkOrder,
+  resolveRepairCost,
+} from "@/lib/domain/work-order-completion";
+import { getScheduleById, linkExpenseToServiceRecord } from "@/lib/repos/maintenance";
+import { createExpense } from "@/lib/repos/expenses";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { getWorkOrderById } from "@/lib/repos/work-orders";
 
@@ -93,14 +98,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       resolvedIssueIds = parsed.resolvedIssueIds as string[];
     }
 
+    const providerName =
+      typeof parsed.providerName === "string" ? parsed.providerName.slice(0, 200) : undefined;
+    // Optional repair cost, recorded as a canonical MAINTENANCE expense and
+    // linked to the service record. Rejected loudly when malformed.
+    const repairCost = resolveRepairCost({
+      costMinor: parsed.costMinor,
+      currency: parsed.currency,
+    });
+
     const result = await completeWorkOrder({
       workOrderId,
       completedAt,
       odometerKm,
       workPerformed,
       outcome: typeof parsed.outcome === "string" ? parsed.outcome.slice(0, 2000) : undefined,
-      providerName:
-        typeof parsed.providerName === "string" ? parsed.providerName.slice(0, 200) : undefined,
+      providerName,
       technicianName:
         typeof parsed.technicianName === "string" ? parsed.technicianName.slice(0, 200) : undefined,
       notes: typeof parsed.notes === "string" ? parsed.notes.slice(0, 2000) : undefined,
@@ -109,6 +122,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       recordedByUserId: context.user.id,
     });
 
+    let expense: Awaited<ReturnType<typeof createExpense>> | null = null;
     if (!result.duplicate) {
       await writeAuditEvent({
         eventType: AUDIT_EVENTS.SERVICE_RECORDED,
@@ -124,12 +138,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         },
         requestId,
       });
+
+      if (repairCost) {
+        expense = await createExpense({
+          vehicleId: workOrder.vehicleId,
+          category: "MAINTENANCE",
+          amountMinor: repairCost.amountMinor,
+          currency: repairCost.currency,
+          description: workPerformed.slice(0, 200),
+          supplierName: providerName,
+          workOrderId,
+          serviceRecordId: result.serviceRecord.id,
+          incurredOn: completedAt,
+          createdBy: context.user.id,
+        });
+        await linkExpenseToServiceRecord(result.serviceRecord.id, expense.id);
+        await writeAuditEvent({
+          eventType: AUDIT_EVENTS.EXPENSE_CREATED,
+          actorId: context.user.id,
+          entityType: "expense",
+          entityId: expense.id,
+          after: {
+            vehicleId: workOrder.vehicleId,
+            category: "MAINTENANCE",
+            amountMinor: repairCost.amountMinor,
+            currency: repairCost.currency,
+            workOrderId,
+            serviceRecordId: result.serviceRecord.id,
+          },
+          requestId,
+        });
+      }
     }
 
     return jsonOk({
       serviceRecord: result.serviceRecord,
       duplicate: result.duplicate,
       resetScheduleIds: result.resetScheduleIds,
+      expense,
     });
   } catch (error) {
     if (error instanceof CompletionError) {

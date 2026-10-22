@@ -47,6 +47,30 @@ export interface CompleteWorkOrderResult {
   resetScheduleIds: string[];
 }
 
+/**
+ * Optional repair cost carried with a completion ({ costMinor, currency }),
+ * recorded as a canonical MAINTENANCE expense linked to the service record.
+ * Absent → null (no cost is recorded); malformed → rejected loudly, never
+ * silently dropped, so the completion and its cost cannot quietly disagree.
+ */
+export function resolveRepairCost(input: {
+  costMinor?: unknown;
+  currency?: unknown;
+}): { amountMinor: number; currency: string } | null {
+  if (input.costMinor === undefined || input.costMinor === null || input.costMinor === "") {
+    return null;
+  }
+  const amountMinor = Number(input.costMinor);
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    throw new CompletionError("INVALID_COST", "costMinor must be a positive integer (pesewas)");
+  }
+  const currency =
+    typeof input.currency === "string" && /^[A-Z]{3}$/.test(input.currency.trim().toUpperCase())
+      ? input.currency.trim().toUpperCase()
+      : "GHS";
+  return { amountMinor, currency };
+}
+
 /** A requested issue, as loaded from the authoritative store. */
 export interface FetchedIssue {
   id: string;

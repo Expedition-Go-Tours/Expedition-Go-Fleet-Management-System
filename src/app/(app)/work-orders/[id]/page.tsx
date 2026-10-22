@@ -284,7 +284,10 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
               {canComplete && completable && vehicle && (
                 <CompleteWorkOrderDialog
                   workOrderId={workOrder.id}
+                  vehicleId={vehicle.id}
                   currentOdometerKm={vehicle.odometerKm}
+                  vehicleOnSafetyHold={vehicle.status === "SAFETY_HOLD"}
+                  canRelease={permissions.includes(PERMISSIONS.VEHICLE_RELEASE)}
                   schedules={scheduleOptions}
                   issues={issueOptions}
                 />

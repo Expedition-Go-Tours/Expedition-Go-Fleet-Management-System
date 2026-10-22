@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { CompletionError, planIssueClosure } from "@/lib/domain/work-order-completion";
+import {
+  CompletionError,
+  planIssueClosure,
+  resolveRepairCost,
+} from "@/lib/domain/work-order-completion";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
 
 describe("planIssueClosure — work-order issue-link integrity", () => {
@@ -126,5 +130,38 @@ describe("work-order completion contract", () => {
       now,
     });
     expect(unNamedUntouched.nextDueOdometerKm).toBe(84250);
+  });
+});
+
+describe("resolveRepairCost — optional repair cost with the completion", () => {
+  it("records no cost when none was supplied", () => {
+    expect(resolveRepairCost({})).toBeNull();
+    expect(resolveRepairCost({ costMinor: undefined })).toBeNull();
+    expect(resolveRepairCost({ costMinor: null })).toBeNull();
+    expect(resolveRepairCost({ costMinor: "" })).toBeNull();
+  });
+
+  it("accepts a positive integer pesewa amount", () => {
+    expect(resolveRepairCost({ costMinor: 85000, currency: "GHS" })).toEqual({
+      amountMinor: 85000,
+      currency: "GHS",
+    });
+  });
+
+  it("defaults the currency to GHS and normalises a real one", () => {
+    expect(resolveRepairCost({ costMinor: 100 })?.currency).toBe("GHS");
+    expect(resolveRepairCost({ costMinor: 100, currency: "usd" })?.currency).toBe("USD");
+    expect(resolveRepairCost({ costMinor: 100, currency: "POUNDS" })?.currency).toBe("GHS");
+  });
+
+  it("rejects a malformed amount loudly instead of dropping it", () => {
+    for (const costMinor of [-5, 0, 10.5, "abc"]) {
+      expect(() => resolveRepairCost({ costMinor })).toThrow(CompletionError);
+      try {
+        resolveRepairCost({ costMinor });
+      } catch (err) {
+        expect((err as CompletionError).code).toBe("INVALID_COST");
+      }
+    }
   });
 });
