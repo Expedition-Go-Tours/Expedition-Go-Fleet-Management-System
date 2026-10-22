@@ -69,7 +69,7 @@ Remaining production items are unchanged from section 6 below.
 | `/work-orders/[id]` | **No** | — | Missing work-order detail (lifecycle, evidence, service-record link, costs). [FIX — create] |
 | `/incidents` | Yes | Yes | Restricted list + report form + resolve. No detail route. |
 | `/incidents/[id]` | **No** | — | Missing incident detail. [FIX — create] |
-| `/expenses` | Yes | Yes | List + form. **Form requires `workOrderId`, contradicting the domain (vehicle is the primary association; work order/service/fuel are optional).** Obsolete `approve`/`mark_paid` labels remain in the code. No vehicle column/link, no filters, no date range. [FIX] |
+| `/expenses` | Yes | Yes | List + form. **Form requires `workOrderId`, contradicting the domain (vehicle is the primary association; work order/service/fuel are optional).** Obsolete `approve`/`mark_paid` labels remain in the code. No vehicle column/link, no filters, no date range. [FIX] — partially fixed 2026-10: approve/reject were removed from every screen; the ledger is record-only with Void as the only in-app correction. |
 | `/fuel` | **No** | — | Only reachable via vehicle tabs. No fleet-level spending/consumption view. [FIX — create] |
 | `/documents` | **No** | — | Only reachable via vehicle tabs, and the mapping is wrong (above). [FIX — create] |
 | `/maintenance` | **No** | — | Schedules are only visible per vehicle; no fleet-wide due/overdue view for the maintenance dashboard KPIs. [FIX — create] |
@@ -95,6 +95,8 @@ Remaining production items are unchanged from section 6 below.
 3. **Expense form** — requires a work order; domain allows vehicle-only
    expenses. Also, the expenses page labels map contains `approve`/`mark_paid`
    which can never render (the lifecycle is RECORDED → VOID only) — dead UI. [FIX]
+   — resolved 2026-10: the labels map and row actions now expose only `void`;
+   approve/reject exist on the API for the external approval process.
 4. **Vehicle form** — sends `mileage`; the API reads `odometerKm`. A >0 baseline
    entered at registration is dropped (vehicle defaults to 0 km). Also the form
    is squeezed beside the list. [FIX]

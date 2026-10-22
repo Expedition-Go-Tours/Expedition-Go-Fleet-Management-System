@@ -104,7 +104,7 @@ describe("work order lifecycle", () => {
   });
 });
 
-describe("expense model (in-app approval)", () => {
+describe("expense model (recorded in-app, approved outside)", () => {
   it("has approve, reject and void — and no others", () => {
     expect(Object.keys(EXPENSES).sort()).toEqual(["approve", "reject", "void"]);
   });

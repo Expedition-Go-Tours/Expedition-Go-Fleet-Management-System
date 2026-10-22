@@ -84,10 +84,12 @@ Release: `vehicle:release` + reason + server check of open critical issues.
   incident and in `incident.updated` audit events. Status is the only
   action-gated field — descriptive fields edit via `incident:manage` PATCH.
 
-## Expense model (in-app approval)
+## Expense model (recorded in-app, approved outside)
 
-`PENDING → APPROVED | REJECTED`, and `APPROVED → VOID(reason, actor)` as a
-reversal. Approving and rejecting need `expense:approve` and run only from
-`PENDING`; rejection requires a reason. Reports count `PENDING` and `APPROVED`
-only. Fuel entries create/reference one canonical expense; reports count each
-pesewa once via `expenseId`.
+The app records; approval is an **external decision**. Statuses remain
+`PENDING → APPROVED | REJECTED`, with `APPROVED → VOID(reason, actor)` as the
+only in-app correction. The `approve`/`reject` API actions remain behind
+`expense:approve` (from `PENDING`, rejection with a reason) for an external
+process or integration — **no screen exposes them**. Reports count `PENDING`
+and `APPROVED` only. Fuel entries create/reference one canonical expense;
+reports count each pesewa once via `expenseId`.

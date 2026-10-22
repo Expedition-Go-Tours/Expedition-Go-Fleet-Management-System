@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
-import { EXPENSE_ACTIONS, EXPENSE_CATEGORIES } from "@/lib/domain/expense";
+import { availableExpenseActions, EXPENSE_CATEGORIES } from "@/lib/domain/expense";
 import { formatMoney, humanizeEnum } from "@/lib/format";
 import {
   listExpenses,
@@ -24,8 +24,6 @@ import Link from "next/link";
 export const metadata = { title: "Expenses" };
 
 const LABELS: Record<string, string> = {
-  approve: "Approve",
-  reject: "Reject",
   void: "Void",
 };
 
@@ -116,13 +114,11 @@ export default async function ExpensesPage({
             ) : (
               <ul className="divide-hairline divide-y">
                 {rows.map((expense) => {
-                  const actions = Object.entries(EXPENSE_ACTIONS)
-                    .filter(
-                      ([, def]) =>
-                        (def.from as readonly string[]).includes(expense.status) &&
-                        permissions.includes(def.permission),
-                    )
-                    .map(([action]) => ({ action, label: LABELS[action] ?? action }));
+                  // Record-only ledger: availableExpenseActions() applies the
+                  // business rule, so approve/reject never reach a screen.
+                  const actions = availableExpenseActions(expense.status, permissions).map(
+                    (action) => ({ action, label: LABELS[action] ?? action }),
+                  );
                   const workOrderLabel = woTitle(expense.workOrderId);
 
                   return (
@@ -153,17 +149,9 @@ export default async function ExpensesPage({
                           endpoint={`/api/v1/expenses/${expense.id}/status`}
                           actions={actions}
                           confirm={{
-                            approve:
-                              "Approve this expense? It will be counted in financial reports.",
-                            reject: "Reject this expense? It will be excluded from totals.",
                             void: "Void this expense? The record is kept but excluded from totals.",
                           }}
                           reason={{
-                            reject: {
-                              label: "Reason for rejecting",
-                              required: true,
-                              placeholder: "Wrong vehicle or amount",
-                            },
                             void: {
                               label: "Reason for voiding",
                               required: true,
@@ -222,7 +210,8 @@ export default async function ExpensesPage({
                 </div>
               </dl>
               <p className="text-body-xs text-muted border-hairline border-t px-5 py-3">
-                Rejected and voided expenses are kept in the ledger but excluded from totals.
+                Expenses are recorded here and approved outside the app. Voided entries are kept for
+                audit but excluded from totals.
               </p>
             </Card>
           )}

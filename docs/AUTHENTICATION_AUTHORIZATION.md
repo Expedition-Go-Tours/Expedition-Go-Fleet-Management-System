@@ -297,7 +297,7 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 | Record fuel | Yes | Yes | Yes |
 | Read expenses | Yes | Yes | Yes |
 | Record expenses | No | Yes | Yes |
-| Approve/reject expenses | No | Yes | Yes |
+| Approve/reject expenses (API only — approval happens outside the app) | No | Yes | Yes |
 | Void/correct expenses | No | Yes, with reason | Yes, with reason |
 | Read financial totals / export | No | Yes | Yes |
 | Manage providers | Yes | Read | Yes |

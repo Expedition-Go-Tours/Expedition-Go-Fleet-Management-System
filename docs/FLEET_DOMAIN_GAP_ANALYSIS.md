@@ -44,7 +44,7 @@ not trusted at face value.
 | Vehicle profile | Only reg/make/model/year/type/vin/mileage. No capacity, fuel type, ownership class, acquired/in-service dates. Mileage is a freely PATCHable integer — no ledger, no history, no corrections. |
 | Reports | No reference number, category, safety flag, immobilization flag, odometer capture, evidence, follow-up comments, or driver "My Reports" view. Report→work-order is 1:1 only (spec demands many-to-many). |
 | Work orders | No completion evidence gate (any state change suffices), no completion odometer/date, no parts/labour, no provider link, no waiting/blocked or verification states, no number. |
-| Expenses | Lifecycle `PENDING→APPROVED→PAID` with in-app approve/pay actions — **conflicts** with the requirement that approval happens outside this system. No supplier, receipt, or work-order-cost linkage semantics. |
+| Expenses | Lifecycle `PENDING→APPROVED→PAID` with in-app approve/pay actions — **conflicts** with the requirement that approval happens outside this system. No supplier, receipt, or work-order-cost linkage semantics. **RESOLVED 2026-10:** no screen exposes approve/reject (record + void only); the API actions remain for the external approver; supplier, receipt and work-order linkage now exist. |
 | Audit | Captures actor/entity/before-after for state changes; not yet wired to odometer, service, inspection, assignment, document events. |
 | Firestore access | Equality-filter + in-memory sort everywhere; no compound indexes, no pagination. Acceptable only as a temporary state. |
 | Vehicle detail | Flat page — no tabs, no history, no timeline, no documents section. |
@@ -88,7 +88,9 @@ double-submit/idempotency tests.
 
 1. **Expense approval lifecycle** (`APPROVED` state, `approve`/`mark_paid`
    actions, approval UI) — approval happens outside the system. Must be
-   redesigned to record/void only.
+   redesigned to record/void only. **RESOLVED 2026-10:** the approval UI is
+   removed from every screen; recording and Void (reason + audit) remain; the
+   permission-gated API actions stay available to an external approver.
 2. **`PATCH /vehicles/[id]` mileage** — free-form editing conflicts with the
    accountable odometer ledger. Must be removed in favour of recorded readings.
 3. **Report auto-activation semantics** — none, but reports currently cannot

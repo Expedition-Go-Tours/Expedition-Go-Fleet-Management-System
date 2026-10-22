@@ -4,10 +4,13 @@ import type { ActionMap } from "@/lib/domain/lifecycle";
 /*
  * Expense domain model.
  *
- * Approval happens IN this system: an expense is recorded as PENDING, then an
- * approver (Operations/Admin) signs it off as APPROVED or REJECTED. A recorded
- * expense is a fact — nothing is ever deleted; a void (with a reason) reverses
- * an approved cost. Money is stored as integer pesewas — never floats.
+ * Approval happens OUTSIDE this system. The app records an expense as PENDING;
+ * an external approver (Operations/Admin via the API, or their own process)
+ * applies APPROVED or REJECTED. The approve/reject actions stay in the action
+ * map so that integration can drive them, but no screen offers them — the only
+ * in-app correction is a void (with a reason) of an approved cost. A recorded
+ * expense is a fact — nothing is ever deleted. Money is stored as integer
+ * pesewas — never floats.
  */
 
 export const EXPENSE_STATUSES = ["PENDING", "APPROVED", "REJECTED", "VOID"] as const;
@@ -93,6 +96,33 @@ export const EXPENSE_ACTIONS = {
     to: "VOID",
   },
 } as const satisfies ActionMap<ExpenseStatus>;
+
+/**
+ * The only expense actions a screen may offer.
+ *
+ * Business rule: the app records expenses and approval happens outside it, so
+ * `approve`/`reject` are API capability for the external approver — never UI
+ * steps. `void` is the single in-app correction and always needs a reason.
+ */
+export const IN_APP_EXPENSE_ACTIONS = ["void"] as const;
+
+/**
+ * In-app actions available for an expense right now: the record-only rule
+ * applied first, then the lifecycle (`from`) and the caller's permissions.
+ * Returns action names, in action-map order, so callers own presentation.
+ */
+export function availableExpenseActions(
+  status: ExpenseStatus,
+  permissions: readonly string[],
+): string[] {
+  return Object.entries(EXPENSE_ACTIONS)
+    .filter(([action]) => (IN_APP_EXPENSE_ACTIONS as readonly string[]).includes(action))
+    .filter(
+      ([, def]) =>
+        (def.from as readonly string[]).includes(status) && permissions.includes(def.permission),
+    )
+    .map(([action]) => action);
+}
 
 /** Guards for expense amounts: positive, bounded, integer pesewas. */
 export function isValidAmountMinor(amountMinor: unknown): amountMinor is number {

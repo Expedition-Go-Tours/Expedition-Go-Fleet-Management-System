@@ -227,9 +227,11 @@ POST /fuel                         { vehicleId, odometerKm, litres, pricePerLitr
 - Expenses observe the lifecycle `PENDING → APPROVED | REJECTED`, with `VOID`
   as a reversal of an approved cost
   (`POST /expenses/:id/status { action: "approve" | "reject" | "void", reason? }`).
-  - `approve` and `reject` require `expense:approve` (OPERATIONS/ADMIN) and only
-    run from `PENDING`. Rejecting requires a reason, so whoever recorded the
-    expense understands why.
+  - `approve` and `reject` are **API-only** (they require `expense:approve`,
+    OPERATIONS/ADMIN, and only run from `PENDING`): approval happens outside
+    the system, so no screen offers these buttons. Rejecting requires a reason.
+  - The only expense action a user sees in the app is `void`, with a required
+    reason and an audit entry.
   - `void` requires `expense:void` (OPERATIONS/ADMIN) and only runs from
     `APPROVED` — it reverses a cost that was already signed off. Voiding and
     rejecting are permanent-audited and never delete the record.
@@ -377,6 +379,6 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
 | No repair without a traceable record | work-order completion evidence gate + immutable ServiceRecord |
 | No release from a hold by same-party fixers | `vehicle:release` held only by ADMIN, and only after open critical issues are closed |
 | Money recorded once, never double-counted | integer pesewas; fuel → canonical Expense in one transaction |
-| No expense "approval" drift | every expense is PENDING until an approver signs it off; rejection and void both require a reason and are audited |
+| No expense "approval" drift | the app records and voids only — approve/reject exist on the API for the external approval process, never as UI steps; void requires a reason and is audited |
 | Reminders/journaling survive reruns | `dedupeKey` idempotency + Firestore transactions |
 | Write payloads never fail on `undefined` | `definedOnly` stripping in every repo write path |

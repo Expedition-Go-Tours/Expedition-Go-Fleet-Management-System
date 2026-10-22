@@ -11,7 +11,7 @@ for real. Nothing here needs a developer except where it says so.
 |---|---|
 | Roles simplified to three — Admin, Operations, Driver | Done |
 | Vehicle safety holds can be released (Admin only, and only when no critical issue is open) | Done |
-| Expenses need approval — Pending → Approved / Rejected, with Void to reverse | Done |
+| Expenses are recorded in the app and approved outside it; Void reverses with a reason | Done |
 | Two-factor login for Admin and Operations | Built, needs one console switch (below) |
 | Two-factor recovery if someone loses their phone | Done — **Users → Reset 2FA** |
 | Document uploads (Cloudinary) | Built, needs your account keys (below) |
@@ -120,8 +120,8 @@ Vercel → Project → Settings → Cron Jobs, pointing at the reminder endpoint
 
 - [ ] You can sign in and see the dashboard.
 - [ ] A Driver can log a trip and see only their own work.
-- [ ] An Operations user can record an expense; you can approve it; the total
-      moves; a rejected or voided one does not count.
+- [ ] An Operations user can record an expense; approval happens outside the
+      app; a voided one does not count toward totals.
 - [ ] A vehicle placed on safety hold cannot be assigned to a trip.
 - [ ] You can upload a document and then open it again.
 - [ ] With two-factor on, signing in asks for a code from your app.

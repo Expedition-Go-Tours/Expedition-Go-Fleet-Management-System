@@ -113,12 +113,12 @@ AUTHENTICATION_AUTHORIZATION.md §3.3 for the decision table).
     `OPEN → IN_PROGRESS ⇄ WAITING → COMPLETED → VERIFIED → CLOSED →(reopen) OPEN`;
     completion is evidence-gated (`workPerformed` + `odometerKm`) and
     idempotent per work order (replays return the existing service record).
-  - Expenses follow `PENDING → APPROVED | REJECTED`, with `VOID` as a
-    reversal of an approved cost. Approving/rejecting needs `expense:approve`
-    (OPERATIONS/ADMIN) and runs only from `PENDING`; voiding needs
-    `expense:void` and runs only from `APPROVED`. Rejection and void each
-    require a reason. `PENDING`/`APPROVED` count in reports, `REJECTED`/`VOID`
-    do not.
+  - Expenses are **recorded in the app and approved outside it** (business
+    rule). The API retains `approve`/`reject` behind `expense:approve`
+    (OPERATIONS/ADMIN, from `PENDING`) so an external process or integration
+    can apply decisions, but **no screen offers them**. The only in-app
+    correction is `void` (`expense:void`, from `APPROVED`, reason + audit).
+    `PENDING`/`APPROVED` count in reports, `REJECTED`/`VOID` do not.
   - Report ownership: `report:read:own` scoping enforced in the list and
     get endpoints; `report:read:all` reads everything. Closing an issue
     requires a resolution, a duplicate link, or a not-actionable reason.
