@@ -150,14 +150,14 @@ export async function countWorkOrders(options?: {
  */
 export async function countWorkOrderTotals(options?: {
   vehicleId?: string;
-}): Promise<{ total: number; open: number }> {
+}): Promise<{ total: number; open: number; waiting: number }> {
   const [total, open, inProgress, waiting] = await Promise.all([
     countWorkOrders(options),
     countWorkOrders({ ...options, status: "OPEN" }),
     countWorkOrders({ ...options, status: "IN_PROGRESS" }),
     countWorkOrders({ ...options, status: "WAITING" }),
   ]);
-  return { total, open: open + inProgress + waiting };
+  return { total, open: open + inProgress + waiting, waiting };
 }
 
 export interface UpdateWorkOrderFields {

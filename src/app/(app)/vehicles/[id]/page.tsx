@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CalendarClock, Gauge, Wrench, type LucideIcon } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  Gauge,
+  ReceiptText,
+  UserRound,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 
 import { StatusActions } from "@/components/actions/StatusActions";
 import { StartAssignmentDialog } from "@/components/assignments/StartAssignmentDialog";
@@ -19,8 +27,14 @@ import { isCloudinaryConfigured } from "@/lib/cloudinary";
 import { computeScheduleStatus } from "@/lib/domain/maintenance";
 import { VEHICLE_STATUS_ACTIONS } from "@/lib/domain/vehicle";
 import { formatDate, formatIsoDate, formatKm, humanizeEnum } from "@/lib/format";
-import { countAssignments, listAssignments } from "@/lib/repos/assignments";
+import { buildVehicleOverview, nextServiceLabel } from "@/lib/vehicles/overview";
+import {
+  countAssignments,
+  getActiveAssignmentForVehicle,
+  listAssignments,
+} from "@/lib/repos/assignments";
 import { listDocuments } from "@/lib/repos/documents";
+import { countExpenses, totalExpensesMinor } from "@/lib/repos/expenses";
 import { countFuelEntries, listFuelEntries } from "@/lib/repos/fuel";
 import { listSchedules, listServiceRecords } from "@/lib/repos/maintenance";
 import { countReadings, listReadings } from "@/lib/repos/odometers";
@@ -34,6 +48,15 @@ import type { MaintenanceSchedule } from "@/lib/repos/maintenance";
 export const metadata = { title: "Vehicle" };
 
 const EXPIRY_WARNING_DAYS = Number(process.env.DOCUMENT_EXPIRY_WARNING_DAYS ?? 30);
+
+const OVERVIEW_ICONS: Record<string, LucideIcon> = {
+  odometer: Gauge,
+  driver: UserRound,
+  next_service: CalendarClock,
+  safety: AlertTriangle,
+  repairs: Wrench,
+  cost: ReceiptText,
+};
 
 /** Visible action buttons computed from the server-side action map + the user's permissions. */
 function visibleActions(status: string, permissions: string[]) {
@@ -91,14 +114,27 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   // Accurate totals via Firestore aggregation — independent of the capped
   // "recent slice" lists above, so counts can never be silently truncated.
-  const [issueTotals, workOrderTotals, readingCount, assignmentCount, fuelCount] =
-    await Promise.all([
-      countIssueTotals({ vehicleId: vehicle.id }),
-      countWorkOrderTotals({ vehicleId: vehicle.id }),
-      countReadings(vehicle.id),
-      countAssignments({ vehicleId: vehicle.id }),
-      countFuelEntries(vehicle.id),
-    ]);
+  const [
+    issueTotals,
+    workOrderTotals,
+    readingCount,
+    assignmentCount,
+    fuelCount,
+    activeAssignment,
+    costToDateMinor,
+    expenseCount,
+  ] = await Promise.all([
+    countIssueTotals({ vehicleId: vehicle.id }),
+    countWorkOrderTotals({ vehicleId: vehicle.id }),
+    countReadings(vehicle.id),
+    countAssignments({ vehicleId: vehicle.id }),
+    countFuelEntries(vehicle.id),
+    // Direct lookup rather than scanning the capped "recent" list: an older
+    // assignment out of the first page would have hidden the current driver.
+    getActiveAssignmentForVehicle(vehicle.id),
+    totalExpensesMinor({ vehicleId: vehicle.id }),
+    countExpenses({ vehicleId: vehicle.id }),
+  ]);
 
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const now = new Date();
@@ -119,15 +155,12 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     return { schedule: s, result };
   });
 
-  const openIssues = issueTotals.open;
-  const openWorkOrders = workOrderTotals.open;
-
   // Staff (assignment:create) may assign an active driver to an available
   // vehicle. The server re-checks reservations, safety hold and permissions;
   // this only decides whether the control is offered at all.
   const canAssign = permissions.includes(PERMISSIONS.ASSIGNMENT_CREATE);
   const canLogService = permissions.includes(PERMISSIONS.SERVICE_RECORD);
-  const hasActiveAssignment = assignments.some((a) => a.status === "ACTIVE");
+  const hasActiveAssignment = activeAssignment !== null;
   const driverOptions = users
     .filter((u) => u.roles.includes("DRIVER") && u.status === "ACTIVE")
     .map((u) => ({ id: u.id, label: `${u.name} · ${u.email}` }))
@@ -136,6 +169,19 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     canAssign && vehicle.status === "ACTIVE" && !hasActiveAssignment && driverOptions.length > 0;
 
   const nextService = nextServiceLabel(evaluatedSchedules, vehicle.odometerKm);
+  const overview = buildVehicleOverview({
+    vehicleId: vehicle.id,
+    odometerKm: vehicle.odometerKm,
+    driverName: activeAssignment
+      ? (userNames.get(activeAssignment.driverUserId) ?? activeAssignment.driverUserId)
+      : null,
+    openSafetyIssues: issueTotals.safetyOpen,
+    openWorkOrders: workOrderTotals.open,
+    waitingWorkOrders: workOrderTotals.waiting,
+    nextService,
+    costToDateMinor,
+    expenseCount,
+  });
 
   const tabData: VehicleDetailTabData = {
     vehicleId: vehicle.id,
@@ -315,41 +361,32 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         }
       />
 
-      {/* Summary strip */}
+      {/* Summary strip — the six facts a dispatcher needs before releasing it */}
       <Card flush>
-        <div className="divide-hairline grid grid-cols-2 divide-x md:grid-cols-4">
-          <SummaryCell label="Current odometer" value={formatKm(vehicle.odometerKm)} icon={Gauge} />
-          {vehicle.estimatedKm != null && vehicle.estimatedKm > 0 && (
-            <SummaryCell
-              label="Estimated km"
-              value={formatKm(vehicle.estimatedKm)}
-              hint={
-                vehicle.estimatedKmTripCount
-                  ? `${vehicle.estimatedKmTripCount} trips since baseline`
-                  : undefined
-              }
-              icon={Gauge}
-            />
-          )}
-          <SummaryCell
-            label="Next service"
-            value={nextService.value}
-            tone={nextService.tone}
-            hint={nextService.hint}
-            icon={CalendarClock}
-          />
-          <LinkCell
-            label="Open issues"
-            value={String(openIssues)}
-            href={`/reports?vehicleId=${vehicle.id}&open=1`}
-            icon={AlertTriangle}
-          />
-          <LinkCell
-            label="Open work orders"
-            value={String(openWorkOrders)}
-            href={`/work-orders?vehicleId=${vehicle.id}&open=1`}
-            icon={Wrench}
-          />
+        <div className="divide-hairline grid grid-cols-2 divide-x md:grid-cols-3 xl:grid-cols-6">
+          {overview.map((cell) => {
+            const Icon = OVERVIEW_ICONS[cell.key];
+            return cell.href ? (
+              <LinkCell
+                key={cell.key}
+                label={cell.label}
+                value={cell.value}
+                hint={cell.hint}
+                tone={cell.tone}
+                href={cell.href}
+                icon={Icon}
+              />
+            ) : (
+              <SummaryCell
+                key={cell.key}
+                label={cell.label}
+                value={cell.value}
+                hint={cell.hint}
+                tone={cell.tone}
+                icon={Icon}
+              />
+            );
+          })}
         </div>
       </Card>
 
@@ -382,42 +419,6 @@ function scheduleToTab(
     nextDueDate: formatIsoDate(result.nextDueDate),
     remainingKm: result.remainingKm,
     remainingDays: result.remainingDays,
-  };
-}
-
-function nextServiceLabel(
-  evaluated: { schedule: MaintenanceSchedule; result: ReturnType<typeof computeScheduleStatus> }[],
-  odometerKm: number,
-): { value: string; tone: "default" | "accent" | "warning" | "danger"; hint: string } {
-  const rank = { OVERDUE: 0, DUE: 1, DUE_SOON: 2, NOT_CONFIGURED: 3, OK: 4 } as const;
-  const sorted = [...evaluated]
-    .filter((e) => e.result.status !== "OK")
-    .sort((a, b) => rank[a.result.status] - rank[b.result.status]);
-  const first = sorted[0];
-  if (!first) {
-    return { value: "On schedule", tone: "default", hint: "No task due in the configured windows" };
-  }
-  if (first.result.status === "NOT_CONFIGURED") {
-    return {
-      value: "Not configured",
-      tone: "default",
-      hint: "Some tasks lack a baseline or interval",
-    };
-  }
-  const t = first.schedule;
-  const r = first.result;
-  const remaining =
-    r.remainingKm !== null
-      ? `${r.remainingKm.toLocaleString()} km`
-      : r.remainingDays !== null
-        ? `${r.remainingDays} day${r.remainingDays === 1 ? "" : "s"}`
-        : null;
-  return {
-    value: `${t.taskName}`,
-    tone: r.status === "OVERDUE" ? "danger" : r.status === "DUE" ? "accent" : "warning",
-    hint: remaining
-      ? `${r.status === "OVERDUE" ? "Overdue by" : "Due in"} ${remaining} (${formatKm(odometerKm)})`
-      : `${r.status} — see Maintenance tab`,
   };
 }
 
@@ -457,24 +458,37 @@ function SummaryCell({
 function LinkCell({
   label,
   value,
+  hint,
+  tone = "default",
   href,
   icon: Icon,
 }: {
   label: string;
   value: string;
+  hint?: string;
+  tone?: "default" | "accent" | "warning" | "danger";
   href: string;
   icon?: LucideIcon;
 }) {
+  const toneClasses = {
+    default: "text-ink",
+    accent: "text-accent",
+    warning: "text-warning",
+    danger: "text-error",
+  }[tone];
   return (
-    <Link href={href} className="hover:bg-subtle flex flex-col gap-0.5 px-5 py-4 transition-colors">
+    <Link
+      href={href}
+      className="hover:bg-subtle focus-visible:outline-accent flex flex-col gap-0.5 px-5 py-4 transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+    >
       <span className="font-ui text-data-xs text-muted flex items-center gap-1.5 font-medium tracking-[var(--tracking-ui)] uppercase">
         {Icon && <Icon aria-hidden="true" className="text-faint h-3.5 w-3.5 shrink-0" />}
         {label}
       </span>
-      <span className="font-heading text-heading-md text-ink font-semibold tabular-nums">
+      <span className={`font-heading text-heading-md font-semibold tabular-nums ${toneClasses}`}>
         {value}
       </span>
-      <span className="text-data-xs text-link mt-0.5">View records</span>
+      <span className="text-data-xs text-muted mt-0.5">{hint ?? "View records"}</span>
     </Link>
   );
 }

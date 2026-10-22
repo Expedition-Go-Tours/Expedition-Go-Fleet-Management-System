@@ -186,17 +186,22 @@ export async function countIssues(options?: {
   return snap.data().count;
 }
 
-/** Total issues and the non-closed subset, in parallel. */
+/**
+ * Total issues and the non-closed subset, in parallel. `safetyOpen` is the
+ * open subset flagged safety-critical — what keeps a vehicle off the road.
+ */
 export async function countIssueTotals(options?: {
   vehicleId?: string;
   reportedBy?: string;
-}): Promise<{ total: number; open: number }> {
-  const [total, open, triaged] = await Promise.all([
+}): Promise<{ total: number; open: number; safetyOpen: number }> {
+  const [total, open, triaged, safetyOpen, safetyTriaged] = await Promise.all([
     countIssues(options),
     countIssues({ ...options, status: "OPEN" }),
     countIssues({ ...options, status: "TRIAGED" }),
+    countIssues({ ...options, status: "OPEN", safetyCritical: true }),
+    countIssues({ ...options, status: "TRIAGED", safetyCritical: true }),
   ]);
-  return { total, open: open + triaged };
+  return { total, open: open + triaged, safetyOpen: safetyOpen + safetyTriaged };
 }
 
 /** Record a lifecycle transition (triage/close) with actor + timestamps. */
