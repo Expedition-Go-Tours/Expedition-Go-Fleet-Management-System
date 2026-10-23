@@ -13,13 +13,11 @@ import {
   FUEL_TYPES_SUPPORTED,
   type FuelPurchaseFormValues,
 } from "@/lib/domain/fuel";
-import { formatMoney } from "@/lib/format";
 
 /**
  * Record a fuel purchase. The server is the authority (it also mirrors the
  * cost into the canonical expense and the odometer ledger), but the body is
- * built by the same pure domain helper that is unit-tested, so the total shown
- * here is exactly the total that gets stored.
+ * built by the same pure domain helper that is unit-tested.
  */
 export function AddFuelDialog({
   canCreate,
@@ -34,19 +32,12 @@ export function AddFuelDialog({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [totalMinor, setTotalMinor] = useState<number | null>(null);
   // One token per opened form: a retried submission cannot double-record.
   const clientTokenRef = useRef<string>("");
 
   function openDialog() {
     clientTokenRef.current = crypto.randomUUID();
     setOpen(true);
-  }
-
-  function onFormInput(event: FormEvent<HTMLFormElement>) {
-    const form = new FormData(event.currentTarget);
-    const result = buildFuelCreatePayload(readValues(form));
-    setTotalMinor(result.ok ? result.payload.totalMinor : null);
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -67,7 +58,6 @@ export function AddFuelDialog({
       });
       setOpen(false);
       (event.target as HTMLFormElement).reset();
-      setTotalMinor(null);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not record the fuel purchase");
@@ -86,7 +76,7 @@ export function AddFuelDialog({
         open={open}
         onClose={() => setOpen(false)}
         title="Record fuel purchase"
-        description="The cost is mirrored into the expense ledger. If you enter the odometer, it is also recorded through the odometer ledger."
+        description="Record the total amount paid. The cost is mirrored into the expense ledger; the odometer is optional."
         size="lg"
         footer={
           <>
@@ -102,7 +92,6 @@ export function AddFuelDialog({
         <form
           id="add-fuel-form"
           onSubmit={onSubmit}
-          onInput={onFormInput}
           className="grid grid-cols-1 gap-4 sm:grid-cols-2"
         >
           {error && (
@@ -158,27 +147,20 @@ export function AddFuelDialog({
               ))}
             </Select>
           </Field>
-          <Field label="Litres" required htmlFor="af-litres">
+          <Field
+            label="Amount paid"
+            required
+            hint="Total on the receipt. No litres or price per litre needed."
+            htmlFor="af-amount"
+          >
             <Input
-              id="af-litres"
-              name="litres"
+              id="af-amount"
+              name="amount"
               type="number"
               min={0.01}
-              step="any"
+              step="0.01"
               inputMode="decimal"
-              placeholder="e.g. 42.5"
-              required
-            />
-          </Field>
-          <Field label="Unit price (per litre)" required htmlFor="af-unit">
-            <Input
-              id="af-unit"
-              name="unitPrice"
-              type="number"
-              min={0.01}
-              step="any"
-              inputMode="decimal"
-              placeholder="e.g. 12.50"
+              placeholder="e.g. 500.00"
               required
             />
           </Field>
@@ -200,15 +182,10 @@ export function AddFuelDialog({
                 />
                 <span className="text-data text-ink">Filled to full tank</span>
               </label>
-              {totalMinor !== null && (
-                <p className="text-body-xs text-muted">
-                  Total <span className="text-ink font-medium">{formatMoney(totalMinor)}</span>
-                </p>
-              )}
             </div>
             <p className="text-body-xs text-muted">
-              Efficiency is only measured between consecutive full-tank fill-ups that both carry an
-              odometer reading. Without one, this purchase still records its cost and litres.
+              Amount-only fill-ups still count as fuel spend. Efficiency needs litres and odometer
+              readings, so these are not measured.
             </p>
           </div>
         </form>
@@ -222,8 +199,7 @@ function readValues(form: FormData): FuelPurchaseFormValues {
     vehicleId: String(form.get("vehicleId") ?? ""),
     transactedOn: String(form.get("transactedOn") ?? ""),
     odometerKm: String(form.get("odometerKm") ?? ""),
-    litres: String(form.get("litres") ?? ""),
-    unitPrice: String(form.get("unitPrice") ?? ""),
+    amount: String(form.get("amount") ?? ""),
     fuelType: String(form.get("fuelType") ?? ""),
     station: String(form.get("station") ?? ""),
     fullTank: form.get("fullTank") === "on",

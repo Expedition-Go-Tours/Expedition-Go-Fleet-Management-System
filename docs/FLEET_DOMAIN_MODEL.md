@@ -95,10 +95,10 @@ immediately after recording. The former `approve`/`reject` API actions were
 removed with the unused `expense:approve` permission; no external consumer
 existed. Reports count `PENDING` and `APPROVED` only, so legacy rows keep
 their historical meaning. Fuel entries create/reference one canonical
-expense; reports count each pesewa once via `expenseId`. The fuel odometer is
-optional: an office-paid fill-up without a dashboard reading still records its
-cost and litres, but writes no odometer reading and breaks the efficiency
-chain rather than inflating a later km/l figure.
+expense; reports count each pesewa once via `expenseId`. The fuel odometer and
+litres are optional: an office-paid fill-up may only know the amount. It still
+records its cost, writes no odometer reading, and breaks the efficiency chain
+rather than inflating a later km/l figure.
 
 Service completions and direct service logs may each carry at most one linked
 MAINTENANCE expense. The expense id is deterministic

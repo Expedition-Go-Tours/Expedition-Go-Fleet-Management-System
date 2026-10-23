@@ -69,7 +69,10 @@ export async function POST(request: NextRequest) {
     const odometer = parseOdometerKm(body.odometerKm);
     if (!odometer.ok) throw ApiError.badRequest(odometer.message);
     const odometerKm = odometer.odometerKm;
-    const litres = Number(body.litres);
+    const litres =
+      body.litres === undefined || body.litres === null || body.litres === ""
+        ? undefined
+        : Number(body.litres);
     const fuelType = typeof body.fuelType === "string" ? body.fuelType : "PETROL";
     const currency = typeof body.currency === "string" ? body.currency.toUpperCase() : "GHS";
 
@@ -85,7 +88,7 @@ export async function POST(request: NextRequest) {
     } else {
       const unitMajor = Number(body.unitPrice);
       const unitMinor = toPesewas(body.unitPriceMinor ?? unitMajor);
-      if (unitMinor === null || !Number.isFinite(litres) || litres <= 0) {
+      if (unitMinor === null || litres === undefined || !Number.isFinite(litres) || litres <= 0) {
         throw ApiError.badRequest("Provide totalMinor or unitPrice(+litres)");
       }
       totalMinor = Math.round(unitMinor * litres);
@@ -113,14 +116,17 @@ export async function POST(request: NextRequest) {
           })
         : null;
 
-    // Canonical expense for the cost — counted once in reports.
+    // Canonical expense for the cost — counted once in reports. Amount-only
+    // entries (the common office case) describe the fuel without inventing a
+    // volume or unit price.
+    const station = typeof body.station === "string" ? body.station : undefined;
     const expense = await createExpense({
       vehicleId,
       category: "FUEL",
       amountMinor: totalMinor,
       currency,
-      description: `${litres}L ${fuelType}${typeof body.station === "string" ? ` @ ${body.station}` : ""}`,
-      supplierName: typeof body.station === "string" ? body.station.slice(0, 200) : undefined,
+      description: `${litres !== undefined ? `${litres}L ` : ""}${fuelType}${station ? ` @ ${station}` : ""}`,
+      supplierName: station?.slice(0, 200),
       receiptKey: typeof body.receiptKey === "string" ? body.receiptKey.slice(0, 500) : undefined,
       incurredOn: new Date(`${transactedOn}T12:00:00Z`),
       createdBy: context.user.id,
@@ -132,7 +138,7 @@ export async function POST(request: NextRequest) {
       ...(odometerKm !== undefined ? { odometerKm } : {}),
       ...(reading ? { odometerReadingId: reading.reading.id } : {}),
       fuelType,
-      litres,
+      ...(litres !== undefined ? { litres } : {}),
       unitPriceMinor: body.unitPriceMinor !== undefined ? Number(body.unitPriceMinor) : undefined,
       totalMinor,
       currency,
@@ -152,7 +158,7 @@ export async function POST(request: NextRequest) {
       entityId: entry.id,
       after: {
         vehicleId,
-        litres,
+        litres: litres ?? null,
         totalMinor,
         fullTank: entry.fullTank,
         odometerKm: odometerKm ?? null,

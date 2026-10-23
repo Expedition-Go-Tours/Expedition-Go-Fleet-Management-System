@@ -14,8 +14,7 @@ const validForm: FuelPurchaseFormValues = {
   vehicleId: "veh_1",
   transactedOn: "2026-10-21",
   odometerKm: "128450",
-  litres: "40",
-  unitPrice: "12.5",
+  amount: "500.00",
   fuelType: "PETROL",
   station: "  Goil, Accra Central  ",
   fullTank: true,
@@ -34,8 +33,6 @@ describe("buildFuelCreatePayload — form to POST /api/v1/fuel body", () => {
         vehicleId: "veh_1",
         transactedOn: "2026-10-21",
         odometerKm: 128450,
-        litres: 40,
-        unitPrice: 12.5,
         totalMinor: 50000,
         fuelType: "PETROL",
         station: "Goil, Accra Central",
@@ -44,11 +41,16 @@ describe("buildFuelCreatePayload — form to POST /api/v1/fuel body", () => {
     });
   });
 
-  it("computes the total the server will store, without float drift", () => {
-    // 0.29 * 100 = 28.999999999999996 in IEEE-754; the integer path must be exact.
-    const result = build({ litres: "10", unitPrice: "0.29" });
-    expect(result.ok && result.payload.totalMinor).toBe(290);
-    expect(result.ok && result.payload.unitPrice).toBe(0.29);
+  it("stores the amount the operator typed, in exact integer pesewas", () => {
+    // 500.29 * 100 = 50028.999999999993 in IEEE-754; the integer path must be exact.
+    const result = build({ amount: "500.29" });
+    expect(result.ok && result.payload.totalMinor).toBe(50029);
+  });
+
+  it("does not send litres or a unit price", () => {
+    const result = build({});
+    expect(result.ok && "litres" in result.payload).toBe(false);
+    expect(result.ok && "unitPrice" in result.payload).toBe(false);
   });
 
   it("omits the station when it is blank rather than sending empty text", () => {
@@ -95,23 +97,22 @@ describe("buildFuelCreatePayload — form to POST /api/v1/fuel body", () => {
       ok: false,
       message: "transactedOn must be YYYY-MM-DD",
     });
-    expect(build({ litres: "0" })).toEqual({
+    expect(build({ amount: "0" })).toEqual({
       ok: false,
-      message: "litres must be a positive number",
+      message: "amount must be a positive amount",
     });
-    expect(build({ unitPrice: "abc" })).toEqual({
-      ok: false,
-      message: "unitPrice must be a positive amount",
-    });
-    expect(build({ unitPrice: "" })).toEqual({
-      ok: false,
-      message: "unitPrice must be a positive amount",
-    });
+    for (const amount of ["abc", "", "12.345", "-5"]) {
+      expect(build({ amount })).toEqual({
+        ok: false,
+        message: "amount must be a positive amount",
+      });
+    }
   });
 });
 
 describe("isValidFuelEntry", () => {
-  it("accepts a positive volume and a positive integer pesewa total", () => {
+  it("accepts an amount without a volume, and a volume when supplied", () => {
+    expect(isValidFuelEntry({ totalMinor: 53125 })).toEqual({ ok: true });
     expect(isValidFuelEntry({ litres: 42.5, totalMinor: 53125 })).toEqual({ ok: true });
   });
 
@@ -185,6 +186,23 @@ describe("computeConsumption — full-tank sequences only", () => {
     );
     expect(secondMissing.kmPerLitre).toBeNull();
   });
+
+  it("refuses to measure when either fill-up has no volume", () => {
+    const firstMissing = computeConsumption(
+      { odometerKm: 1000, fullTank: true },
+      { odometerKm: 1400, litres: 50, fullTank: true },
+    );
+    expect(firstMissing.kmPerLitre).toBeNull();
+    expect(firstMissing.reason).toBe(
+      "Both fill-ups need a recorded volume for a defensible figure",
+    );
+
+    const secondMissing = computeConsumption(
+      { odometerKm: 1000, litres: 40, fullTank: true },
+      { odometerKm: 1400, fullTank: true },
+    );
+    expect(secondMissing.kmPerLitre).toBeNull();
+  });
 });
 
 describe("consumptionByEntry — a missing reading breaks the chain", () => {
@@ -192,7 +210,7 @@ describe("consumptionByEntry — a missing reading breaks the chain", () => {
     id: string,
     transactedOn: string,
     odometerKm: number | undefined,
-    litres: number,
+    litres: number | undefined,
     overrides: Partial<{ vehicleId: string; fullTank: boolean }> = {},
   ) => ({
     id,
@@ -233,6 +251,17 @@ describe("consumptionByEntry — a missing reading breaks the chain", () => {
     ]);
     expect(measured.has("c")).toBe(false);
     expect(measured.get("d")).toBe(10);
+  });
+
+  it("breaks the chain at an amount-only fill-up with no litres", () => {
+    const measured = consumptionByEntry([
+      fill("a", "2026-10-01", 1000, 40),
+      fill("b", "2026-10-05", 1400, undefined),
+      fill("c", "2026-10-12", 1800, 50),
+    ]);
+    expect(measured.has("b")).toBe(false);
+    expect(measured.has("c")).toBe(false);
+    expect(measured.size).toBe(0);
   });
 
   it("breaks the chain at an intervening partial fill-up", () => {

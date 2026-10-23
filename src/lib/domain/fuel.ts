@@ -6,11 +6,11 @@ import { toPesewas } from "@/lib/domain/expense";
  *
  * A fuel entry is the operational record; its cost lives in the canonical
  * Expense (linked by expenseId) so reports count each pesewa exactly once.
- * The odometer is optional because the person paying for fuel may not have
- * access to the dashboard. A purchase without a reading is still a real cost
- * and volume; it is simply not measured. Efficiency is only computed from
- * full-tank-to-full-tank sequences — anything less (including a missing
- * reading) reports "unknown" rather than an unreliable figure.
+ * The odometer and litres are optional: the person paying for fuel may only
+ * know the amount. A purchase without them is still a real cost; it is simply
+ * not measured. Efficiency is only computed from full-tank-to-full-tank
+ * sequences where both volume and readings exist — anything less reports
+ * "unknown" rather than an unreliable figure.
  */
 
 export const FUEL_TYPES_SUPPORTED = ["PETROL", "DIESEL", "HYBRID", "OTHER"] as const;
@@ -24,7 +24,7 @@ export interface FuelEntry {
   odometerKm?: number;
   odometerReadingId?: string;
   fuelType: string;
-  litres: number;
+  litres?: number;
   /** Pesewas per litre, when known. */
   unitPriceMinor?: number;
   /** Total cost in pesewas — mirrored into the canonical Expense. */
@@ -56,6 +56,12 @@ export function computeConsumption(
     return {
       kmPerLitre: null,
       reason: "Both fill-ups need an odometer reading for a defensible figure",
+    };
+  }
+  if (first.litres === undefined || second.litres === undefined) {
+    return {
+      kmPerLitre: null,
+      reason: "Both fill-ups need a recorded volume for a defensible figure",
     };
   }
   const distance = second.odometerKm - first.odometerKm;
@@ -99,7 +105,7 @@ export interface ConsumptionEntry {
   createdAt?: Date;
   odometerKm?: number;
   fullTank: boolean;
-  litres: number;
+  litres?: number;
 }
 
 /** Purchase order — date, then creation time, then id. Never odometer order. */
@@ -160,13 +166,16 @@ export function latestConsumption(
   return { kmPerLitre: latest ? (measured.get(latest.id) ?? null) : null };
 }
 
-/** Guard for fuel entry amounts and volumes. */
+/** Guard for fuel entry amounts and (optionally) volumes. */
 export function isValidFuelEntry(input: {
-  litres: unknown;
+  litres?: unknown;
   totalMinor: unknown;
 }): { ok: true } | { ok: false; message: string } {
-  if (typeof input.litres !== "number" || !Number.isFinite(input.litres) || input.litres <= 0) {
-    return { ok: false, message: "litres must be a positive number" };
+  if (
+    input.litres !== undefined &&
+    (typeof input.litres !== "number" || !Number.isFinite(input.litres) || input.litres <= 0)
+  ) {
+    return { ok: false, message: "litres must be a positive number when provided" };
   }
   if (
     typeof input.totalMinor !== "number" ||
@@ -183,8 +192,8 @@ export interface FuelPurchaseFormValues {
   vehicleId: string;
   transactedOn: string;
   odometerKm: string;
-  litres: string;
-  unitPrice: string;
+  /** Total amount paid on the receipt, in major units. */
+  amount: string;
   fuelType: string;
   station: string;
   fullTank: boolean;
@@ -196,9 +205,6 @@ export interface FuelCreatePayload {
   transactedOn: string;
   /** Present only when the operator actually has a reading. */
   odometerKm?: number;
-  litres: number;
-  /** Unit price in major units (what the operator typed). */
-  unitPrice: number;
   /** Cost in pesewas — authoritative: the API stores exactly this. */
   totalMinor: number;
   fuelType: string;
@@ -209,8 +215,7 @@ export interface FuelCreatePayload {
 /**
  * Form values → the fuel-entry request body, or the first message to show the
  * operator. The server re-validates everything; this exists so the dialog can
- * fail fast with the same rules and display the exact total that will be
- * stored (unit price × litres, computed in integer pesewas).
+ * fail fast with the same rules and show that the amount is stored exactly.
  */
 export function buildFuelCreatePayload(
   values: FuelPurchaseFormValues,
@@ -226,13 +231,15 @@ export function buildFuelCreatePayload(
   const odometer = parseOdometerKm(values.odometerKm);
   if (!odometer.ok) return odometer;
 
-  const litres = Number(values.litres);
-  const unitMinor = toPesewas(values.unitPrice);
-  if (unitMinor === null || unitMinor <= 0) {
-    return { ok: false, message: "unitPrice must be a positive amount" };
+  const amountRaw = values.amount.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(amountRaw)) {
+    return { ok: false, message: "amount must be a positive amount" };
   }
-  const totalMinor = Math.round(unitMinor * litres);
-  const amountCheck = isValidFuelEntry({ litres, totalMinor });
+  const totalMinor = toPesewas(amountRaw);
+  if (totalMinor === null || totalMinor <= 0) {
+    return { ok: false, message: "amount must be a positive amount" };
+  }
+  const amountCheck = isValidFuelEntry({ totalMinor });
   if (!amountCheck.ok) return amountCheck;
 
   const fuelType = values.fuelType.trim() || "PETROL";
@@ -247,8 +254,6 @@ export function buildFuelCreatePayload(
       vehicleId,
       transactedOn,
       ...(odometer.odometerKm !== undefined ? { odometerKm: odometer.odometerKm } : {}),
-      litres,
-      unitPrice: unitMinor / 100,
       totalMinor,
       fuelType,
       ...(station ? { station } : {}),

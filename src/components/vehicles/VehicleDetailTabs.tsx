@@ -96,7 +96,7 @@ export interface TabAssignmentData {
 export interface TabFuelData {
   id: string;
   transactedOn: string;
-  litres: number;
+  litres: number | null;
   amountMinor: number;
   currency: string;
   odometerKm: number | null;
@@ -702,7 +702,7 @@ function FuelPanel({
             <li key={f.id} className="flex items-center justify-between gap-3 px-5 py-3">
               <div className="flex min-w-0 flex-col">
                 <span className="text-data text-ink font-medium">
-                  {f.litres.toLocaleString()} L
+                  {f.litres !== null ? `${f.litres.toLocaleString()} L` : "Fuel purchase"}
                   {f.fullTank ? (
                     <span className="text-data-xs text-muted ml-1.5">(full tank)</span>
                   ) : null}

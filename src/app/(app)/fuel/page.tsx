@@ -61,7 +61,8 @@ export default async function FuelPage({
     })
     .sort((a, b) => b.transactedOn.localeCompare(a.transactedOn));
 
-  const totalLitres = rows.reduce((sum, r) => sum + r.litres, 0);
+  const totalLitres = rows.reduce((sum, r) => sum + (r.litres ?? 0), 0);
+  const litreCount = rows.filter((r) => typeof r.litres === "number").length;
   const totalMinor = rows.reduce((sum, r) => sum + r.totalMinor, 0);
   const measuredCount = rows.filter((r) => r.measured).length;
   const vehicleCount = new Set(rows.map((r) => r.vehicleId)).size;
@@ -70,7 +71,7 @@ export default async function FuelPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Fuel"
-        description="Fuel ledger. Costs are mirrored into canonical expenses; an odometer reading is optional, and efficiency is only reported from consecutive full-tank fill-ups that both carry one."
+        description="Fuel ledger. Record the amount paid; the odometer and litres are optional. Efficiency is only reported where consecutive full-tank fill-ups have both."
         crumbs={[{ label: "Finance & compliance" }, { label: "Fuel" }]}
         actions={<AddFuelDialog canCreate={canCreate} vehicles={vehicleOptions} />}
       />
@@ -84,8 +85,8 @@ export default async function FuelPage({
         />
         <KpiCard
           label="Volume"
-          value={`${formatNumber(totalLitres)} L`}
-          context="Recorded litres"
+          value={litreCount > 0 ? `${formatNumber(totalLitres)} L` : "—"}
+          context={litreCount > 0 ? `Across ${litreCount} fill-ups with litres` : "Not recorded"}
           icon={<Fuel aria-hidden="true" className="h-4 w-4" />}
         />
         <KpiCard
@@ -152,9 +153,13 @@ export default async function FuelPage({
                 )}
               </Td>
               <Td>
-                <span className="text-data text-ink tabular-nums">
-                  {formatNumber(row.litres)} L
-                </span>
+                {typeof row.litres === "number" ? (
+                  <span className="text-data text-ink tabular-nums">
+                    {formatNumber(row.litres)} L
+                  </span>
+                ) : (
+                  <CellMeta>Not recorded</CellMeta>
+                )}
               </Td>
               <Td>
                 <span className="text-data text-ink tabular-nums">
@@ -190,9 +195,9 @@ export default async function FuelPage({
       </Card>
 
       <p className="text-body-xs text-muted">
-        Efficiency requires two consecutive full-tank fill-ups with increasing odometer readings. A
-        fill-up without a reading still records its cost and litres, but it breaks the chain — later
-        fill-ups are not measured rather than paired across the gap.
+        Amount-only fill-ups still count as spend. Efficiency requires two consecutive full-tank
+        fill-ups with litres and increasing odometer readings; a fill-up without either breaks the
+        chain and is shown as not measured.
       </p>
     </div>
   );

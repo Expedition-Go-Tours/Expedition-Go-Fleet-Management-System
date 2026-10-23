@@ -58,7 +58,25 @@ beforeEach(() => {
   }));
 });
 
-describe("POST /api/v1/fuel — optional odometer", () => {
+describe("POST /api/v1/fuel — optional odometer and volume", () => {
+  it("records an amount-only purchase without inventing litres or a unit price", async () => {
+    const response = await post({
+      vehicleId: "veh_1",
+      transactedOn: "2026-10-21",
+      totalMinor: 50000,
+      fuelType: "PETROL",
+      fullTank: true,
+    });
+    expect(response.status).toBe(201);
+
+    expect(mocks.recordReading).not.toHaveBeenCalled();
+    const entry = mocks.createFuelEntry.mock.calls[0]![0] as Record<string, unknown>;
+    expect(entry).not.toHaveProperty("litres");
+    expect(entry).not.toHaveProperty("odometerKm");
+    const expense = mocks.createExpense.mock.calls[0]![0] as Record<string, unknown>;
+    expect(expense).toMatchObject({ category: "FUEL", amountMinor: 50000, description: "PETROL" });
+  });
+
   it("records the cost and litres without writing a ledger reading when no odometer is given", async () => {
     const response = await post(baseBody);
     expect(response.status).toBe(201);
@@ -87,6 +105,17 @@ describe("POST /api/v1/fuel — optional odometer", () => {
     const entry = mocks.createFuelEntry.mock.calls[0]![0] as Record<string, unknown>;
     expect(entry.odometerKm).toBe(128450);
     expect(entry.odometerReadingId).toBe("read_1");
+  });
+
+  it("rejects a body with no amount and no usable unit price", async () => {
+    const response = await post({
+      vehicleId: "veh_1",
+      transactedOn: "2026-10-21",
+      litres: 40,
+      fullTank: true,
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.createExpense).not.toHaveBeenCalled();
   });
 
   it("rejects a supplied invalid odometer before creating money or a reading", async () => {

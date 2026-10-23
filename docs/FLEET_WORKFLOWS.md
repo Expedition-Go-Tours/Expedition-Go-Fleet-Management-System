@@ -235,23 +235,27 @@ POST /assignments/:id/end          { endOdometerKm, notes? }
 ## 6. Fuel
 
 ```
-POST /fuel                         { vehicleId, litres, pricePerLitre, odometerKm?, … }
+POST /fuel                         { vehicleId, totalMinor, odometerKm?, litres?, … }
 ```
 
+- The everyday form records the **total amount paid** (`totalMinor`) — no litres
+  or unit price required. The API still accepts `litres` for historical/API
+  clients and validates it when supplied.
 - A fuel entry creates its **canonical `Expense`** (category FUEL, integer
   pesewas via `toPesewas`) and links the expense id back on the fuel entry.
   Money is never figured twice.
-- **The odometer is optional.** The person paying for fuel may not have access
-  to the dashboard; a blank reading is stored as absent, never fabricated as
-  `0`, and no odometer-ledger reading is written. The cost and litres are still
-  recorded normally.
-- Consumption is only recorded on **full-tank purchases** (fuel level
-  semantics). When a reading is supplied it flows into the ledger
-  (`FUEL_PURCHASE`, monotonic). When it is absent, the fill-up **breaks the
+- **The odometer and litres are optional.** The person paying for fuel may not
+  have access to the dashboard. A blank reading is stored as absent, never
+  fabricated as `0`, and no odometer-ledger reading is written. An amount-only
+  entry still records the cost normally.
+- Consumption is only recorded on **full-tank purchases** with both a reading
+  and a volume. When a reading is supplied it flows into the ledger
+  (`FUEL_PURCHASE`, monotonic). When either is absent, the fill-up **breaks the
   efficiency chain**: later fill-ups are not paired across it, because skipping
-  it would attribute its litres to a later segment and overstate km/l.
-- The fuel ledger shows a missing reading as **No reading** and its efficiency
-  as **Not measured**. Such entries still count in spend and volume totals.
+  it would attribute unknown fuel to a later segment and overstate km/l.
+- The fuel ledger shows a missing reading as **No reading**, a missing volume as
+  **Not recorded**, and its efficiency as **Not measured**. Amount-only entries
+  still count in spend; the volume KPI counts only fill-ups with litres.
 - Expenses are **recorded here; approval happens outside the app**. A new
   expense is stored as `PENDING` (kept for backward compatibility, presented
   as **Recorded**) and can be corrected immediately — there is no approval
@@ -386,7 +390,7 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
   SAFETY_HOLD with issueId; completed repairs never release the hold.
 - **E — Assignment/trip distance**: start with odometer → end with higher
   reading; trip = end − start; decrease → 409.
-- **F — Fuel**: canonical Expense created; consumption only on full tank.
+- **F — Fuel**: canonical Expense created; amount-only entries allowed; consumption only from full tanks with litres and readings.
 - **G — Documents**: missing mandatory registration document blocks
   assignment start with 409.
 - **H — Notifications**: cron run with CRON_SECRET; dedupe keys make reruns

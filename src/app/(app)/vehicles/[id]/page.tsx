@@ -256,7 +256,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     fuelEntries: fuelEntries.map((f) => ({
       id: f.id,
       transactedOn: formatDate(f.transactedOn),
-      litres: f.litres,
+      litres: f.litres ?? null,
       amountMinor: f.totalMinor,
       currency: f.currency,
       odometerKm: f.odometerKm ?? null,
