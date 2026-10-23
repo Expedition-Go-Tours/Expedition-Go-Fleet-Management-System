@@ -220,6 +220,15 @@ GET  /odometer/recent              → recent readings across the fleet
   date back to the work order, so the two records never disagree. An existing
   cost cannot be cleared here — the expense must be voided with a reason
   instead. Every correction is audited before/after as `service.corrected`.
+- **Permanent deletion** is a separate, ADMIN-only escape hatch
+  (`service:delete`) for a record that must not remain at all. It requires a
+  written reason and captures the full record plus cleanup summary as
+  `service.deleted` in the audit log. The linked MAINTENANCE expense(s) are
+  deleted in the same transaction; schedules this record last reset lose their
+  baseline and return to `NOT_CONFIGURED` (re-baseline on the next service);
+  odometer readings are kept as mileage history and only lose their service
+  link; a linked work order is kept and its service-record link is cleared.
+  Use correction, not deletion, for ordinary mistakes.
 - Standard fixtures (`oil-change` 5,000 km / 500 km) are seeded by the
   migration/bootstrap scripts.
 
@@ -301,15 +310,27 @@ POST /fuel                         { vehicleId, totalMinor, odometerKm?, litres?
   same transaction (amount, description, supplier, payee, incurred date), so the
   fuel ledger and finance ledger never disagree, and every correction is
   audited before/after as `fuel.corrected`.
+- **Permanent deletion** is ADMIN-only (`fuel:delete`), requires a written
+  reason, and is audited as `fuel.deleted` with the full record. The canonical
+  expense is deleted with the purchase. The odometer reading is kept as mileage
+  history and only loses its fuel link, so deleting a purchase never rewrites
+  the vehicle's odometer.
 - Expenses are **recorded here; approval happens outside the app**. A new
   expense is stored as `PENDING` (kept for backward compatibility, presented
   as **Recorded**) and can be corrected immediately — there is no approval
   step to wait for.
-  - The only expense action is `void`
+  - The normal correction action is `void`
     (`POST /expenses/:id/status { action: "void", reason }`), available from
     `PENDING` or legacy `APPROVED`, requiring `expense:void`
-    (OPERATIONS/ADMIN), a reason and an audit entry. The record is never
-    deleted.
+    (OPERATIONS/ADMIN), a reason and an audit entry. A voided row stays visible
+    but is excluded from totals.
+  - An `ADMIN` can also **permanently delete** an expense
+    (`DELETE /expenses/:id`, `expense:delete`) with a written reason. The full
+    row is captured as `expense.deleted` before removal, and the source
+    fuel/service record is unlinked in the same transaction. A service record's
+    cost is cleared when this was its only expense; the source record itself
+    (and a linked work order) is never deleted by this action. Use void for the
+    normal audit-preserving path; deletion is for data that must not remain.
   - The former `approve`/`reject` API actions and the `expense:approve`
     permission were removed: no external process or integration consumed
     them. Legacy `APPROVED`/`REJECTED` rows remain readable and are counted
@@ -456,9 +477,9 @@ These are asserted by `scripts/e2e-accountability.mjs` (40) and
 | States move only through action/complete endpoints | generic PATCH bodies cannot include `status` |
 | Odometer never decreases silently | ledger transaction → `409 DECREASE_REJECTED` |
 | Trip distance is always end − start | assignment end reads both ledger readings |
-| No repair without a traceable record | work-order completion evidence gate + immutable ServiceRecord |
+| No repair without a traceable record | work-order completion evidence gate + service record; ADMIN deletion keeps a full before-snapshot in the audit log |
 | No release from a hold by same-party fixers | `vehicle:release` held only by ADMIN, and only after open critical issues are closed |
 | Money recorded once, never double-counted | integer pesewas; fuel → canonical Expense in one transaction |
-| No expense "approval" drift | the app records and voids only; the former approve/reject API actions were removed because nothing consumed them. Void requires a reason and is audited, and works immediately on a recorded cost |
+| No expense "approval" drift | the app records, voids and (ADMIN-only) permanently deletes only; the former approve/reject API actions were removed because nothing consumed them. Void and delete require a reason and are audited, and work immediately on a recorded cost |
 | Reminders/journaling survive reruns | `dedupeKey` idempotency + Firestore transactions |
 | Write payloads never fail on `undefined` | `definedOnly` stripping in every repo write path |

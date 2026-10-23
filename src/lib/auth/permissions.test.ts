@@ -41,6 +41,9 @@ describe("permission catalog", () => {
       "fuel:read",
       "fuel:create",
       "fuel:update",
+      "fuel:delete",
+      "expense:delete",
+      "service:delete",
       "document:read",
       "document:upload",
       "document:manage",
@@ -76,7 +79,10 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.ASSIGNMENT_CREATE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.EXPENSE_CREATE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.FUEL_UPDATE)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.FUEL_DELETE)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.EXPENSE_DELETE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.SERVICE_UPDATE)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.SERVICE_DELETE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.USER_INVITE)).toBe(false);
   });
 
@@ -112,6 +118,10 @@ describe("baseline role matrix", () => {
     // the same desk pays the invoice — but still cannot run or release.
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_RECORD)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_UPDATE)).toBe(true);
+    // Permanent deletion is not part of the operations desk.
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.FUEL_DELETE)).toBe(false);
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.EXPENSE_DELETE)).toBe(false);
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_DELETE)).toBe(false);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.WORK_ORDER_CREATE)).toBe(false);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
   });
@@ -123,6 +133,9 @@ describe("baseline role matrix", () => {
     // Old MANAGER oversight reads are now part of ADMIN.
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.USER_READ)).toBe(true);
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.EXPENSE_CREATE)).toBe(true);
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.EXPENSE_DELETE)).toBe(true);
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.FUEL_DELETE)).toBe(true);
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.SERVICE_DELETE)).toBe(true);
     // Only ADMIN may clear a safety hold; the route still re-checks open
     // critical issues, so the grant does not bypass the safety invariant.
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.VEHICLE_RELEASE)).toBe(true);

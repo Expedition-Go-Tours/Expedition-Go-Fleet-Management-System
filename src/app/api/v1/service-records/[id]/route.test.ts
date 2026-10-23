@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   correctServiceRecord: vi.fn(),
+  deleteServiceRecord: vi.fn(),
   writeAuditEvent: vi.fn(),
 }));
 
@@ -16,12 +17,21 @@ vi.mock("@/lib/domain/service-correction", async (importOriginal) => {
   return { ...actual, correctServiceRecord: mocks.correctServiceRecord };
 });
 
+vi.mock("@/lib/repos/maintenance", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/repos/maintenance")>();
+  return { ...actual, deleteServiceRecord: mocks.deleteServiceRecord };
+});
+
 vi.mock("@/lib/repos/audit", () => ({
-  AUDIT_EVENTS: { SERVICE_CORRECTED: "service.corrected" },
+  AUDIT_EVENTS: {
+    SERVICE_CORRECTED: "service.corrected",
+    SERVICE_DELETED: "service.deleted",
+  },
   writeAuditEvent: mocks.writeAuditEvent,
 }));
 
-import { PATCH } from "@/app/api/v1/service-records/[id]/route";
+import { DELETE, PATCH } from "@/app/api/v1/service-records/[id]/route";
+import { DeletionError } from "@/lib/domain/deletion";
 import { ServiceCorrectionError } from "@/lib/domain/service-correction";
 
 const before = {
@@ -59,6 +69,10 @@ function patch(body: Record<string, unknown>, id = "svc_1") {
   return PATCH({ json: async () => body } as never, { params: Promise.resolve({ id }) });
 }
 
+function del(body: Record<string, unknown>, id = "svc_1") {
+  return DELETE({ json: async () => body } as never, { params: Promise.resolve({ id }) });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.correctServiceRecord.mockImplementation(async (input: Record<string, unknown>) => ({
@@ -67,6 +81,13 @@ beforeEach(() => {
     expenseId: "exp_1",
     expenseCreated: false,
   }));
+  mocks.deleteServiceRecord.mockResolvedValue({
+    before,
+    deletedExpenseIds: ["exp_1"],
+    clearedScheduleIds: ["sched_1"],
+    unlinkedOdometerReadingIds: ["read_1"],
+    unlinkedWorkOrderId: undefined,
+  });
 });
 
 describe("PATCH /api/v1/service-records/[id] — correct a completed service", () => {
@@ -142,6 +163,50 @@ describe("PATCH /api/v1/service-records/[id] — correct a completed service", (
       new ServiceCorrectionError("COST_REQUIRED", "This service already has a recorded cost."),
     );
     expect((await patch(validBody)).status).toBe(400);
+    expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /api/v1/service-records/[id] — permanently delete a service", () => {
+  it("deletes the record, reports cleanup and audits the reason", async () => {
+    const response = await del({ reason: "  Wrong vehicle selected  " });
+    expect(response.status).toBe(200);
+
+    expect(mocks.deleteServiceRecord).toHaveBeenCalledWith(
+      "svc_1",
+      expect.objectContaining({
+        eventType: "service.deleted",
+        entityType: "serviceRecord",
+        entityId: "svc_1",
+        actorId: "user_1",
+        reason: "Wrong vehicle selected",
+        requestId: expect.any(String),
+      }),
+    );
+    // The repository writes the audit event in the delete transaction.
+    expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
+
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      deleted: true,
+      deletedExpenseIds: ["exp_1"],
+      clearedScheduleIds: ["sched_1"],
+      unlinkedOdometerReadingIds: ["read_1"],
+    });
+  });
+
+  it("requires a written reason before deleting", async () => {
+    expect((await del({})).status).toBe(400);
+    expect((await del({ reason: "x" })).status).toBe(400);
+    expect((await del({ reason: "x".repeat(501) })).status).toBe(400);
+    expect(mocks.deleteServiceRecord).not.toHaveBeenCalled();
+  });
+
+  it("maps a missing record to 404", async () => {
+    mocks.deleteServiceRecord.mockRejectedValueOnce(
+      new DeletionError("SERVICE_NOT_FOUND", "Service record not found"),
+    );
+    expect((await del({ reason: "Mistaken record" })).status).toBe(404);
     expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,8 @@ import type { DocumentData } from "firebase-admin/firestore";
 
 import type { Expense, ExpenseStatus } from "@/lib/domain/expense";
 import { normalizeExpenseStatus as normalizeStatus } from "@/lib/domain/expense";
+import { auditSnapshot, DeletionError, type DeletionAudit } from "@/lib/domain/deletion";
+import { writeAuditEventInTx } from "@/lib/repos/audit";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
@@ -263,6 +265,105 @@ export async function linkExpenseToServiceRecord(
   await expensesRef().doc(expenseId).update({
     serviceRecordId,
     updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+export interface DeleteExpenseResult {
+  before: Expense;
+  /** Fuel purchase whose canonical-expense link was cleared. */
+  unlinkedFuelEntryId?: string;
+  /** Service record whose expense link (and cost intent) was cleared. */
+  unlinkedServiceRecordId?: string;
+  /** True when the service record's own cost fields were cleared too. */
+  clearedServiceCost: boolean;
+}
+
+/**
+ * Permanently delete one expense (ADMIN only, with a written reason).
+ *
+ * The source record is unlinked in the same transaction so nothing points at a
+ * missing document. If the expense was a service record's only cost, the
+ * record's cost fields are cleared too; a fuel purchase keeps its recorded
+ * amount (the purchase still happened) but loses the finance link.
+ */
+export async function deleteExpenseRecord(
+  id: string,
+  audit?: DeletionAudit,
+): Promise<DeleteExpenseResult> {
+  const { FieldValue } = await import("firebase-admin/firestore");
+  const db = getAdminDb();
+  const ref = expensesRef().doc(id);
+  const now = FieldValue.serverTimestamp();
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) {
+      throw new DeletionError("EXPENSE_NOT_FOUND", "Expense not found");
+    }
+    const before = toExpense(snap.id, snap.data() ?? {});
+
+    const fuelRef = before.fuelEntryId
+      ? db.collection(COLLECTIONS.fuelEntries).doc(before.fuelEntryId)
+      : null;
+    const serviceRef = before.serviceRecordId
+      ? db.collection(COLLECTIONS.serviceRecords).doc(before.serviceRecordId)
+      : null;
+
+    const fuelSnap = fuelRef ? await tx.get(fuelRef) : null;
+    const serviceSnap = serviceRef ? await tx.get(serviceRef) : null;
+
+    let unlinkedFuelEntryId: string | undefined;
+    let unlinkedServiceRecordId: string | undefined;
+    let clearedServiceCost = false;
+
+    if (fuelRef && fuelSnap?.exists && String(fuelSnap.data()?.expenseId ?? "") === before.id) {
+      tx.update(fuelRef, { expenseId: null, updatedAt: now });
+      unlinkedFuelEntryId = fuelRef.id;
+    }
+
+    if (serviceRef && serviceSnap?.exists) {
+      const service = serviceSnap.data() ?? {};
+      const ids = Array.isArray(service.expenseIds) ? service.expenseIds.map(String) : [];
+      const remaining = ids.filter((expenseId) => expenseId !== before.id);
+      const update: Record<string, unknown> = {
+        expenseIds: remaining,
+        updatedAt: now,
+      };
+      // The service's cost is the linked expense. When this was the only
+      // expense and the amounts agree, remove the cost intent as well.
+      if (
+        remaining.length === 0 &&
+        Number(service.repairCostMinor ?? 0) === before.amountMinor
+      ) {
+        update.repairCostMinor = null;
+        update.repairCostCurrency = null;
+        update.labourCostMinor = null;
+        update.costItems = null;
+        clearedServiceCost = true;
+      }
+      tx.update(serviceRef, update);
+      unlinkedServiceRecordId = serviceRef.id;
+    }
+
+    if (audit) {
+      writeAuditEventInTx(tx, {
+        ...audit,
+        before: auditSnapshot(before),
+        after: {
+          unlinkedFuelEntryId: unlinkedFuelEntryId ?? null,
+          unlinkedServiceRecordId: unlinkedServiceRecordId ?? null,
+          clearedServiceCost,
+        },
+      });
+    }
+
+    tx.delete(ref);
+    return {
+      before,
+      unlinkedFuelEntryId,
+      unlinkedServiceRecordId,
+      clearedServiceCost,
+    };
   });
 }
 

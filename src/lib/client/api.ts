@@ -31,7 +31,7 @@ export async function apiRequest<T>(
     method,
     headers: {
       ...(body !== undefined ? { "content-type": "application/json" } : {}),
-      ...(method === "GET" || method === "DELETE" ? {} : { "x-csrf-token": readCsrfToken() ?? "" }),
+      ...(method === "GET" ? {} : { "x-csrf-token": readCsrfToken() ?? "" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -61,6 +61,7 @@ export const api = {
   get: <T>(path: string) => apiRequest<T>("GET", path),
   post: <T>(path: string, body?: unknown) => apiRequest<T>("POST", path, body),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>("PATCH", path, body),
+  delete: <T>(path: string, body?: unknown) => apiRequest<T>("DELETE", path, body),
   /**
    * Multipart upload. Sends the browser's FormData untouched (so the file and
    * its parts are encoded correctly) while still carrying the CSRF header and

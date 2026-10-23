@@ -5,10 +5,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { parseDeletionReason } from "@/lib/domain/deletion";
 import { parsePaidTo } from "@/lib/domain/expense";
 import { FUEL_TYPES_SUPPORTED, isValidFuelEntry } from "@/lib/domain/fuel";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
-import { correctFuelEntry, FuelEntryError } from "@/lib/repos/fuel";
+import { correctFuelEntry, deleteFuelEntryRecord, FuelEntryError } from "@/lib/repos/fuel";
 
 export const runtime = "nodejs";
 
@@ -98,6 +99,47 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const status = error.code === "FUEL_ENTRY_NOT_FOUND" ? 404 : 409;
       return NextResponse.json({ error: { code: error.code, message: error.message } }, { status });
     }
+    return toErrorResponse(error);
+  }
+}
+
+/**
+ * DELETE /api/v1/fuel/[id]
+ *
+ * Permanently remove one fuel purchase (fuel:delete — ADMIN only). A written
+ * reason is required and the full record is captured in the audit log. The
+ * canonical expense is deleted with it; the odometer reading is kept as
+ * mileage history and only loses its fuel link.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const requestId = randomUUID();
+  try {
+    await assertCsrfAndOrigin();
+    const context = await requireAuthContext();
+    requirePermission(context, PERMISSIONS.FUEL_DELETE);
+
+    const { id } = await params;
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const reason = parseDeletionReason(body?.reason);
+
+    const result = await deleteFuelEntryRecord(id, {
+      eventType: AUDIT_EVENTS.FUEL_DELETED,
+      actorId: context.user.id,
+      entityType: "fuelEntry",
+      entityId: id,
+      reason,
+      requestId,
+    });
+
+    return jsonOk({
+      deleted: true,
+      deletedExpenseId: result.deletedExpenseId ?? null,
+      unlinkedOdometerReadingId: result.unlinkedOdometerReadingId ?? null,
+    });
+  } catch (error) {
     return toErrorResponse(error);
   }
 }

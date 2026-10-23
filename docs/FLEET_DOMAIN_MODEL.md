@@ -12,7 +12,7 @@ Terminology is fixed here; code uses these names.
 | `OdometerReading` | `odometerReadings` | Every accepted/flagged/superseded mileage observation |
 | `MaintenanceTemplate` | `maintenanceTemplates` | Reusable task definition (intervals, thresholds) |
 | `MaintenanceSchedule` | `maintenanceSchedules` | Per-vehicle configured task + authoritative baseline (`lastServiceOdometerKm`, `lastServiceDate`) |
-| `ServiceRecord` | `serviceRecords` | Work actually completed (immutable once created) |
+| `ServiceRecord` | `serviceRecords` | Work actually completed (correctable; ADMIN deletion is audited with a full snapshot) |
 | `VehicleIssue` | `maintenanceReports` | Reported defect + full report history (collection name kept for audit continuity) |
 | `IncidentReport` | `incidentReports` | Breakdown/accident/passenger events (restricted) |
 | `WorkOrder` | `workOrders` | Repair execution workflow |
@@ -93,9 +93,12 @@ Release: `vehicle:release` + reason + server check of open critical issues.
 The app records; approval is an **external decision that does not happen in
 this app**. Statuses `PENDING → APPROVED | REJECTED` remain only as legacy
 storage compatibility: a newly recorded cost is stored as `PENDING` and shown
-as **Recorded**, never as "awaiting approval". The only lifecycle action is
+as **Recorded**, never as "awaiting approval". The normal lifecycle action is
 `PENDING | APPROVED → VOID(reason, actor)` behind `expense:void`, available
-immediately after recording. The former `approve`/`reject` API actions were
+immediately after recording. A separate ADMIN-only `expense:delete` can
+permanently remove an expense with a written reason and a full `expense.deleted`
+audit snapshot; it is reserved for data that must not remain, not ordinary
+corrections. The former `approve`/`reject` API actions were
 removed with the unused `expense:approve` permission; no external consumer
 existed. Reports count `PENDING` and `APPROVED` only, so legacy rows keep
 their historical meaning. Fuel entries create/reference one canonical
@@ -130,7 +133,17 @@ back to the work order. Money is never cleared silently — an existing cost mus
 be voided with a reason instead. Corrections are audited as
 `service.corrected`.
 
+An ADMIN can permanently delete a completed service record with
+`service:delete` and a written reason. The linked MAINTENANCE expense(s) go with
+it; schedules the record last reset lose their baseline and return to
+`NOT_CONFIGURED`; odometer readings are kept as mileage history with the
+service link cleared; a linked work order is kept with its service link
+cleared. The full record and cleanup summary are audited as `service.deleted`.
+
 Fuel purchases can be corrected by operations/admin: date, amount, fuel type,
 station, payee and full-tank flag are editable, while the vehicle, odometer
 link and recorder stay immutable. The linked expense is updated in the same
-transaction and the correction is audited before/after.
+transaction and the correction is audited before/after. An ADMIN can
+permanently delete a purchase (`fuel:delete`, written reason, `fuel.deleted`
+audit): its canonical expense is deleted with it, while its odometer reading is
+kept as mileage history and only loses the fuel link.

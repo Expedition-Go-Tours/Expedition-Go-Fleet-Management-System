@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   correctFuelEntry: vi.fn(),
+  deleteFuelEntryRecord: vi.fn(),
   writeAuditEvent: vi.fn(),
 }));
 
@@ -13,15 +14,20 @@ vi.mock("@/lib/auth/guards", () => ({
 
 vi.mock("@/lib/repos/fuel", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/repos/fuel")>();
-  return { ...actual, correctFuelEntry: mocks.correctFuelEntry };
+  return {
+    ...actual,
+    correctFuelEntry: mocks.correctFuelEntry,
+    deleteFuelEntryRecord: mocks.deleteFuelEntryRecord,
+  };
 });
 
 vi.mock("@/lib/repos/audit", () => ({
-  AUDIT_EVENTS: { FUEL_CORRECTED: "fuel.corrected" },
+  AUDIT_EVENTS: { FUEL_CORRECTED: "fuel.corrected", FUEL_DELETED: "fuel.deleted" },
   writeAuditEvent: mocks.writeAuditEvent,
 }));
 
-import { PATCH } from "@/app/api/v1/fuel/[id]/route";
+import { DELETE, PATCH } from "@/app/api/v1/fuel/[id]/route";
+import { DeletionError } from "@/lib/domain/deletion";
 import { FuelEntryError } from "@/lib/repos/fuel";
 
 const before = {
@@ -29,6 +35,7 @@ const before = {
   vehicleId: "veh_1",
   transactedOn: "2026-10-20",
   odometerKm: 128450,
+  odometerReadingId: "read_1",
   fuelType: "PETROL",
   totalMinor: 40000,
   currency: "GHS",
@@ -53,12 +60,21 @@ function patch(body: Record<string, unknown>, id = "fuel_1") {
   return PATCH({ json: async () => body } as never, { params: Promise.resolve({ id }) });
 }
 
+function del(body: Record<string, unknown>, id = "fuel_1") {
+  return DELETE({ json: async () => body } as never, { params: Promise.resolve({ id }) });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.correctFuelEntry.mockImplementation(async (input: Record<string, unknown>) => ({
     before,
     after: { ...before, ...input },
   }));
+  mocks.deleteFuelEntryRecord.mockResolvedValue({
+    before,
+    deletedExpenseId: "exp_1",
+    unlinkedOdometerReadingId: "read_1",
+  });
 });
 
 describe("PATCH /api/v1/fuel/[id] — correct a recorded purchase", () => {
@@ -115,6 +131,49 @@ describe("PATCH /api/v1/fuel/[id] — correct a recorded purchase", () => {
     );
     const response = await patch(validBody);
     expect(response.status).toBe(404);
+    expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /api/v1/fuel/[id] — permanently delete a purchase", () => {
+  it("deletes the purchase, reports cleanup and audits the reason", async () => {
+    const response = await del({ reason: "  Duplicate of the 12 Oct entry  " });
+    expect(response.status).toBe(200);
+
+    expect(mocks.deleteFuelEntryRecord).toHaveBeenCalledWith(
+      "fuel_1",
+      expect.objectContaining({
+        eventType: "fuel.deleted",
+        entityType: "fuelEntry",
+        entityId: "fuel_1",
+        actorId: "user_1",
+        reason: "Duplicate of the 12 Oct entry",
+        requestId: expect.any(String),
+      }),
+    );
+    // The repository writes the audit event in the delete transaction.
+    expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
+
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      deleted: true,
+      deletedExpenseId: "exp_1",
+      unlinkedOdometerReadingId: "read_1",
+    });
+  });
+
+  it("requires a written reason before deleting", async () => {
+    expect((await del({})).status).toBe(400);
+    expect((await del({ reason: "  " })).status).toBe(400);
+    expect((await del({ reason: "x".repeat(501) })).status).toBe(400);
+    expect(mocks.deleteFuelEntryRecord).not.toHaveBeenCalled();
+  });
+
+  it("maps a missing purchase to 404", async () => {
+    mocks.deleteFuelEntryRecord.mockRejectedValueOnce(
+      new DeletionError("FUEL_ENTRY_NOT_FOUND", "Fuel entry not found"),
+    );
+    expect((await del({ reason: "Mistaken entry" })).status).toBe(404);
     expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
   });
 });

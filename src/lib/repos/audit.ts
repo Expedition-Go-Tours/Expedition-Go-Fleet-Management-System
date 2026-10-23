@@ -34,6 +34,7 @@ export const AUDIT_EVENTS = {
   WORK_ORDER_STATUS_CHANGED: "work_order.status.changed",
   EXPENSE_CREATED: "expense.created",
   EXPENSE_STATUS_CHANGED: "expense.status.changed",
+  EXPENSE_DELETED: "expense.deleted",
   PROVIDER_CREATED: "provider.created",
   PROVIDER_UPDATED: "provider.updated",
   ODOMETER_RECORDED: "odometer.recorded",
@@ -42,6 +43,7 @@ export const AUDIT_EVENTS = {
   SCHEDULE_UPDATED: "schedule.updated",
   SERVICE_RECORDED: "service.recorded",
   SERVICE_CORRECTED: "service.corrected",
+  SERVICE_DELETED: "service.deleted",
   WORK_ORDER_WAITED: "work_order.waited",
   WORK_ORDER_VERIFIED: "work_order.verified",
   ISSUE_TRIAGED: "issue.triaged",
@@ -66,6 +68,7 @@ export const AUDIT_EVENTS = {
   DOCUMENT_UPDATED: "document.updated",
   FUEL_RECORDED: "fuel.recorded",
   FUEL_CORRECTED: "fuel.corrected",
+  FUEL_DELETED: "fuel.deleted",
   AUDIT_READ: "audit.read",
   EXPORT_GENERATED: "export.generated",
 } as const;

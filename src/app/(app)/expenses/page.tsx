@@ -5,6 +5,7 @@ import { StatusActions } from "@/components/actions/StatusActions";
 import { ExpenseFilters } from "@/components/expenses/ExpenseFilters";
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
+import { DeleteRecordDialog } from "@/components/ui/DeleteRecordDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
@@ -38,6 +39,7 @@ export default async function ExpensesPage({
   const permissions = [...permissionsForRoles(context.user.roles)];
   const canCreate = permissions.includes("expense:create");
   const canExport = permissions.includes("expense:export");
+  const canDelete = permissions.includes(PERMISSIONS.EXPENSE_DELETE);
 
   const params = await searchParams;
   const category = params.category?.trim() || undefined;
@@ -95,6 +97,8 @@ export default async function ExpensesPage({
         dataTour="expense-header"
         actions={
           canExport ? (
+            // A file download, not a client-side page navigation.
+            // eslint-disable-next-line @next/next/no-html-link-for-pages
             <a
               href="/api/v1/expenses/export"
               data-tour="expense-export"
@@ -164,21 +168,51 @@ export default async function ExpensesPage({
                           />
                         </div>
                       </div>
-                      {actions.length > 0 && (
-                        <StatusActions
-                          endpoint={`/api/v1/expenses/${expense.id}/status`}
-                          actions={actions}
-                          confirm={{
-                            void: "Void this expense? The record is kept but excluded from totals.",
-                          }}
-                          reason={{
-                            void: {
-                              label: "Reason for voiding",
-                              required: true,
-                              placeholder: "Duplicate of another entry",
-                            },
-                          }}
-                        />
+                      {(actions.length > 0 || canDelete) && (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {actions.length > 0 && (
+                            <StatusActions
+                              endpoint={`/api/v1/expenses/${expense.id}/status`}
+                              actions={actions}
+                              confirm={{
+                                void: "Void this expense? The record is kept but excluded from totals.",
+                              }}
+                              reason={{
+                                void: {
+                                  label: "Reason for voiding",
+                                  required: true,
+                                  placeholder: "Duplicate of another entry",
+                                },
+                              }}
+                            />
+                          )}
+                          {canDelete && (
+                            <DeleteRecordDialog
+                              endpoint={`/api/v1/expenses/${expense.id}`}
+                              recordLabel={`${expense.description} — ${formatMoney(
+                                expense.amountMinor,
+                                expense.currency,
+                              )} on ${formatDate(expense.incurredOn)}`}
+                              description="This permanently removes the expense from the finance ledger. The action cannot be undone."
+                              details={[
+                                expense.status === "VOID" || expense.status === "REJECTED"
+                                  ? "This expense is already excluded from totals, so the recorded total will not change."
+                                  : "The recorded total drops by this amount.",
+                                ...(expense.fuelEntryId
+                                  ? [
+                                      "The fuel purchase is kept with its amount, but loses its finance link.",
+                                    ]
+                                  : []),
+                                ...(expense.serviceRecordId
+                                  ? [
+                                      "The service record is kept; its cost is cleared when this was its only expense.",
+                                    ]
+                                  : []),
+                                "A linked fuel purchase, service record or work order is not deleted.",
+                              ]}
+                            />
+                          )}
+                        </div>
                       )}
                     </li>
                   );

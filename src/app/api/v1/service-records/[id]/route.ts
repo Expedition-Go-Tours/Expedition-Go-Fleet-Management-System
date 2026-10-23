@@ -5,12 +5,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { parseDeletionReason } from "@/lib/domain/deletion";
 import { parsePaidTo } from "@/lib/domain/expense";
 import {
   correctServiceRecord,
   ServiceCorrectionError,
 } from "@/lib/domain/service-correction";
 import { resolveServiceCostInput, ServiceCostError } from "@/lib/domain/service-cost";
+import { deleteServiceRecord } from "@/lib/repos/maintenance";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 
 export const runtime = "nodejs";
@@ -141,6 +143,51 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         { status: 400 },
       );
     }
+    return toErrorResponse(error);
+  }
+}
+
+/**
+ * DELETE /api/v1/service-records/[id]
+ *
+ * Permanently remove one completed service record (service:delete — ADMIN
+ * only). A written reason is required and the full record plus cleanup summary
+ * are captured in the audit log. Linked MAINTENANCE expenses are deleted with
+ * it; schedules this record last reset lose their baseline (they return to
+ * NOT_CONFIGURED), odometer readings keep their mileage but lose the service
+ * link, and a linked work order keeps the job but loses the service link.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const requestId = randomUUID();
+  try {
+    await assertCsrfAndOrigin();
+    const context = await requireAuthContext();
+    requirePermission(context, PERMISSIONS.SERVICE_DELETE);
+
+    const { id } = await params;
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const reason = parseDeletionReason(body?.reason);
+
+    const result = await deleteServiceRecord(id, {
+      eventType: AUDIT_EVENTS.SERVICE_DELETED,
+      actorId: context.user.id,
+      entityType: "serviceRecord",
+      entityId: id,
+      reason,
+      requestId,
+    });
+
+    return jsonOk({
+      deleted: true,
+      deletedExpenseIds: result.deletedExpenseIds,
+      clearedScheduleIds: result.clearedScheduleIds,
+      unlinkedOdometerReadingIds: result.unlinkedOdometerReadingIds,
+      unlinkedWorkOrderId: result.unlinkedWorkOrderId ?? null,
+    });
+  } catch (error) {
     return toErrorResponse(error);
   }
 }

@@ -6,6 +6,7 @@ import { EditFuelDialog } from "@/components/fuel/EditFuelDialog";
 import { FuelFilters } from "@/components/fuel/FuelFilters";
 import { Card } from "@/components/ui/Card";
 import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
+import { DeleteRecordDialog } from "@/components/ui/DeleteRecordDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -34,6 +35,7 @@ export default async function FuelPage({
   const permissions = permissionsForRoles(context.user.roles);
   const canCreate = permissions.has(PERMISSIONS.FUEL_CREATE);
   const canEdit = permissions.has(PERMISSIONS.FUEL_UPDATE);
+  const canDelete = permissions.has(PERMISSIONS.FUEL_DELETE);
   const { vehicleId } = await searchParams;
 
   const [entries, vehicles] = await Promise.all([listFuelEntries({ limit: 300 }), listVehicles()]);
@@ -122,7 +124,9 @@ export default async function FuelPage({
             { key: "price", header: "Unit price" },
             { key: "total", header: "Total" },
             { key: "tank", header: "Tank" },
-            ...(canEdit ? [{ key: "edit", header: "Actions", className: "text-right" }] : []),
+            ...(canEdit || canDelete
+              ? [{ key: "actions", header: "Actions", className: "text-right" }]
+              : []),
           ]}
           empty={
             <EmptyState
@@ -181,22 +185,46 @@ export default async function FuelPage({
                   {row.fullTank ? "Full" : "Partial"}
                 </span>
               </Td>
-              {canEdit && (
+              {(canEdit || canDelete) && (
                 <Td className="text-right">
-                  <EditFuelDialog
-                    entry={{
-                      id: row.id,
-                      vehicleLabel: row.vehicleLabel,
-                      transactedOn: row.transactedOn,
-                      totalMinor: row.totalMinor,
-                      currency: row.currency,
-                      fuelType: row.fuelType,
-                      station: row.station,
-                      paidTo: row.paidTo,
-                      fullTank: row.fullTank,
-                      odometerKm: row.odometerKm,
-                    }}
-                  />
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    {canEdit && (
+                      <EditFuelDialog
+                        entry={{
+                          id: row.id,
+                          vehicleLabel: row.vehicleLabel,
+                          transactedOn: row.transactedOn,
+                          totalMinor: row.totalMinor,
+                          currency: row.currency,
+                          fuelType: row.fuelType,
+                          station: row.station,
+                          paidTo: row.paidTo,
+                          fullTank: row.fullTank,
+                          odometerKm: row.odometerKm,
+                        }}
+                      />
+                    )}
+                    {canDelete && (
+                      <DeleteRecordDialog
+                        endpoint={`/api/v1/fuel/${row.id}`}
+                        recordLabel={`${row.vehicleLabel} — ${formatMoney(
+                          row.totalMinor,
+                          row.currency,
+                        )} on ${formatDate(row.transactedOn)}`}
+                        description="This permanently removes the fuel purchase. The action cannot be undone."
+                        details={[
+                          ...(row.expenseId
+                            ? ["The canonical expense for this purchase is deleted too."]
+                            : []),
+                          ...(row.odometerReadingId
+                            ? [
+                                "The odometer reading is kept as mileage history; only its fuel link is cleared.",
+                              ]
+                            : []),
+                        ]}
+                      />
+                    )}
+                  </div>
                 </Td>
               )}
             </tr>

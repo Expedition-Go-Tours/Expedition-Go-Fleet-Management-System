@@ -11,6 +11,7 @@ import {
 import { MaintenanceFilters } from "@/components/maintenance/MaintenanceFilters";
 import { Card } from "@/components/ui/Card";
 import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
+import { DeleteRecordDialog } from "@/components/ui/DeleteRecordDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -60,6 +61,7 @@ export default async function MaintenancePage({
   const canLogService = permissions.has(PERMISSIONS.SERVICE_RECORD);
   const canReadService = permissions.has(PERMISSIONS.SERVICE_READ);
   const canEditService = permissions.has(PERMISSIONS.SERVICE_UPDATE);
+  const canDeleteService = permissions.has(PERMISSIONS.SERVICE_DELETE);
   const { state, vehicleId } = await searchParams;
   const validState = STATE_ORDER.includes(state as ScheduleStatus)
     ? (state as ScheduleStatus)
@@ -308,7 +310,9 @@ export default async function MaintenancePage({
               { key: "cost", header: "Cost" },
               { key: "paidTo", header: "Paid to" },
               { key: "source", header: "Source" },
-              ...(canEditService ? [{ key: "actions", header: "" }] : []),
+              ...(canEditService || canDeleteService
+                ? [{ key: "actions", header: "Actions", className: "text-right" }]
+                : []),
             ]}
             empty={
               <EmptyState
@@ -376,26 +380,59 @@ export default async function MaintenancePage({
                       <CellMeta>Direct log</CellMeta>
                     )}
                   </Td>
-                  {canEditService && (
-                    <Td>
-                      <EditServiceDialog
-                        record={{
-                          id: record.id,
-                          vehicleLabel: vehicle?.regNumber ?? "Vehicle",
-                          completedOn: record.completedAt.toISOString().slice(0, 10),
-                          taskName: record.taskName,
-                          workPerformed: record.workPerformed,
-                          providerName: record.providerName,
-                          technicianName: record.technicianName,
-                          paidTo: record.paidTo,
-                          notes: record.notes,
-                          odometerKm: record.odometerKm,
-                          repairCostMinor: record.repairCostMinor,
-                          repairCostCurrency: record.repairCostCurrency,
-                          labourCostMinor: record.labourCostMinor,
-                          costItems: record.costItems,
-                        }}
-                      />
+                  {(canEditService || canDeleteService) && (
+                    <Td className="text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {canEditService && (
+                          <EditServiceDialog
+                            record={{
+                              id: record.id,
+                              vehicleLabel: vehicle?.regNumber ?? "Vehicle",
+                              completedOn: record.completedAt.toISOString().slice(0, 10),
+                              taskName: record.taskName,
+                              workPerformed: record.workPerformed,
+                              providerName: record.providerName,
+                              technicianName: record.technicianName,
+                              paidTo: record.paidTo,
+                              notes: record.notes,
+                              odometerKm: record.odometerKm,
+                              repairCostMinor: record.repairCostMinor,
+                              repairCostCurrency: record.repairCostCurrency,
+                              labourCostMinor: record.labourCostMinor,
+                              costItems: record.costItems,
+                            }}
+                          />
+                        )}
+                        {canDeleteService && (
+                          <DeleteRecordDialog
+                            endpoint={`/api/v1/service-records/${record.id}`}
+                            recordLabel={`${record.taskName} — ${
+                              vehicle?.regNumber ?? "Vehicle"
+                            } on ${formatDate(record.completedAt)}`}
+                            description="This permanently removes the completed service record. The action cannot be undone."
+                            details={[
+                              ...(record.repairCostMinor !== undefined
+                                ? ["The linked maintenance expense is deleted too."]
+                                : []),
+                              ...(record.scheduleId
+                                ? [
+                                    "Schedules this service last reset lose their baseline and must be re-baselined.",
+                                  ]
+                                : []),
+                              ...(record.odometerKm !== null
+                                ? [
+                                    "The odometer reading is kept as mileage history; only its service link is cleared.",
+                                  ]
+                                : []),
+                              ...(record.workOrderId
+                                ? [
+                                    "The work order is kept, but its link to this service record is cleared.",
+                                  ]
+                                : []),
+                            ]}
+                          />
+                        )}
+                      </div>
                     </Td>
                   )}
                 </tr>

@@ -1,6 +1,8 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
 import type { FuelEntry } from "@/lib/domain/fuel";
+import { auditSnapshot, DeletionError, type DeletionAudit } from "@/lib/domain/deletion";
+import { writeAuditEventInTx } from "@/lib/repos/audit";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
@@ -130,6 +132,82 @@ export interface CorrectFuelEntryInput {
   /** Blank clears the payee. */
   paidTo?: string;
   fullTank: boolean;
+}
+
+export interface DeleteFuelEntryResult {
+  before: FuelEntry;
+  /** Canonical expense removed with the purchase, when one was linked. */
+  deletedExpenseId?: string;
+  /** Odometer observation kept as mileage history, with its fuel link cleared. */
+  unlinkedOdometerReadingId?: string;
+}
+
+/**
+ * Permanently delete one fuel purchase (ADMIN only, with a written reason).
+ *
+ * The canonical expense is removed in the same transaction — it exists only
+ * because of this purchase. The odometer reading is deliberately kept: it is a
+ * mileage observation, not money, and deleting it could rewrite the vehicle's
+ * odometer history. Only its link to the purchase is cleared.
+ */
+export async function deleteFuelEntryRecord(
+  id: string,
+  audit?: DeletionAudit,
+): Promise<DeleteFuelEntryResult> {
+  const db = getAdminDb();
+  const entryRef = fuelRef().doc(id);
+
+  return db.runTransaction(async (tx) => {
+    const entrySnap = await tx.get(entryRef);
+    if (!entrySnap.exists) {
+      throw new DeletionError("FUEL_ENTRY_NOT_FOUND", "Fuel entry not found");
+    }
+    const before = toFuelEntry(entrySnap.id, entrySnap.data() ?? {});
+
+    const expenseRef = before.expenseId
+      ? db.collection(COLLECTIONS.expenses).doc(before.expenseId)
+      : null;
+    const readingRef = before.odometerReadingId
+      ? db.collection(COLLECTIONS.odometerReadings).doc(before.odometerReadingId)
+      : null;
+
+    const expenseSnap = expenseRef ? await tx.get(expenseRef) : null;
+    const readingSnap = readingRef ? await tx.get(readingRef) : null;
+
+    let deletedExpenseId: string | undefined;
+    let deletedExpense: unknown;
+    let unlinkedOdometerReadingId: string | undefined;
+
+    if (expenseRef && expenseSnap?.exists) {
+      tx.delete(expenseRef);
+      deletedExpenseId = expenseRef.id;
+      deletedExpense = auditSnapshot({ id: expenseSnap.id, ...expenseSnap.data() });
+    }
+
+    if (
+      readingRef &&
+      readingSnap?.exists &&
+      String(readingSnap.data()?.fuelEntryId ?? "") === before.id
+    ) {
+      tx.update(readingRef, { fuelEntryId: null });
+      unlinkedOdometerReadingId = readingRef.id;
+    }
+
+    if (audit) {
+      writeAuditEventInTx(tx, {
+        ...audit,
+        before: auditSnapshot(before),
+        after: {
+          deletedExpenseId: deletedExpenseId ?? null,
+          deletedExpense: deletedExpense ?? null,
+          unlinkedOdometerReadingId: unlinkedOdometerReadingId ?? null,
+        },
+      });
+    }
+
+    tx.delete(entryRef);
+    return { before, deletedExpenseId, unlinkedOdometerReadingId };
+  });
 }
 
 /**

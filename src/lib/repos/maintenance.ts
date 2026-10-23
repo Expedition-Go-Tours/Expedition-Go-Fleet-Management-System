@@ -1,6 +1,9 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
 import type { ScheduleStatus } from "@/lib/domain/maintenance";
+import { auditSnapshot, DeletionError, type DeletionAudit } from "@/lib/domain/deletion";
+import { serviceExpenseId } from "@/lib/domain/service-cost";
+import { writeAuditEventInTx } from "@/lib/repos/audit";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toDate } from "@/lib/repos/timestamps";
@@ -363,6 +366,153 @@ export async function findServiceRecordByKey(key: string): Promise<ServiceRecord
   if (snap.empty) return null;
   const doc = snap.docs[0]!;
   return toServiceRecord(doc.id, doc.data());
+}
+
+export interface DeleteServiceRecordResult {
+  before: ServiceRecord;
+  deletedExpenseIds: string[];
+  /** Schedules whose baseline was cleared because this record set it. */
+  clearedScheduleIds: string[];
+  /** Odometer observations kept as mileage history, with the link cleared. */
+  unlinkedOdometerReadingIds: string[];
+  /** Work order left untouched except for its service-record link. */
+  unlinkedWorkOrderId?: string;
+}
+
+/**
+ * Permanently delete one completed service record (ADMIN only, with a reason).
+ *
+ * The linked MAINTENANCE expense(s) are removed with it. Schedules this record
+ * last reset lose their baseline rather than keeping a due point derived from a
+ * record that no longer exists; they return to NOT_CONFIGURED until the next
+ * service is recorded. Odometer readings are kept as mileage history and only
+ * lose their service link. A linked work order is kept — deletion removes the
+ * service record, not the workshop's record of the job — and its link is cleared.
+ */
+export async function deleteServiceRecord(
+  id: string,
+  audit?: DeletionAudit,
+): Promise<DeleteServiceRecordResult> {
+  const { FieldValue } = await import("firebase-admin/firestore");
+  const db = getAdminDb();
+  const recordRef = serviceRecordsRef().doc(id);
+
+  const before = await getServiceRecordById(id);
+  if (!before) {
+    throw new DeletionError("SERVICE_NOT_FOUND", "Service record not found");
+  }
+
+  const scheduleSnap = await db
+    .collection(COLLECTIONS.maintenanceSchedules)
+    .where("lastServiceRecordId", "==", id)
+    .limit(100)
+    .get();
+  const scheduleRefs = scheduleSnap.docs.map((doc) => doc.ref);
+
+  const readingSnap = await db
+    .collection(COLLECTIONS.odometerReadings)
+    .where("serviceRecordId", "==", id)
+    .limit(50)
+    .get();
+  const readingRefs = readingSnap.docs.map((doc) => doc.ref);
+
+  const linkedExpenseSnap = await db
+    .collection(COLLECTIONS.expenses)
+    .where("serviceRecordId", "==", id)
+    .limit(20)
+    .get();
+  const expenseIds = new Set<string>([
+    // Include the deterministic id so an orphaned expense from a partial
+    // earlier write cannot survive the service record.
+    serviceExpenseId(id),
+    ...before.expenseIds,
+    ...linkedExpenseSnap.docs.map((doc) => doc.id),
+  ]);
+  const expenseRefs = [...expenseIds].map((expenseId) =>
+    db.collection(COLLECTIONS.expenses).doc(expenseId),
+  );
+
+  const workOrderRef = before.workOrderId
+    ? db.collection(COLLECTIONS.workOrders).doc(before.workOrderId)
+    : null;
+
+  const now = FieldValue.serverTimestamp();
+
+  return db.runTransaction(async (tx) => {
+    const recordSnap = await tx.get(recordRef);
+    if (!recordSnap.exists) {
+      throw new DeletionError("SERVICE_NOT_FOUND", "Service record not found");
+    }
+
+    const scheduleSnaps = await Promise.all(scheduleRefs.map((ref) => tx.get(ref)));
+    const readingSnaps = await Promise.all(readingRefs.map((ref) => tx.get(ref)));
+    const expenseSnaps = await Promise.all(expenseRefs.map((ref) => tx.get(ref)));
+    const workOrderSnap = workOrderRef ? await tx.get(workOrderRef) : null;
+
+    const deletedExpenseIds: string[] = [];
+    const deletedExpenses: unknown[] = [];
+    for (const expenseSnap of expenseSnaps) {
+      if (!expenseSnap.exists) continue;
+      deletedExpenses.push(auditSnapshot({ id: expenseSnap.id, ...expenseSnap.data() }));
+      tx.delete(expenseSnap.ref);
+      deletedExpenseIds.push(expenseSnap.id);
+    }
+
+    const clearedScheduleIds: string[] = [];
+    for (const scheduleSnap of scheduleSnaps) {
+      if (!scheduleSnap.exists) continue;
+      if (String(scheduleSnap.data()?.lastServiceRecordId ?? "") !== id) continue;
+      tx.update(scheduleSnap.ref, {
+        lastServiceRecordId: null,
+        lastServiceDate: null,
+        lastServiceOdometerKm: null,
+        updatedAt: now,
+      });
+      clearedScheduleIds.push(scheduleSnap.id);
+    }
+
+    const unlinkedOdometerReadingIds: string[] = [];
+    for (const readingSnap of readingSnaps) {
+      if (!readingSnap.exists) continue;
+      if (String(readingSnap.data()?.serviceRecordId ?? "") !== id) continue;
+      tx.update(readingSnap.ref, { serviceRecordId: null });
+      unlinkedOdometerReadingIds.push(readingSnap.id);
+    }
+
+    let unlinkedWorkOrderId: string | undefined;
+    if (
+      workOrderRef &&
+      workOrderSnap?.exists &&
+      String(workOrderSnap.data()?.serviceRecordId ?? "") === id
+    ) {
+      tx.update(workOrderRef, { serviceRecordId: null, updatedAt: now });
+      unlinkedWorkOrderId = workOrderRef.id;
+    }
+
+    if (audit) {
+      writeAuditEventInTx(tx, {
+        ...audit,
+        before: auditSnapshot(before),
+        after: {
+          deletedExpenseIds,
+          deletedExpenses,
+          clearedScheduleIds,
+          unlinkedOdometerReadingIds,
+          unlinkedWorkOrderId: unlinkedWorkOrderId ?? null,
+        },
+      });
+    }
+
+    tx.delete(recordRef);
+
+    return {
+      before,
+      deletedExpenseIds,
+      clearedScheduleIds,
+      unlinkedOdometerReadingIds,
+      unlinkedWorkOrderId,
+    };
+  });
 }
 
 /* ------------------------- Status evaluation view ------------------------- */

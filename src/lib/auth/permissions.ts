@@ -39,6 +39,7 @@ export const PERMISSIONS = {
   SERVICE_RECORD: "service:record",
   SERVICE_READ: "service:read",
   SERVICE_UPDATE: "service:update",
+  SERVICE_DELETE: "service:delete",
 
   ASSIGNMENT_READ: "assignment:read",
   ASSIGNMENT_CREATE: "assignment:create",
@@ -58,11 +59,13 @@ export const PERMISSIONS = {
   EXPENSE_CREATE: "expense:create",
   EXPENSE_UPDATE: "expense:update",
   EXPENSE_VOID: "expense:void",
+  EXPENSE_DELETE: "expense:delete",
   EXPENSE_EXPORT: "expense:export",
 
   FUEL_READ: "fuel:read",
   FUEL_CREATE: "fuel:create",
   FUEL_UPDATE: "fuel:update",
+  FUEL_DELETE: "fuel:delete",
 
   DOCUMENT_READ: "document:read",
   DOCUMENT_UPLOAD: "document:upload",

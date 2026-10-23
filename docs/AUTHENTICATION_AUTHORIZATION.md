@@ -259,7 +259,18 @@ expense:read
 expense:create
 expense:update
 expense:void
+expense:delete
 expense:export
+
+fuel:read
+fuel:create
+fuel:update
+fuel:delete
+
+service:read
+service:record
+service:update
+service:delete
 
 provider:read
 provider:create
@@ -300,6 +311,7 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 | Record expenses | No | Yes | Yes |
 | Approve/reject expenses (API only — approval happens outside the app) | No | Yes | Yes |
 | Void/correct expenses | No | Yes, with reason | Yes, with reason |
+| Permanently delete a fuel purchase, service record or expense | No | No | Yes, with a written reason and a full audit snapshot |
 | Read financial totals / export | No | Yes | Yes |
 | Manage providers | Yes | Read | Yes |
 | Release vehicle from safety hold | No | No | Yes (`vehicle:release`); re-checks open critical issues |
