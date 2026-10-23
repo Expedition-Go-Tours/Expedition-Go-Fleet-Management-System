@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildFuelCreatePayload,
+  buildFuelUpdatePayload,
   computeConsumption,
   consumptionByEntry,
   isValidFuelEntry,
@@ -17,6 +18,7 @@ const validForm: FuelPurchaseFormValues = {
   amount: "500.00",
   fuelType: "PETROL",
   station: "  Goil, Accra Central  ",
+  paidTo: "",
   fullTank: true,
 };
 
@@ -57,6 +59,21 @@ describe("buildFuelCreatePayload — form to POST /api/v1/fuel body", () => {
     const result = build({ station: "   " });
     expect(result.ok && result.payload.station).toBeUndefined();
     expect(result.ok && "station" in result.payload).toBe(false);
+  });
+
+  it("trims the optional payee and omits it when blank", () => {
+    const paid = build({ paidTo: "  Kofi Mensah  " });
+    expect(paid.ok && paid.payload.paidTo).toBe("Kofi Mensah");
+
+    const blank = build({ paidTo: "   " });
+    expect(blank.ok && "paidTo" in blank.payload).toBe(false);
+  });
+
+  it("rejects a payee longer than the shared limit instead of truncating it", () => {
+    expect(build({ paidTo: "x".repeat(201) })).toEqual({
+      ok: false,
+      message: "paidTo must be 200 characters or fewer",
+    });
   });
 
   it("defaults a blank fuel type to PETROL and rejects an unsupported one", () => {
@@ -300,6 +317,57 @@ describe("consumptionByEntry — a missing reading breaks the chain", () => {
     expect(latestConsumption(entries, "veh_2")).toEqual({
       kmPerLitre: null,
       reason: "Not enough consecutive full-tank fill-ups with odometer readings",
+    });
+  });
+});
+
+describe("buildFuelUpdatePayload — correcting a recorded purchase", () => {
+  const validUpdate = {
+    transactedOn: "2026-10-21",
+    amount: "500.00",
+    fuelType: "PETROL",
+    station: "  Goil, Accra Central  ",
+    paidTo: "  Kofi Mensah  ",
+    fullTank: true,
+  };
+
+  it("builds the editable fields with text trimmed and the amount exact", () => {
+    expect(buildFuelUpdatePayload(validUpdate)).toEqual({
+      ok: true,
+      payload: {
+        transactedOn: "2026-10-21",
+        totalMinor: 50000,
+        fuelType: "PETROL",
+        station: "Goil, Accra Central",
+        paidTo: "Kofi Mensah",
+        fullTank: true,
+      },
+    });
+  });
+
+  it("omits a cleared station and payee instead of sending empty text", () => {
+    const result = buildFuelUpdatePayload({ ...validUpdate, station: "  ", paidTo: "" });
+    expect(result.ok && result.payload.station).toBeUndefined();
+    expect(result.ok && "station" in result.payload).toBe(false);
+    expect(result.ok && "paidTo" in result.payload).toBe(false);
+  });
+
+  it("rejects the same mistakes as recording: date, amount, fuel type and payee", () => {
+    expect(buildFuelUpdatePayload({ ...validUpdate, transactedOn: "21/10/2026" })).toEqual({
+      ok: false,
+      message: "transactedOn must be YYYY-MM-DD",
+    });
+    expect(buildFuelUpdatePayload({ ...validUpdate, amount: "0" })).toEqual({
+      ok: false,
+      message: "amount must be a positive amount",
+    });
+    expect(buildFuelUpdatePayload({ ...validUpdate, fuelType: "LPG" })).toEqual({
+      ok: false,
+      message: "Unsupported fuel type",
+    });
+    expect(buildFuelUpdatePayload({ ...validUpdate, paidTo: "x".repeat(201) })).toEqual({
+      ok: false,
+      message: "paidTo must be 200 characters or fewer",
     });
   });
 });

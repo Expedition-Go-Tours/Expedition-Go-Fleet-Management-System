@@ -8,7 +8,9 @@ import {
   IN_APP_EXPENSE_ACTIONS,
   isCountedExpense,
   isValidAmountMinor,
+  MAX_PAID_TO_LENGTH,
   normalizeExpenseStatus,
+  parsePaidTo,
   summarizeExpenses,
   toPesewas,
   type ExpenseSummaryRow,
@@ -182,6 +184,26 @@ describe("summarizeExpenses — practical totals for a small team", () => {
       monthMinor: 0,
       byCategory: [],
       byVehicle: [],
+    });
+  });
+});
+
+describe("parsePaidTo — optional payee on a recorded payment", () => {
+  it("treats absent and blank values as 'not recorded', never empty text", () => {
+    expect(parsePaidTo(undefined)).toEqual({ ok: true });
+    expect(parsePaidTo(null)).toEqual({ ok: true });
+    expect(parsePaidTo("   ")).toEqual({ ok: true });
+  });
+
+  it("trims a real name", () => {
+    expect(parsePaidTo("  Kofi Mensah  ")).toEqual({ ok: true, paidTo: "Kofi Mensah" });
+  });
+
+  it("rejects non-text values and names over the shared limit", () => {
+    expect(parsePaidTo(42)).toEqual({ ok: false, message: "paidTo must be text" });
+    expect(parsePaidTo("x".repeat(MAX_PAID_TO_LENGTH + 1))).toEqual({
+      ok: false,
+      message: `paidTo must be ${MAX_PAID_TO_LENGTH} characters or fewer`,
     });
   });
 });

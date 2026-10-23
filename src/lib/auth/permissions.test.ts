@@ -39,6 +39,7 @@ describe("permission catalog", () => {
       "incident:manage",
       "fuel:read",
       "fuel:create",
+      "fuel:update",
       "document:read",
       "document:upload",
       "document:manage",
@@ -73,6 +74,7 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.ASSIGNMENT_CREATE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.EXPENSE_CREATE)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.FUEL_UPDATE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.USER_INVITE)).toBe(false);
   });
 
@@ -103,6 +105,7 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.EXPENSE_VOID)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.EXPENSE_EXPORT)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.FUEL_CREATE)).toBe(true);
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.FUEL_UPDATE)).toBe(true);
     // Records that completed maintenance happened (and books its cost), because
     // the same desk pays the invoice — but still cannot run or release.
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_RECORD)).toBe(true);

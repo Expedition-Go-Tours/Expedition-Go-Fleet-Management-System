@@ -194,6 +194,15 @@ GET  /odometer/recent              → recent readings across the fleet
   and the UI shows “No reading”. The schedule baseline then uses the vehicle's
   last accepted reading, which can only make the next due point earlier — never
   later — than the true service mileage.
+- The direct-log cost can be **itemised** into workmanship (`labourMinor`) and
+  named parts (`items: [{ name, amountMinor }]`). The server computes the
+  authoritative total, rejects a mismatched `costMinor`, and stores the
+  breakdown on the service record for audit. The linked MAINTENANCE expense
+  carries the total; a plain `costMinor` remains supported for older callers.
+- The direct-log form accepts the same optional **“Paid to (representative /
+  driver)”** name as fuel. `paidTo` is stored on the service record and mirrored
+  to its linked MAINTENANCE expense (retries fall back to the record's value), so
+  the expense ledger and CSV identify who was paid.
 - Standard fixtures (`oil-change` 5,000 km / 500 km) are seeded by the
   migration/bootstrap scripts.
 
@@ -247,6 +256,11 @@ POST /fuel                         { vehicleId, totalMinor, odometerKm?, litres?
 - The everyday form records the **total amount paid** (`totalMinor`) — no litres
   or unit price required. The API still accepts `litres` for historical/API
   clients and validates it when supplied.
+- Operations can also type **“Paid to (representative / driver)”** — the person
+  who received the cash. `paidTo` is optional, trimmed, capped at 200
+  characters, and stored on the fuel entry **and** mirrored to the canonical
+  expense in the same request. It is shown in the fuel ledger, the expense
+  ledger and the CSV export.
 - A fuel entry creates its **canonical `Expense`** (category FUEL, integer
   pesewas via `toPesewas`) and links the expense id back on the fuel entry.
   Money is never figured twice.
@@ -262,6 +276,14 @@ POST /fuel                         { vehicleId, totalMinor, odometerKm?, litres?
 - The fuel ledger shows a missing reading as **No reading**, a missing volume as
   **Not recorded**, and its efficiency as **Not measured**. Amount-only entries
   still count in spend; the volume KPI counts only fill-ups with litres.
+- A recorded purchase can be **corrected** by `OPERATIONS` and `ADMIN`
+  (`fuel:update`) — drivers can record but not edit. Editable fields are the
+  date, amount, fuel type, station, payee and full-tank flag. The vehicle,
+  odometer/reading link and recorder are immutable; a wrong reading is corrected
+  through the odometer ledger. The linked canonical expense is updated in the
+  same transaction (amount, description, supplier, payee, incurred date), so the
+  fuel ledger and finance ledger never disagree, and every correction is
+  audited before/after as `fuel.corrected`.
 - Expenses are **recorded here; approval happens outside the app**. A new
   expense is stored as `PENDING` (kept for backward compatibility, presented
   as **Recorded**) and can be corrected immediately — there is no approval

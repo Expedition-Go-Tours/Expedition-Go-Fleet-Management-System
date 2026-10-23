@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Droplets, Fuel, Gauge, ReceiptText } from "lucide-react";
 
 import { AddFuelDialog } from "@/components/fuel/AddFuelDialog";
+import { EditFuelDialog } from "@/components/fuel/EditFuelDialog";
 import { FuelFilters } from "@/components/fuel/FuelFilters";
 import { Card } from "@/components/ui/Card";
 import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
@@ -30,7 +31,9 @@ export default async function FuelPage({
   searchParams: Promise<{ vehicleId?: string }>;
 }) {
   const context = await requirePagePermission(PERMISSIONS.FUEL_READ);
-  const canCreate = permissionsForRoles(context.user.roles).has(PERMISSIONS.FUEL_CREATE);
+  const permissions = permissionsForRoles(context.user.roles);
+  const canCreate = permissions.has(PERMISSIONS.FUEL_CREATE);
+  const canEdit = permissions.has(PERMISSIONS.FUEL_UPDATE);
   const { vehicleId } = await searchParams;
 
   const [entries, vehicles] = await Promise.all([listFuelEntries({ limit: 300 }), listVehicles()]);
@@ -71,7 +74,7 @@ export default async function FuelPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Fuel"
-        description="Fuel ledger. Record the amount paid; the odometer and litres are optional. Efficiency is only reported where consecutive full-tank fill-ups have both."
+        description="Fuel ledger. Record the amount paid; the odometer is optional and the cost is mirrored into the expense ledger."
         crumbs={[{ label: "Finance & compliance" }, { label: "Fuel" }]}
         actions={<AddFuelDialog canCreate={canCreate} vehicles={vehicleOptions} />}
       />
@@ -114,12 +117,12 @@ export default async function FuelPage({
           columns={[
             { key: "date", header: "Date" },
             { key: "vehicle", header: "Vehicle" },
+            { key: "paidTo", header: "Paid to" },
             { key: "odometer", header: "Odometer" },
-            { key: "volume", header: "Litres" },
             { key: "price", header: "Unit price" },
             { key: "total", header: "Total" },
             { key: "tank", header: "Tank" },
-            { key: "efficiency", header: "Efficiency" },
+            ...(canEdit ? [{ key: "edit", header: "Actions", className: "text-right" }] : []),
           ]}
           empty={
             <EmptyState
@@ -144,21 +147,19 @@ export default async function FuelPage({
                 </Link>
               </Td>
               <Td>
+                {row.paidTo ? (
+                  <span className="text-data text-ink">{row.paidTo}</span>
+                ) : (
+                  <CellMeta>—</CellMeta>
+                )}
+              </Td>
+              <Td>
                 {typeof row.odometerKm === "number" ? (
                   <span className="text-data text-ink tabular-nums">
                     {row.odometerKm.toLocaleString()} km
                   </span>
                 ) : (
                   <CellMeta>No reading</CellMeta>
-                )}
-              </Td>
-              <Td>
-                {typeof row.litres === "number" ? (
-                  <span className="text-data text-ink tabular-nums">
-                    {formatNumber(row.litres)} L
-                  </span>
-                ) : (
-                  <CellMeta>Not recorded</CellMeta>
                 )}
               </Td>
               <Td>
@@ -180,25 +181,28 @@ export default async function FuelPage({
                   {row.fullTank ? "Full" : "Partial"}
                 </span>
               </Td>
-              <Td>
-                {row.kmPerLitre !== null ? (
-                  <span className="text-data text-ink tabular-nums">
-                    {formatNumber(row.kmPerLitre)} km/l
-                  </span>
-                ) : (
-                  <CellMeta>Not measured</CellMeta>
-                )}
-              </Td>
+              {canEdit && (
+                <Td className="text-right">
+                  <EditFuelDialog
+                    entry={{
+                      id: row.id,
+                      vehicleLabel: row.vehicleLabel,
+                      transactedOn: row.transactedOn,
+                      totalMinor: row.totalMinor,
+                      currency: row.currency,
+                      fuelType: row.fuelType,
+                      station: row.station,
+                      paidTo: row.paidTo,
+                      fullTank: row.fullTank,
+                      odometerKm: row.odometerKm,
+                    }}
+                  />
+                </Td>
+              )}
             </tr>
           ))}
         </DataTable>
       </Card>
-
-      <p className="text-body-xs text-muted">
-        Amount-only fill-ups still count as spend. Efficiency requires two consecutive full-tank
-        fill-ups with litres and increasing odometer readings; a fill-up without either breaks the
-        chain and is shown as not measured.
-      </p>
     </div>
   );
 }

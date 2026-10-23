@@ -45,6 +45,11 @@ export interface Expense {
   description: string;
   supplierName?: string;
   providerId?: string;
+  /**
+   * Person who received this payment (driver, mechanic, fuel attendant…).
+   * Free text because a small team often pays someone who has no app account.
+   */
+  paidTo?: string;
   /** Receipt/invoice evidence key in private storage. */
   receiptKey?: string;
   /** External reference (invoice number, Momo transaction, …). */
@@ -211,6 +216,27 @@ export function isValidAmountMinor(amountMinor: unknown): amountMinor is number 
     amountMinor > 0 &&
     amountMinor <= 100_000_000_00 // cap at 100M cedis in pesewas
   );
+}
+
+/** Longest accepted payee name on a recorded payment. */
+export const MAX_PAID_TO_LENGTH = 200;
+
+/**
+ * Normalise the optional “paid to” name shared by fuel and service payments.
+ * Blank means “not recorded”; a value is trimmed, bounded, and never silently
+ * truncated. Used by the dialogs' payload builders and the API routes alike.
+ */
+export function parsePaidTo(
+  value: unknown,
+): { ok: true; paidTo?: string } | { ok: false; message: string } {
+  if (value === undefined || value === null) return { ok: true };
+  if (typeof value !== "string") return { ok: false, message: "paidTo must be text" };
+  const paidTo = value.trim();
+  if (!paidTo) return { ok: true };
+  if (paidTo.length > MAX_PAID_TO_LENGTH) {
+    return { ok: false, message: `paidTo must be ${MAX_PAID_TO_LENGTH} characters or fewer` };
+  }
+  return { ok: true, paidTo };
 }
 
 /** Major-unit string/number → integer pesewas, without float drift. */

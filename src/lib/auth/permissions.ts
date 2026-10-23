@@ -61,6 +61,7 @@ export const PERMISSIONS = {
 
   FUEL_READ: "fuel:read",
   FUEL_CREATE: "fuel:create",
+  FUEL_UPDATE: "fuel:update",
 
   DOCUMENT_READ: "document:read",
   DOCUMENT_UPLOAD: "document:upload",
@@ -196,6 +197,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.EXPENSE_EXPORT,
     PERMISSIONS.FUEL_CREATE,
     PERMISSIONS.FUEL_READ,
+    PERMISSIONS.FUEL_UPDATE,
     PERMISSIONS.DOCUMENT_READ,
     PERMISSIONS.DOCUMENT_UPLOAD,
     PERMISSIONS.TRIP_CREATE,

@@ -245,6 +245,8 @@ export interface ServiceRecord {
   providerId?: string;
   providerName?: string;
   technicianName?: string;
+  /** Person who received the payment, when the cost was paid to an individual. */
+  paidTo?: string;
   notes?: string;
   /** Expense ids for parts/labour — referenced, never copied into totals. */
   expenseIds: string[];
@@ -255,6 +257,12 @@ export interface ServiceRecord {
    */
   repairCostMinor?: number;
   repairCostCurrency?: string;
+  /**
+   * Itemised breakdown of the recorded cost, when the caller supplied one.
+   * `repairCostMinor` remains the authoritative total (labour + items).
+   */
+  labourCostMinor?: number;
+  costItems?: { name: string; amountMinor: number }[];
   /** Issue ids this service resolved. */
   resolvedIssueIds: string[];
   recordedByUserId: string;
@@ -281,6 +289,7 @@ function toServiceRecord(id: string, data: DocumentData): ServiceRecord {
     providerId: data.providerId ? String(data.providerId) : undefined,
     providerName: data.providerName ? String(data.providerName) : undefined,
     technicianName: data.technicianName ? String(data.technicianName) : undefined,
+    paidTo: data.paidTo ? String(data.paidTo) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
     expenseIds: Array.isArray(data.expenseIds) ? data.expenseIds.map(String) : [],
     repairCostMinor:
@@ -288,6 +297,17 @@ function toServiceRecord(id: string, data: DocumentData): ServiceRecord {
         ? undefined
         : Number(data.repairCostMinor),
     repairCostCurrency: data.repairCostCurrency ? String(data.repairCostCurrency) : undefined,
+    labourCostMinor:
+      typeof data.labourCostMinor === "number" ? Number(data.labourCostMinor) : undefined,
+    costItems: Array.isArray(data.costItems)
+      ? data.costItems
+          .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+          .map((item) => ({
+            name: String(item.name ?? ""),
+            amountMinor: Number(item.amountMinor ?? 0),
+          }))
+          .filter((item) => item.name !== "" && Number.isSafeInteger(item.amountMinor))
+      : undefined,
     resolvedIssueIds: Array.isArray(data.resolvedIssueIds) ? data.resolvedIssueIds.map(String) : [],
     recordedByUserId: String(data.recordedByUserId ?? ""),
     createdAt: toDate(data.createdAt) ?? new Date(0),

@@ -145,6 +145,7 @@ export default async function ExpensesPage({
                             </Link>{" "}
                             · {humanizeEnum(expense.category)} · {formatDate(expense.incurredOn)}
                             {linkedWork ? ` · ${linkedWork}` : ""}
+                            {expense.paidTo ? ` · Paid to ${expense.paidTo}` : ""}
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">

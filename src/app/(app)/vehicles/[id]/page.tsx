@@ -226,6 +226,11 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       odometerKm: r.odometerKm ?? null,
       workOrderId: r.workOrderId ?? null,
       workPerformed: r.workPerformed ?? null,
+      repairCostMinor: r.repairCostMinor ?? null,
+      repairCostCurrency: r.repairCostCurrency ?? null,
+      labourCostMinor: r.labourCostMinor ?? null,
+      costItems: r.costItems ?? [],
+      paidTo: r.paidTo ?? null,
     })),
     issues: issues.map((i) => ({
       id: i.id,

@@ -51,8 +51,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const header =
-      "id,incurredOn,vehicleId,workOrderId,serviceRecordId,category,amountMinor,currency,description,supplier,externalReference";
+    // One column list drives the header, every row and the TOTAL line so the
+    // positional CSV can never drift out of alignment.
+    const columns = [
+      "id",
+      "incurredOn",
+      "vehicleId",
+      "workOrderId",
+      "serviceRecordId",
+      "category",
+      "amountMinor",
+      "currency",
+      "description",
+      "supplier",
+      "paidTo",
+      "externalReference",
+    ];
     const rows = expenses.map((e) =>
       [
         e.id,
@@ -65,10 +79,18 @@ export async function GET(request: NextRequest) {
         e.currency,
         `"${e.description.replace(/"/g, '""')}"`,
         e.supplierName ? `"${e.supplierName.replace(/"/g, '""')}"` : "",
+        e.paidTo ? `"${e.paidTo.replace(/"/g, '""')}"` : "",
         e.externalReference ?? "",
       ].join(","),
     );
-    const csv = [header, ...rows, `TOTAL,,,,,,,${totalMinor},,,`].join("\n");
+    const totalRow = columns
+      .map((column) => {
+        if (column === "id") return "TOTAL";
+        if (column === "amountMinor") return String(totalMinor);
+        return "";
+      })
+      .join(",");
+    const csv = [columns.join(","), ...rows, totalRow].join("\n");
 
     return new Response(csv, {
       status: 200,

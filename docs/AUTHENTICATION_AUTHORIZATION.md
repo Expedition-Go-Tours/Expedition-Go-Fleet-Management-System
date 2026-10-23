@@ -294,6 +294,7 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 | Preventive maintenance schedules + service records | Yes | Read; record completed work | Yes |
 | Record/correct odometer readings | Yes | Record | Yes |
 | Record fuel | Yes | Yes | Yes |
+| Correct a recorded fuel purchase | No | Yes | Yes |
 | Read expenses | Yes | Yes | Yes |
 | Record expenses | No | Yes | Yes |
 | Approve/reject expenses (API only — approval happens outside the app) | No | Yes | Yes |

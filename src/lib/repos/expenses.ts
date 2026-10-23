@@ -30,6 +30,7 @@ function toExpense(id: string, data: DocumentData): Expense {
     description: String(data.description ?? ""),
     supplierName: data.supplierName ? String(data.supplierName) : undefined,
     providerId: data.providerId ? String(data.providerId) : undefined,
+    paidTo: data.paidTo ? String(data.paidTo) : undefined,
     receiptKey: data.receiptKey ? String(data.receiptKey) : undefined,
     externalReference: data.externalReference ? String(data.externalReference) : undefined,
     incurredOn: toDate(data.incurredOn) ?? toDate(data.createdAt) ?? new Date(0),
@@ -59,6 +60,7 @@ export interface CreateExpenseInput {
   description: string;
   supplierName?: string;
   providerId?: string;
+  paidTo?: string;
   receiptKey?: string;
   externalReference?: string;
   incurredOn?: Date;
@@ -82,6 +84,7 @@ function expenseDocument(input: CreateExpenseInput, now: unknown): Record<string
     fuelEntryId: input.fuelEntryId ?? null,
     supplierName: input.supplierName ?? null,
     providerId: input.providerId ?? null,
+    paidTo: input.paidTo ?? null,
     receiptKey: input.receiptKey ?? null,
     externalReference: input.externalReference ?? null,
     incurredOn: input.incurredOn ?? new Date(),
@@ -132,6 +135,7 @@ export async function ensureServiceExpense(
       description: input.description,
       supplierName: input.supplierName,
       providerId: input.providerId,
+      paidTo: input.paidTo,
       receiptKey: input.receiptKey,
       externalReference: input.externalReference,
       incurredOn: input.incurredOn,

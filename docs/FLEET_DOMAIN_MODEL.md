@@ -108,4 +108,19 @@ Service completions and direct service logs may each carry at most one linked
 MAINTENANCE expense. The expense id is deterministic
 (`svc_<serviceRecordId>`), and the service record stores the requested cost
 as intent until the expense is linked, so a retry after a partial failure
-finishes the cost instead of silently losing it.
+finishes the cost instead of silently losing it. A direct log may itemise the
+cost as workmanship plus named parts (`labourCostMinor`, `costItems`): the
+server sums the parts into `repairCostMinor`, which stays the authoritative
+total, and the linked expense carries that total.
+
+Both fuel entries and service records can carry an optional free-text
+`paidTo` (≤200 characters) — the person who received the payment. It is
+trimmed at write time (blank means not recorded), stored on the source record,
+and mirrored onto the canonical `Expense` in the same request. It is distinct
+from `supplierName`, which stays the station/garage business, and is shown in
+the fuel ledger, the expense ledger and the CSV export.
+
+Fuel purchases can be corrected by operations/admin: date, amount, fuel type,
+station, payee and full-tank flag are editable, while the vehicle, odometer
+link and recorder stay immutable. The linked expense is updated in the same
+transaction and the correction is audited before/after.

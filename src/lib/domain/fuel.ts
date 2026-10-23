@@ -1,5 +1,5 @@
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { toPesewas } from "@/lib/domain/expense";
+import { parsePaidTo, toPesewas } from "@/lib/domain/expense";
 
 /*
  * Fuel purchase records.
@@ -31,6 +31,8 @@ export interface FuelEntry {
   totalMinor: number;
   currency: string;
   station?: string;
+  /** Person who received the payment, when someone other than the station. */
+  paidTo?: string;
   receiptKey?: string;
   /** Filled to the tank nozzle — required for consumption calculation. */
   fullTank: boolean;
@@ -196,6 +198,8 @@ export interface FuelPurchaseFormValues {
   amount: string;
   fuelType: string;
   station: string;
+  /** Person who received the payment (representative / driver). */
+  paidTo: string;
   fullTank: boolean;
 }
 
@@ -209,27 +213,46 @@ export interface FuelCreatePayload {
   totalMinor: number;
   fuelType: string;
   station?: string;
+  paidTo?: string;
   fullTank: boolean;
 }
 
 /**
- * Form values → the fuel-entry request body, or the first message to show the
- * operator. The server re-validates everything; this exists so the dialog can
- * fail fast with the same rules and show that the amount is stored exactly.
+ * Editable fields on a recorded purchase. The vehicle and odometer are not
+ * here: the vehicle is fixed, and the odometer lives in the append-only ledger
+ * (a wrong reading is corrected there, never by rewriting the purchase).
  */
-export function buildFuelCreatePayload(
-  values: FuelPurchaseFormValues,
-): { ok: true; payload: FuelCreatePayload } | { ok: false; message: string } {
-  const vehicleId = values.vehicleId.trim();
-  if (!vehicleId) return { ok: false, message: "Choose the vehicle that was filled up" };
+export interface FuelUpdateFormValues {
+  transactedOn: string;
+  amount: string;
+  fuelType: string;
+  station: string;
+  paidTo: string;
+  fullTank: boolean;
+}
 
+/** The validated PATCH /api/v1/fuel/[id] body. */
+export interface FuelUpdatePayload {
+  transactedOn: string;
+  totalMinor: number;
+  fuelType: string;
+  station?: string;
+  paidTo?: string;
+  fullTank: boolean;
+}
+
+/**
+ * Validate the fields that can be corrected. Shared by the create payload
+ * (after the vehicle/odometer checks) and the edit dialog so both reject the
+ * same mistakes with the same wording.
+ */
+function buildFuelAmountFields(
+  values: FuelUpdateFormValues,
+): { ok: true; payload: FuelUpdatePayload } | { ok: false; message: string } {
   const transactedOn = values.transactedOn.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(transactedOn)) {
     return { ok: false, message: "transactedOn must be YYYY-MM-DD" };
   }
-
-  const odometer = parseOdometerKm(values.odometerKm);
-  if (!odometer.ok) return odometer;
 
   const amountRaw = values.amount.trim();
   if (!/^\d+(\.\d{1,2})?$/.test(amountRaw)) {
@@ -248,16 +271,52 @@ export function buildFuelCreatePayload(
   }
 
   const station = values.station.trim();
+  const paidToResult = parsePaidTo(values.paidTo);
+  if (!paidToResult.ok) return { ok: false, message: paidToResult.message };
+
+  return {
+    ok: true,
+    payload: {
+      transactedOn,
+      totalMinor,
+      fuelType,
+      ...(station ? { station } : {}),
+      ...(paidToResult.paidTo ? { paidTo: paidToResult.paidTo } : {}),
+      fullTank: values.fullTank === true,
+    },
+  };
+}
+
+/** Form values for correcting a recorded purchase (no vehicle/odometer). */
+export function buildFuelUpdatePayload(
+  values: FuelUpdateFormValues,
+): { ok: true; payload: FuelUpdatePayload } | { ok: false; message: string } {
+  return buildFuelAmountFields(values);
+}
+
+/**
+ * Form values → the fuel-entry request body, or the first message to show the
+ * operator. The server re-validates everything; this exists so the dialog can
+ * fail fast with the same rules and show that the amount is stored exactly.
+ */
+export function buildFuelCreatePayload(
+  values: FuelPurchaseFormValues,
+): { ok: true; payload: FuelCreatePayload } | { ok: false; message: string } {
+  const vehicleId = values.vehicleId.trim();
+  if (!vehicleId) return { ok: false, message: "Choose the vehicle that was filled up" };
+
+  const odometer = parseOdometerKm(values.odometerKm);
+  if (!odometer.ok) return odometer;
+
+  const fields = buildFuelAmountFields(values);
+  if (!fields.ok) return fields;
+
   return {
     ok: true,
     payload: {
       vehicleId,
-      transactedOn,
       ...(odometer.odometerKm !== undefined ? { odometerKm: odometer.odometerKm } : {}),
-      totalMinor,
-      fuelType,
-      ...(station ? { station } : {}),
-      fullTank: values.fullTank === true,
+      ...fields.payload,
     },
   };
 }

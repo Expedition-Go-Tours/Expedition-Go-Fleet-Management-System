@@ -62,6 +62,11 @@ export interface TabServiceRecordData {
   odometerKm: number | null;
   workOrderId: string | null;
   workPerformed: string | null;
+  repairCostMinor: number | null;
+  repairCostCurrency: string | null;
+  labourCostMinor: number | null;
+  costItems: { name: string; amountMinor: number }[];
+  paidTo: string | null;
 }
 
 export interface TabIssueData {
@@ -529,6 +534,21 @@ function ServicePanel({ records }: { records: TabServiceRecordData[] }) {
                 </div>
                 {s.workPerformed && (
                   <p className="text-data-xs text-muted mt-1">{s.workPerformed}</p>
+                )}
+                {s.repairCostMinor !== null && (
+                  <p className="text-data-xs text-muted mt-1">
+                    Cost {formatMoney(s.repairCostMinor, s.repairCostCurrency ?? "GHS")}
+                    {s.labourCostMinor !== null &&
+                      ` · Workmanship ${formatMoney(
+                        s.labourCostMinor,
+                        s.repairCostCurrency ?? "GHS",
+                      )}`}
+                    {s.costItems.map(
+                      (item) =>
+                        ` · ${item.name} ${formatMoney(item.amountMinor, s.repairCostCurrency ?? "GHS")}`,
+                    )}
+                    {s.paidTo ? ` · Paid to ${s.paidTo}` : ""}
+                  </p>
                 )}
                 {s.workOrderId && (
                   <p className="text-data-xs text-link mt-1 font-medium">

@@ -165,6 +165,13 @@ export function AddFuelDialog({
             />
           </Field>
           <Field
+            label="Paid to (representative / driver)"
+            hint="Optional — the person who received the money, if not the station."
+            htmlFor="af-paid-to"
+          >
+            <Input id="af-paid-to" name="paidTo" placeholder="e.g. Kofi Mensah" />
+          </Field>
+          <Field
             label="Station"
             hint="Optional — also becomes the expense supplier."
             htmlFor="af-station"
@@ -202,6 +209,7 @@ function readValues(form: FormData): FuelPurchaseFormValues {
     amount: String(form.get("amount") ?? ""),
     fuelType: String(form.get("fuelType") ?? ""),
     station: String(form.get("station") ?? ""),
+    paidTo: String(form.get("paidTo") ?? ""),
     fullTank: form.get("fullTank") === "on",
   };
 }

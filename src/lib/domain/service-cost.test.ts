@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildServiceExpenseRecord,
   recordServiceCost,
+  resolveServiceCostInput,
   serviceExpenseId,
   ServiceCostError,
   type ServiceCostInput,
@@ -18,6 +19,7 @@ const input: ServiceCostInput = {
   currency: "ghs",
   description: "  Replace front brake pads  ",
   supplierName: "Kofi Auto Parts",
+  paidTo: "  Kofi Mensah  ",
   incurredOn: new Date("2026-10-19T10:00:00Z"),
   createdBy: "user_1",
 };
@@ -77,8 +79,13 @@ describe("buildServiceExpenseRecord — canonical MAINTENANCE expense", () => {
       currency: "GHS",
       description: "Replace front brake pads",
       supplierName: "Kofi Auto Parts",
+      paidTo: "Kofi Mensah",
       createdBy: "user_1",
     });
+  });
+
+  it("omits a blank payee rather than storing empty text", () => {
+    expect(buildServiceExpenseRecord({ ...input, paidTo: "   " }).paidTo).toBeUndefined();
   });
 
   it("rejects a non-positive or fractional amount", () => {
@@ -181,5 +188,90 @@ describe("recordServiceCost — recoverable, idempotent cost linking", () => {
     expect(ledger.expenses.size).toBe(1);
     expect(results.every((r) => r.expenseId === "svc_svc_record_1")).toBe(true);
     expect(results.filter((r) => r.created).length).toBe(1);
+  });
+});
+
+describe("resolveServiceCostInput — workmanship + parts total", () => {
+  it("returns null when nothing was entered", () => {
+    expect(resolveServiceCostInput({})).toBeNull();
+    expect(resolveServiceCostInput({ costMinor: "", labourMinor: "", items: [] })).toBeNull();
+  });
+
+  it("keeps the legacy single total when no breakdown is supplied", () => {
+    expect(resolveServiceCostInput({ costMinor: 45000 })).toEqual({
+      amountMinor: 45000,
+      currency: "GHS",
+    });
+  });
+
+  it("sums workmanship and multiple parts into the authoritative total", () => {
+    const resolved = resolveServiceCostInput({
+      labourMinor: 20000,
+      items: [
+        { name: "  Oil filter ", amountMinor: 8000 },
+        { name: "Engine oil", amountMinor: 17000 },
+      ],
+    });
+
+    expect(resolved).toEqual({
+      amountMinor: 45000,
+      currency: "GHS",
+      labourMinor: 20000,
+      items: [
+        { name: "Oil filter", amountMinor: 8000 },
+        { name: "Engine oil", amountMinor: 17000 },
+      ],
+    });
+  });
+
+  it("supports parts-only and labour-only invoices", () => {
+    expect(resolveServiceCostInput({ items: [{ name: "Wiper", amountMinor: 5000 }] })).toEqual({
+      amountMinor: 5000,
+      currency: "GHS",
+      labourMinor: 0,
+      items: [{ name: "Wiper", amountMinor: 5000 }],
+    });
+    expect(resolveServiceCostInput({ labourMinor: 12000, items: [] })).toEqual({
+      amountMinor: 12000,
+      currency: "GHS",
+      labourMinor: 12000,
+      items: [],
+    });
+  });
+
+  it("accepts a declared total only when it matches the breakdown", () => {
+    expect(
+      resolveServiceCostInput({
+        labourMinor: 10000,
+        items: [{ name: "Filter", amountMinor: 5000 }],
+        costMinor: 15000,
+      })?.amountMinor,
+    ).toBe(15000);
+
+    expect(() =>
+      resolveServiceCostInput({
+        labourMinor: 10000,
+        items: [{ name: "Filter", amountMinor: 5000 }],
+        costMinor: 14000,
+      }),
+    ).toThrowError(/match/i);
+  });
+
+  it("rejects malformed costs instead of silently dropping them", () => {
+    const codeOf = (args: Parameters<typeof resolveServiceCostInput>[0]) => {
+      try {
+        resolveServiceCostInput(args);
+        return "NO_THROW";
+      } catch (err) {
+        return (err as ServiceCostError).code;
+      }
+    };
+
+    expect(codeOf({ labourMinor: -1, items: [] })).toBe("INVALID_AMOUNT");
+    expect(codeOf({ labourMinor: 12.5, items: [] })).toBe("INVALID_AMOUNT");
+    expect(codeOf({ items: [{ name: "", amountMinor: 100 }] })).toBe("INVALID_COST_ITEM");
+    expect(codeOf({ items: [{ name: "Part", amountMinor: 0 }] })).toBe("INVALID_COST_ITEM");
+    expect(codeOf({ items: "not-a-list" })).toBe("INVALID_COST_ITEM");
+    expect(codeOf({ costMinor: 0 })).toBe("INVALID_AMOUNT");
   });
 });

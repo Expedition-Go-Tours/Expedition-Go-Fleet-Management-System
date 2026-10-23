@@ -64,6 +64,7 @@ export const AUDIT_EVENTS = {
   DOCUMENT_UPLOADED: "document.uploaded",
   DOCUMENT_UPDATED: "document.updated",
   FUEL_RECORDED: "fuel.recorded",
+  FUEL_CORRECTED: "fuel.corrected",
   AUDIT_READ: "audit.read",
   EXPORT_GENERATED: "export.generated",
 } as const;

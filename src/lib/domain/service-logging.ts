@@ -1,3 +1,4 @@
+import type { ServiceCostItem } from "@/lib/domain/service-cost";
 import type { ServiceRecord } from "@/lib/repos/maintenance";
 
 /*
@@ -39,6 +40,8 @@ export interface LogServiceInput {
   workPerformed: string;
   providerName?: string;
   technicianName?: string;
+  /** Person who received the payment, when the cost was paid to an individual. */
+  paidTo?: string;
   notes?: string;
   /** PM schedules this work actually serviced — their baselines are reset. */
   scheduleIds: string[];
@@ -46,7 +49,14 @@ export interface LogServiceInput {
   /** Makes retried submissions idempotent. */
   clientToken?: string;
   /** Cost to record as the linked MAINTENANCE expense, persisted as intent. */
-  repairCost?: { amountMinor: number; currency: string };
+  repairCost?: {
+    amountMinor: number;
+    currency: string;
+    /** Workmanship portion when the cost was itemised. */
+    labourMinor?: number;
+    /** Parts/consumables when the cost was itemised. */
+    items?: ServiceCostItem[];
+  };
 }
 
 export interface LogServiceResult {
@@ -185,10 +195,13 @@ export async function logService(input: LogServiceInput): Promise<LogServiceResu
     workPerformed,
     providerName: input.providerName,
     technicianName: input.technicianName,
+    paidTo: input.paidTo,
     notes: input.notes,
     expenseIds: [],
     repairCostMinor: input.repairCost?.amountMinor,
     repairCostCurrency: input.repairCost?.currency,
+    labourCostMinor: input.repairCost?.labourMinor,
+    costItems: input.repairCost?.items,
     resolvedIssueIds: [],
     recordedByUserId: input.recordedByUserId,
     createdAt: now,

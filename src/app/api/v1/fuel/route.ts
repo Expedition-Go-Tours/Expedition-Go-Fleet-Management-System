@@ -9,7 +9,7 @@ import { isValidFuelEntry, latestConsumption, parseOdometerKm } from "@/lib/doma
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { createExpense } from "@/lib/repos/expenses";
 import { createFuelEntry, listFuelEntries } from "@/lib/repos/fuel";
-import { toPesewas } from "@/lib/domain/expense";
+import { parsePaidTo, toPesewas } from "@/lib/domain/expense";
 import { recordReading } from "@/lib/repos/odometers";
 import { getVehicleById } from "@/lib/repos/vehicles";
 
@@ -120,6 +120,9 @@ export async function POST(request: NextRequest) {
     // entries (the common office case) describe the fuel without inventing a
     // volume or unit price.
     const station = typeof body.station === "string" ? body.station : undefined;
+    const paidToResult = parsePaidTo(body.paidTo);
+    if (!paidToResult.ok) throw ApiError.badRequest(paidToResult.message);
+    const paidTo = paidToResult.paidTo;
     const expense = await createExpense({
       vehicleId,
       category: "FUEL",
@@ -127,6 +130,7 @@ export async function POST(request: NextRequest) {
       currency,
       description: `${litres !== undefined ? `${litres}L ` : ""}${fuelType}${station ? ` @ ${station}` : ""}`,
       supplierName: station?.slice(0, 200),
+      paidTo,
       receiptKey: typeof body.receiptKey === "string" ? body.receiptKey.slice(0, 500) : undefined,
       incurredOn: new Date(`${transactedOn}T12:00:00Z`),
       createdBy: context.user.id,
@@ -143,6 +147,7 @@ export async function POST(request: NextRequest) {
       totalMinor,
       currency,
       station: typeof body.station === "string" ? body.station.slice(0, 200) : undefined,
+      paidTo,
       receiptKey: typeof body.receiptKey === "string" ? body.receiptKey.slice(0, 500) : undefined,
       fullTank: body.fullTank === true,
       expenseId: expense.id,
@@ -162,6 +167,7 @@ export async function POST(request: NextRequest) {
         totalMinor,
         fullTank: entry.fullTank,
         odometerKm: odometerKm ?? null,
+        paidTo: paidTo ?? null,
         expenseId: expense.id,
       },
       requestId,

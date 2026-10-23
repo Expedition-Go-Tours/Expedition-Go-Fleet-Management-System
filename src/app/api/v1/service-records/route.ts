@@ -11,13 +11,14 @@ import {
   listServiceRecords,
 } from "@/lib/repos/maintenance";
 import { ServiceLogError, logService, resolveServiceOdometer } from "@/lib/domain/service-logging";
-import { resolveRepairCost } from "@/lib/domain/work-order-completion";
+import { resolveServiceCostInput, ServiceCostError } from "@/lib/domain/service-cost";
 import {
   ensureServiceExpense,
   findExpenseByServiceRecordId,
   getExpenseById,
 } from "@/lib/repos/expenses";
 import { recordServiceCost } from "@/lib/domain/service-cost";
+import { parsePaidTo } from "@/lib/domain/expense";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { ApiError } from "@/lib/api/errors";
 
@@ -98,8 +99,19 @@ export async function POST(request: NextRequest) {
     const scheduleIds = Array.isArray(body.scheduleIds)
       ? body.scheduleIds.filter((s): s is string => typeof s === "string").slice(0, 20)
       : [];
-    // Optional repair cost, recorded as a canonical MAINTENANCE expense.
-    const repairCost = resolveRepairCost({ costMinor: body.costMinor, currency: body.currency });
+    // Optional cost, recorded as a canonical MAINTENANCE expense. Direct logs
+    // may itemise it (workmanship + parts); the server sums the total.
+    const repairCost = resolveServiceCostInput({
+      costMinor: body.costMinor,
+      labourMinor: body.labourMinor,
+      items: body.items,
+      currency: body.currency,
+    });
+    // Optional payee — who received the money. Independent of whether a cost
+    // is supplied so a retry that only re-sends the payee still records it.
+    const paidToResult = parsePaidTo(body.paidTo);
+    if (!paidToResult.ok) throw ApiError.badRequest(paidToResult.message);
+    const paidTo = paidToResult.paidTo;
 
     const result = await logService({
       vehicleId,
@@ -111,6 +123,7 @@ export async function POST(request: NextRequest) {
         typeof body.providerName === "string" ? body.providerName.slice(0, 200) : undefined,
       technicianName:
         typeof body.technicianName === "string" ? body.technicianName.slice(0, 200) : undefined,
+      paidTo,
       notes: typeof body.notes === "string" ? body.notes.slice(0, 2000) : undefined,
       scheduleIds,
       recordedByUserId: context.user.id,
@@ -130,6 +143,7 @@ export async function POST(request: NextRequest) {
           odometerKm: odometerKm ?? null,
           resetScheduleIds: result.resetScheduleIds,
           direct: true,
+          paidTo: paidTo ?? null,
         },
         requestId,
       });
@@ -165,6 +179,7 @@ export async function POST(request: NextRequest) {
                 description: record.description,
                 supplierName: record.supplierName,
                 providerId: record.providerId,
+                paidTo: record.paidTo,
                 incurredOn: record.incurredOn,
                 createdBy: record.createdBy,
               });
@@ -180,6 +195,7 @@ export async function POST(request: NextRequest) {
             description: workPerformed,
             supplierName:
               typeof body.providerName === "string" ? body.providerName.slice(0, 200) : undefined,
+            paidTo: paidTo ?? result.serviceRecord.paidTo,
             incurredOn: completedAt,
             createdBy: context.user.id,
             existingExpenseId,
@@ -199,6 +215,7 @@ export async function POST(request: NextRequest) {
               amountMinor: effectiveCost.amountMinor,
               currency: effectiveCost.currency,
               serviceRecordId: result.serviceRecord.id,
+              paidTo: paidTo ?? result.serviceRecord.paidTo ?? null,
             },
             requestId,
           });
@@ -234,6 +251,12 @@ export async function POST(request: NextRequest) {
             ? 409
             : 400;
       return NextResponse.json({ error: { code: error.code, message: error.message } }, { status });
+    }
+    if (error instanceof ServiceCostError) {
+      return NextResponse.json(
+        { error: { code: error.code, message: error.message } },
+        { status: 400 },
+      );
     }
     return toErrorResponse(error);
   }

@@ -2,14 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { Wrench } from "lucide-react";
+import { Plus, Trash2, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/client/api";
 import { toPesewas } from "@/lib/domain/expense";
-import { formatNumber } from "@/lib/format";
+import { formatMoney, formatNumber } from "@/lib/format";
+
+interface CostItemDraft {
+  id: string;
+  name: string;
+  amount: string;
+}
 
 /**
  * Record maintenance that already happened — a garage visit or breakdown repair —
@@ -38,6 +44,8 @@ export function LogServiceDialog({
   const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? "");
   const [odometerKm, setOdometerKm] = useState("");
   const [scheduleIds, setScheduleIds] = useState<string[]>([]);
+  const [labour, setLabour] = useState("");
+  const [costItems, setCostItems] = useState<CostItemDraft[]>([]);
   const clientTokenRef = useRef<string>("");
 
   const selected = vehicles.find((v) => v.id === vehicleId);
@@ -46,12 +54,36 @@ export function LogServiceDialog({
     [schedules, vehicleId],
   );
 
+  // Preview only — the server recomputes and owns the authoritative total.
+  const previewTotalMinor = useMemo(() => {
+    const labourMinor = labour.trim() ? (toPesewas(labour) ?? 0) : 0;
+    const itemsMinor = costItems.reduce(
+      (sum, item) => sum + (item.amount.trim() ? (toPesewas(item.amount) ?? 0) : 0),
+      0,
+    );
+    return labourMinor + itemsMinor;
+  }, [labour, costItems]);
+
+  function addCostItem() {
+    setCostItems((items) => [...items, { id: crypto.randomUUID(), name: "", amount: "" }]);
+  }
+
+  function updateCostItem(id: string, patch: Partial<Omit<CostItemDraft, "id">>) {
+    setCostItems((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function removeCostItem(id: string) {
+    setCostItems((items) => items.filter((item) => item.id !== id));
+  }
+
   function openDialog() {
     clientTokenRef.current = crypto.randomUUID();
     const initialVehicleId = defaultVehicleId ?? "";
     setVehicleId(initialVehicleId);
     // Optional: never prefill a reading that may not belong to this service.
     setOdometerKm("");
+    setLabour("");
+    setCostItems([]);
     setError(null);
     setOpen(true);
   }
@@ -90,13 +122,34 @@ export function LogServiceDialog({
       setBusy(false);
       return;
     }
-    const costRaw = String(form.get("costMinor") ?? "").trim();
-    const costMinor = costRaw ? toPesewas(costRaw) : null;
-    if (costRaw && (costMinor === null || costMinor <= 0)) {
-      setError("Repair cost must be a positive amount.");
+    const labourRaw = labour.trim();
+    const labourMinor = labourRaw ? toPesewas(labourRaw) : 0;
+    if (labourRaw && labourMinor === null) {
+      setError("Workmanship cost must be a valid amount.");
       setBusy(false);
       return;
     }
+
+    // Blank rows are ignored; a half-filled row is a mistake, not a silent drop.
+    const filledItems = costItems
+      .map((item) => ({ name: item.name.trim(), amountRaw: item.amount.trim() }))
+      .filter((item) => item.name !== "" || item.amountRaw !== "");
+    if (filledItems.some((item) => item.name === "" || item.amountRaw === "")) {
+      setError("Every part needs both a name and a cost.");
+      setBusy(false);
+      return;
+    }
+    const parsedItems: { name: string; amountMinor: number }[] = [];
+    for (const item of filledItems) {
+      const amountMinor = toPesewas(item.amountRaw);
+      if (amountMinor === null || amountMinor <= 0) {
+        setError(`The cost for “${item.name}” must be a positive amount.`);
+        setBusy(false);
+        return;
+      }
+      parsedItems.push({ name: item.name, amountMinor });
+    }
+    const hasCost = (labourMinor ?? 0) > 0 || parsedItems.length > 0;
 
     try {
       const body: Record<string, unknown> = {
@@ -104,18 +157,24 @@ export function LogServiceDialog({
         completedAt: String(form.get("completedAt") ?? "") || undefined,
         workPerformed,
         providerName: String(form.get("providerName") ?? "").trim() || undefined,
+        paidTo: String(form.get("paidTo") ?? "").trim() || undefined,
         taskName: String(form.get("taskName") ?? "").trim() || undefined,
         scheduleIds: scheduleIds.length > 0 ? scheduleIds : undefined,
         clientToken: clientTokenRef.current,
       };
       if (odometerValue !== undefined) body.odometerKm = odometerValue;
-      if (costMinor) body.costMinor = costMinor;
+      if (hasCost) {
+        body.labourMinor = labourMinor ?? 0;
+        body.items = parsedItems;
+      }
       await api.post("/api/v1/service-records", body);
       setOpen(false);
       (event.target as HTMLFormElement).reset();
       setScheduleIds([]);
       setVehicleId(defaultVehicleId ?? "");
       setOdometerKm("");
+      setLabour("");
+      setCostItems([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not record the service.");
@@ -195,7 +254,7 @@ export function LogServiceDialog({
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Odometer (km)"
               hint={
@@ -226,21 +285,6 @@ export function LogServiceDialog({
             >
               <Input id="ls-task" name="taskName" placeholder="e.g. Oil & filter change" />
             </Field>
-            <Field
-              label="Cost (GHS)"
-              hint="Optional — saved as a maintenance expense."
-              htmlFor="ls-cost"
-            >
-              <Input
-                id="ls-cost"
-                name="costMinor"
-                type="number"
-                min={0.01}
-                step="any"
-                inputMode="decimal"
-                placeholder="e.g. 450"
-              />
-            </Field>
           </div>
 
           <Field label="What was done?" required htmlFor="ls-work">
@@ -260,6 +304,105 @@ export function LogServiceDialog({
           >
             <Input id="ls-provider" name="providerName" placeholder="e.g. Kingdom Motors" />
           </Field>
+
+          <fieldset className="border-hairline rounded-md border p-3">
+            <legend className="font-ui text-data-xs text-muted px-1 font-semibold tracking-[var(--tracking-ui)] uppercase">
+              Cost (optional)
+            </legend>
+            <p className="text-data-xs text-muted mt-1">
+              Split the invoice into workmanship and the parts actually bought. The server totals it
+              and records one maintenance expense.
+            </p>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field
+                label="Workmanship (GHS)"
+                hint="Labour charged by the garage."
+                htmlFor="ls-labour"
+              >
+                <Input
+                  id="ls-labour"
+                  name="labour"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  value={labour}
+                  onChange={(event) => setLabour(event.target.value)}
+                  placeholder="e.g. 200"
+                />
+              </Field>
+              <Field
+                label="Paid to (representative / driver)"
+                hint="Optional — the person who received the money."
+                htmlFor="ls-paid-to"
+              >
+                <Input id="ls-paid-to" name="paidTo" placeholder="e.g. Kofi Mensah" />
+              </Field>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="font-ui text-data-xs text-muted font-semibold tracking-[var(--tracking-ui)] uppercase">
+                Parts / items bought
+              </p>
+              <Button type="button" variant="ghost" size="sm" onClick={addCostItem}>
+                <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+                Add item
+              </Button>
+            </div>
+
+            {costItems.length === 0 ? (
+              <p className="text-data-xs text-muted mt-2">None added.</p>
+            ) : (
+              <div className="mt-2 flex flex-col gap-2">
+                {costItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
+                  >
+                    <Field label={`Item ${index + 1}`} htmlFor={`ls-item-name-${item.id}`}>
+                      <Input
+                        id={`ls-item-name-${item.id}`}
+                        value={item.name}
+                        onChange={(event) => updateCostItem(item.id, { name: event.target.value })}
+                        placeholder="e.g. Oil filter"
+                      />
+                    </Field>
+                    <Field label="Cost (GHS)" htmlFor={`ls-item-cost-${item.id}`}>
+                      <Input
+                        id={`ls-item-cost-${item.id}`}
+                        type="number"
+                        min={0.01}
+                        step="any"
+                        inputMode="decimal"
+                        value={item.amount}
+                        onChange={(event) =>
+                          updateCostItem(item.id, { amount: event.target.value })
+                        }
+                        placeholder="e.g. 80"
+                      />
+                    </Field>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Remove item ${index + 1}`}
+                      onClick={() => removeCostItem(item.id)}
+                    >
+                      <Trash2 aria-hidden="true" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="border-hairline mt-3 flex items-center justify-between border-t pt-2">
+              <span className="text-data-xs text-muted">Total cost</span>
+              <span className="text-data text-ink font-medium tabular-nums">
+                {previewTotalMinor > 0 ? formatMoney(previewTotalMinor) : "—"}
+              </span>
+            </div>
+          </fieldset>
 
           {vehicleSchedules.length > 0 && (
             <div>
