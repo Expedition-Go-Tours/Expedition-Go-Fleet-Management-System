@@ -522,7 +522,9 @@ function ServicePanel({ records }: { records: TabServiceRecordData[] }) {
                   <span className="text-data text-ink font-medium">{s.taskName}</span>
                   <span className="text-data-xs text-muted ml-auto">
                     {s.completedAt}
-                    {s.odometerKm !== null ? ` · ${s.odometerKm.toLocaleString()} km` : ""}
+                    {s.odometerKm !== null
+                      ? ` · ${s.odometerKm.toLocaleString()} km`
+                      : " · No reading"}
                   </span>
                 </div>
                 {s.workPerformed && (

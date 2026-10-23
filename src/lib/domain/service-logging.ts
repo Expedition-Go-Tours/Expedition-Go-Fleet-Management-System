@@ -3,9 +3,14 @@ import type { ServiceRecord } from "@/lib/repos/maintenance";
 /*
  * Direct service logging — recording maintenance that already happened
  * (an ad-hoc garage visit, a breakdown repair) without the ceremony of a
- * work order. Produces the SAME ServiceRecord shape, odometer ledger entry
- * and schedule-baseline reset as work-order completion, so service history,
- * maintenance alerts and cost reports never care which door it came through.
+ * work order. Produces the SAME ServiceRecord shape, schedule-baseline reset
+ * and — when the caller supplied a reading — the same odometer ledger entry as
+ * work-order completion, so service history, maintenance alerts and cost
+ * reports never care which door it came through.
+ *
+ * The odometer is optional for a direct log. When it is absent no reading is
+ * invented: the service record keeps its mileage unknown, no ledger entry is
+ * written, and the schedule baseline falls back to the last accepted reading.
  *
  * A direct log never touches issues or work orders: it records what was
  * done to the vehicle, nothing else.
@@ -26,7 +31,11 @@ export interface LogServiceInput {
   taskName?: string;
   /** Actual completion date/time. */
   completedAt: Date;
-  odometerKm: number;
+  /**
+   * Odometer at completion. Optional for a direct log: when absent the record
+   * carries no reading and no ledger entry is written.
+   */
+  odometerKm?: number;
   workPerformed: string;
   providerName?: string;
   technicianName?: string;
@@ -44,6 +53,30 @@ export interface LogServiceResult {
   serviceRecord: ServiceRecord;
   duplicate: boolean;
   resetScheduleIds: string[];
+}
+
+/**
+ * Odometer supplied by a direct service log. Absent or blank is allowed — the
+ * record then carries no reading (never a fabricated 0). Anything else must be
+ * a non-negative whole kilometre, rejected loudly rather than silently dropped.
+ */
+export function resolveServiceOdometer(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  if (typeof value !== "number" && typeof value !== "string") {
+    throw new ServiceLogError(
+      "INVALID_ODOMETER",
+      "odometerKm must be a non-negative integer when provided",
+    );
+  }
+  const km = Number(value);
+  if (!Number.isSafeInteger(km) || km < 0) {
+    throw new ServiceLogError(
+      "INVALID_ODOMETER",
+      "odometerKm must be a non-negative integer when provided",
+    );
+  }
+  return km;
 }
 
 /**
@@ -109,9 +142,11 @@ export async function logService(input: LogServiceInput): Promise<LogServiceResu
   const vehicleSnap = await db.collection(COLLECTIONS.vehicles).doc(vehicleId).get();
   if (!vehicleSnap.exists) throw new ServiceLogError("VEHICLE_NOT_FOUND", "Vehicle not found");
   const projection = Number(vehicleSnap.data()?.odometerKm ?? 0);
-  const validation = validateReading(input.odometerKm, "SERVICE_COMPLETION", projection);
-  if (!validation.ok) {
-    throw new ServiceLogError(validation.code, validation.message);
+  if (input.odometerKm !== undefined) {
+    const validation = validateReading(input.odometerKm, "SERVICE_COMPLETION", projection);
+    if (!validation.ok) {
+      throw new ServiceLogError(validation.code, validation.message);
+    }
   }
 
   // Schedules must exist and belong to this vehicle — pure, unit-tested check.
@@ -146,7 +181,7 @@ export async function logService(input: LogServiceInput): Promise<LogServiceResu
     scheduleId: input.scheduleIds[0],
     taskName: plan.taskName ?? "Service",
     completedAt: input.completedAt,
-    odometerKm: input.odometerKm,
+    odometerKm: input.odometerKm ?? null,
     workPerformed,
     providerName: input.providerName,
     technicianName: input.technicianName,
@@ -166,9 +201,13 @@ export async function logService(input: LogServiceInput): Promise<LogServiceResu
   await db.runTransaction(async (tx) => {
     tx.set(serviceRecordsRef.doc(serviceRecordId), definedOnly({ ...serviceRecord }));
 
+    // A missing reading never invents one. The schedule baseline falls back to
+    // the vehicle's last accepted reading, which can only make the next due
+    // point earlier — never later — than the true service mileage.
+    const baselineKm = input.odometerKm ?? projection;
     for (const scheduleId of input.scheduleIds) {
       tx.update(schedulesRef.doc(scheduleId), {
-        lastServiceOdometerKm: input.odometerKm,
+        lastServiceOdometerKm: baselineKm,
         lastServiceDate: input.completedAt,
         lastServiceRecordId: serviceRecordId,
         updatedAt: now,
@@ -177,27 +216,29 @@ export async function logService(input: LogServiceInput): Promise<LogServiceResu
 
     // Same ledger entry shape as work-order completion, so the odometer story
     // of the vehicle stays consistent whichever path recorded the service.
-    const readingId = `${vehicleId}_svc-direct-${input.clientToken ?? serviceRecordId}`;
-    tx.set(db.collection(COLLECTIONS.odometerReadings).doc(readingId), {
-      vehicleId,
-      km: input.odometerKm,
-      effectiveAt: input.completedAt,
-      createdAt: now,
-      recordedByUserId: input.recordedByUserId,
-      source: "SERVICE_COMPLETION",
-      serviceRecordId,
-      notes: `Service log — ${workPerformed.slice(0, 200)}`,
-      status: "ACCEPTED",
-      deltaKm: input.odometerKm - projection,
-      clientToken: `svc-direct-${input.clientToken ?? serviceRecordId}`,
-    });
-    if (input.odometerKm > projection) {
-      tx.update(db.collection(COLLECTIONS.vehicles).doc(vehicleId), {
-        odometerKm: input.odometerKm,
-        odometerAt: input.completedAt,
-        odometerSource: "SERVICE_COMPLETION",
-        updatedAt: now,
+    if (input.odometerKm !== undefined) {
+      const readingId = `${vehicleId}_svc-direct-${input.clientToken ?? serviceRecordId}`;
+      tx.set(db.collection(COLLECTIONS.odometerReadings).doc(readingId), {
+        vehicleId,
+        km: input.odometerKm,
+        effectiveAt: input.completedAt,
+        createdAt: now,
+        recordedByUserId: input.recordedByUserId,
+        source: "SERVICE_COMPLETION",
+        serviceRecordId,
+        notes: `Service log — ${workPerformed.slice(0, 200)}`,
+        status: "ACCEPTED",
+        deltaKm: input.odometerKm - projection,
+        clientToken: `svc-direct-${input.clientToken ?? serviceRecordId}`,
       });
+      if (input.odometerKm > projection) {
+        tx.update(db.collection(COLLECTIONS.vehicles).doc(vehicleId), {
+          odometerKm: input.odometerKm,
+          odometerAt: input.completedAt,
+          odometerSource: "SERVICE_COMPLETION",
+          updatedAt: now,
+        });
+      }
     }
   });
 

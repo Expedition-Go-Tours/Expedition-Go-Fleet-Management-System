@@ -187,7 +187,13 @@ GET  /odometer/recent              → recent readings across the fleet
   acknowledgements never do.
 - Direct service logging follows the same cost rule as completion: one
   linked MAINTENANCE expense per service record, deterministic id, retryable
-  partial failure, and the same odometer-ledger entry shape.
+  partial failure, and — when an odometer is supplied — the same odometer-ledger
+  entry shape.
+- The direct-log odometer is **optional**. A blank reading records
+  `odometerKm: null` and writes nothing to the ledger (never a fabricated `0`),
+  and the UI shows “No reading”. The schedule baseline then uses the vehicle's
+  last accepted reading, which can only make the next due point earlier — never
+  later — than the true service mileage.
 - Standard fixtures (`oil-change` 5,000 km / 500 km) are seeded by the
   migration/bootstrap scripts.
 

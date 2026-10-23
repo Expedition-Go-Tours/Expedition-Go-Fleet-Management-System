@@ -10,7 +10,7 @@ import {
   linkExpenseToServiceRecord,
   listServiceRecords,
 } from "@/lib/repos/maintenance";
-import { ServiceLogError, logService } from "@/lib/domain/service-logging";
+import { ServiceLogError, logService, resolveServiceOdometer } from "@/lib/domain/service-logging";
 import { resolveRepairCost } from "@/lib/domain/work-order-completion";
 import {
   ensureServiceExpense,
@@ -59,9 +59,11 @@ export async function GET(request: NextRequest) {
  * Log maintenance that already happened (service:record) — a garage visit or
  * breakdown repair recorded directly, without creating a work order first.
  *
- * Writes the same ServiceRecord, odometer ledger entry and schedule-baseline
- * resets as work-order completion, so service history never cares which path
- * recorded it. An optional repair cost is stored as a canonical MAINTENANCE
+ * Writes the same ServiceRecord, schedule-baseline resets and — when an
+ * odometer is supplied — the same odometer ledger entry as work-order
+ * completion, so service history never cares which path recorded it. Without
+ * an odometer the record keeps its reading unknown and no ledger entry is
+ * written. An optional repair cost is stored as a canonical MAINTENANCE
  * expense linked to the record. `clientToken` makes retries idempotent.
  */
 export async function POST(request: NextRequest) {
@@ -76,11 +78,10 @@ export async function POST(request: NextRequest) {
 
     const vehicleId = typeof body.vehicleId === "string" ? body.vehicleId.trim() : "";
     const workPerformed = typeof body.workPerformed === "string" ? body.workPerformed.trim() : "";
-    const odometerKm = Number(body.odometerKm);
+    // Optional: a garage receipt may not carry a reading. Absent → no ledger
+    // entry, never a fabricated 0.
+    const odometerKm = resolveServiceOdometer(body.odometerKm);
     if (!vehicleId) throw ApiError.badRequest("vehicleId is required");
-    if (!Number.isSafeInteger(odometerKm) || odometerKm < 0) {
-      throw ApiError.badRequest("odometerKm is required (non-negative integer)");
-    }
 
     let completedAt = new Date();
     if (body.completedAt !== undefined && body.completedAt !== "") {
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         entityId: result.serviceRecord.id,
         after: {
           vehicleId,
-          odometerKm,
+          odometerKm: odometerKm ?? null,
           resetScheduleIds: result.resetScheduleIds,
           direct: true,
         },

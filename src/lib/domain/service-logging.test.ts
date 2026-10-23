@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { ServiceLogError, planServiceLogging } from "@/lib/domain/service-logging";
+import {
+  ServiceLogError,
+  planServiceLogging,
+  resolveServiceOdometer,
+} from "@/lib/domain/service-logging";
 
 const base = {
   vehicleId: "veh1",
@@ -74,5 +78,37 @@ describe("planServiceLogging — direct service logging pre-checks", () => {
     expect(
       codeOf(["sch1", "sch1"], [{ id: "sch1", exists: true, vehicleId: "veh1", taskName: "Oil" }]),
     ).toBe("DUPLICATE_SCHEDULE");
+  });
+});
+
+describe("resolveServiceOdometer — optional reading for direct service logs", () => {
+  it("treats absent and blank values as no reading, never as 0", () => {
+    expect(resolveServiceOdometer(undefined)).toBeUndefined();
+    expect(resolveServiceOdometer(null)).toBeUndefined();
+    expect(resolveServiceOdometer("")).toBeUndefined();
+    expect(resolveServiceOdometer("   ")).toBeUndefined();
+  });
+
+  it("accepts a whole kilometre reading from JSON numbers or form strings", () => {
+    expect(resolveServiceOdometer(128500)).toBe(128500);
+    expect(resolveServiceOdometer("128500")).toBe(128500);
+    expect(resolveServiceOdometer(0)).toBe(0);
+  });
+
+  it("rejects malformed readings loudly instead of dropping them", () => {
+    const codeOf = (value: unknown) => {
+      try {
+        resolveServiceOdometer(value);
+        return "NO_THROW";
+      } catch (err) {
+        return (err as ServiceLogError).code;
+      }
+    };
+
+    expect(codeOf(-1)).toBe("INVALID_ODOMETER");
+    expect(codeOf(1.5)).toBe("INVALID_ODOMETER");
+    expect(codeOf("abc")).toBe("INVALID_ODOMETER");
+    expect(codeOf(true)).toBe("INVALID_ODOMETER");
+    expect(codeOf(Number.MAX_SAFE_INTEGER + 1)).toBe("INVALID_ODOMETER");
   });
 });

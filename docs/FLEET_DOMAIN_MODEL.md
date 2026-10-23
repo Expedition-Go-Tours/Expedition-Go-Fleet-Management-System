@@ -54,6 +54,10 @@ remainingKm, remainingDays, odometerState, timeState, computed }`.
   incomplete) or nothing is configured.
 - Only a recorded `ServiceRecord` (via work-order completion or direct
   `service:record`) resets a schedule — never a reminder acknowledgement.
+- A direct service log may omit the odometer. The record then stores
+  `odometerKm: null` (never `0`) and writes no ledger entry; the schedule
+  baseline falls back to the vehicle's last accepted reading, so the next due
+  point can move earlier but never later.
 
 ## Work-order lifecycle
 

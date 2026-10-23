@@ -155,23 +155,26 @@ export async function completeWorkOrder(
       // Heal records completed before the ledger write became transactional:
       // recording with the same client token is a no-op if the reading exists,
       // and closes the gap if a crash lost it. Failure is logged (detectable),
-      // not silently swallowed, and does not fail the replay.
-      await recordReading({
-        vehicleId: existing.vehicleId,
-        km: existing.odometerKm,
-        source: "SERVICE_COMPLETION",
-        recordedByUserId: input.recordedByUserId,
-        effectiveAt: existing.completedAt,
-        serviceRecordId: existing.id,
-        notes: `Completion of work order — ${existing.workPerformed.slice(0, 200)}`,
-        clientToken: `svc-${input.workOrderId}`,
-      }).catch((error: unknown) => {
-        console.error(
-          "[work-order-completion] replay odometer heal failed",
-          input.workOrderId,
-          error,
-        );
-      });
+      // not silently swallowed, and does not fail the replay. A record without
+      // a reading has nothing to heal — never invent one.
+      if (existing.odometerKm !== null) {
+        await recordReading({
+          vehicleId: existing.vehicleId,
+          km: existing.odometerKm,
+          source: "SERVICE_COMPLETION",
+          recordedByUserId: input.recordedByUserId,
+          effectiveAt: existing.completedAt,
+          serviceRecordId: existing.id,
+          notes: `Completion of work order — ${existing.workPerformed.slice(0, 200)}`,
+          clientToken: `svc-${input.workOrderId}`,
+        }).catch((error: unknown) => {
+          console.error(
+            "[work-order-completion] replay odometer heal failed",
+            input.workOrderId,
+            error,
+          );
+        });
+      }
       return { serviceRecord: existing, duplicate: true, resetScheduleIds: input.scheduleIds };
     }
     throw new CompletionError("ALREADY_COMPLETE", `Work order is already ${String(wo.status)}`);

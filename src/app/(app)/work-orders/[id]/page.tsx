@@ -250,7 +250,9 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
                 <DetailRow label="Task">{serviceRecord.taskName}</DetailRow>
                 <DetailRow label="Completed at">{formatDate(serviceRecord.completedAt)}</DetailRow>
                 <DetailRow label="Odometer">
-                  {serviceRecord.odometerKm.toLocaleString()} km
+                  {serviceRecord.odometerKm !== null
+                    ? `${serviceRecord.odometerKm.toLocaleString()} km`
+                    : "No reading"}
                 </DetailRow>
                 <DetailRow label="Work performed">{serviceRecord.workPerformed}</DetailRow>
                 {serviceRecord.outcome && (

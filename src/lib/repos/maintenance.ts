@@ -238,7 +238,8 @@ export interface ServiceRecord {
   taskName: string;
   workOrderId?: string;
   completedAt: Date;
-  odometerKm: number;
+  /** Null when recorded without a reading — never fabricated as 0. */
+  odometerKm: number | null;
   workPerformed: string;
   outcome?: string;
   providerId?: string;
@@ -274,7 +275,7 @@ function toServiceRecord(id: string, data: DocumentData): ServiceRecord {
     taskName: String(data.taskName ?? ""),
     workOrderId: data.workOrderId ? String(data.workOrderId) : undefined,
     completedAt: toDate(data.completedAt) ?? new Date(0),
-    odometerKm: Number(data.odometerKm ?? 0),
+    odometerKm: typeof data.odometerKm === "number" ? data.odometerKm : null,
     workPerformed: String(data.workPerformed ?? ""),
     outcome: data.outcome ? String(data.outcome) : undefined,
     providerId: data.providerId ? String(data.providerId) : undefined,
