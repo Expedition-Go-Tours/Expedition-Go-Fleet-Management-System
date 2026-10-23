@@ -118,25 +118,24 @@ export default async function MaintenancePage({
         description="Preventive maintenance across the fleet, computed from the documented schedule engine against accepted odometer readings."
         crumbs={[{ label: "Fleet" }, { label: "Maintenance" }]}
         actions={
-          canLogService ? (
-            <LogServiceDialog
-              variant="accent"
-              defaultVehicleId={vehicleId}
-              vehicles={vehicles
-                .slice()
-                .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
-                .map((v) => ({
-                  id: v.id,
-                  label: `${v.regNumber} — ${v.make} ${v.model}`,
-                  odometerKm: v.odometerKm,
-                }))}
-              schedules={schedules.map((s) => ({
-                id: s.id,
-                vehicleId: s.vehicleId,
-                taskName: s.taskName,
+          <LogServiceDialog
+            variant="accent"
+            canCreate={canLogService}
+            defaultVehicleId={vehicleId}
+            vehicles={vehicles
+              .slice()
+              .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
+              .map((v) => ({
+                id: v.id,
+                label: `${v.regNumber} — ${v.make} ${v.model}`,
+                odometerKm: v.odometerKm,
               }))}
-            />
-          ) : undefined
+            schedules={schedules.map((s) => ({
+              id: s.id,
+              vehicleId: s.vehicleId,
+              taskName: s.taskName,
+            }))}
+          />
         }
       />
 

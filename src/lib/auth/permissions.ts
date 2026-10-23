@@ -99,7 +99,9 @@ export const ALL_PERMISSIONS: readonly PermissionKey[] = Object.values(PERMISSIO
  *   - DRIVER = driving work plus the workshop bookkeeping the old MAINTENANCE
  *     role held (work orders, schedules, service records, providers, documents,
  *     fuel) — the driver takes the vehicle to the garage and records the work.
- *   - OPERATIONS = dispatching plus the money the old FINANCE role held.
+ *   - OPERATIONS = dispatching plus the money the old FINANCE role held. They
+ *     also record maintenance that has already been completed (and its cost),
+ *     but cannot create, verify or close work orders.
  *   - ADMIN = everything, minus the deliberate safety-hold carve-out below.
  *
  * Deliberately explicit:
@@ -175,6 +177,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.REPORT_UPDATE,
     PERMISSIONS.WORK_ORDER_READ,
     PERMISSIONS.SCHEDULE_READ,
+    // Recording a completed service books the garage invoice (the money desk
+    // already owns expenses) without letting operations run or verify repairs.
+    PERMISSIONS.SERVICE_RECORD,
     PERMISSIONS.SERVICE_READ,
     PERMISSIONS.ASSIGNMENT_READ,
     PERMISSIONS.ASSIGNMENT_CREATE,

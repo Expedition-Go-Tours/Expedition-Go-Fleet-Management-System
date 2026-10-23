@@ -12,7 +12,7 @@ import { toPesewas } from "@/lib/domain/expense";
 import { formatNumber } from "@/lib/format";
 
 /**
- * Log maintenance that already happened — a garage visit or breakdown repair —
+ * Record maintenance that already happened — a garage visit or breakdown repair —
  * without creating a work order first. Four required facts (vehicle, date,
  * odometer, what was done); everything else is optional. The server records
  * the same ServiceRecord, ledger entry and schedule resets as a work-order
@@ -22,11 +22,13 @@ export function LogServiceDialog({
   vehicles,
   schedules,
   defaultVehicleId,
+  canCreate = true,
   variant = "outline",
 }: {
   vehicles: { id: string; label: string; odometerKm: number }[];
   schedules: { id: string; vehicleId: string; taskName: string }[];
   defaultVehicleId?: string;
+  canCreate?: boolean;
   variant?: "outline" | "accent";
 }) {
   const router = useRouter();
@@ -130,16 +132,16 @@ export function LogServiceDialog({
 
   return (
     <>
-      <Button variant={variant} onClick={openDialog} disabled={vehicles.length === 0}>
+      <Button variant={variant} onClick={openDialog} disabled={!canCreate || vehicles.length === 0}>
         <Wrench aria-hidden="true" className="h-4 w-4" />
-        Log service
+        Record maintenance
       </Button>
 
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Log completed maintenance"
-        description="For work that already happened. Recorded straight into the vehicle's service history and maintenance schedule."
+        title="Record completed maintenance"
+        description="For work that already happened. The report, cost and odometer are recorded straight into the vehicle's service history and maintenance schedule."
         size="lg"
         footer={
           <>
@@ -153,7 +155,7 @@ export function LogServiceDialog({
               form="log-service-form"
               isLoading={busy}
             >
-              Log service
+              Record maintenance
             </Button>
           </>
         }

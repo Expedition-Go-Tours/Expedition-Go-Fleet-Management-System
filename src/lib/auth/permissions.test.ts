@@ -103,9 +103,10 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.EXPENSE_VOID)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.EXPENSE_EXPORT)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.FUEL_CREATE)).toBe(true);
-    // Still cannot run repairs or release.
+    // Records that completed maintenance happened (and books its cost), because
+    // the same desk pays the invoice — but still cannot run or release.
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_RECORD)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.WORK_ORDER_CREATE)).toBe(false);
-    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_RECORD)).toBe(false);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
   });
 

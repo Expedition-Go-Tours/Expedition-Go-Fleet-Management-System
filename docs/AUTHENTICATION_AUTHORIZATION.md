@@ -291,7 +291,7 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 | Read all reports | No | Yes | Yes |
 | Triage/close reports | Yes | Yes | Yes |
 | Create/manage work orders | Yes | Read/coordinate | Yes |
-| Preventive maintenance schedules + service records | Yes | Read | Yes |
+| Preventive maintenance schedules + service records | Yes | Read; record completed work | Yes |
 | Record/correct odometer readings | Yes | Record | Yes |
 | Record fuel | Yes | Yes | Yes |
 | Read expenses | Yes | Yes | Yes |
@@ -306,10 +306,13 @@ binding one, and matches `src/lib/auth/permissions.ts`.
 
 Because the merge is **additive**, drivers inherit the workshop bookkeeping
 (work orders, schedules, service records, odometer corrections, fuel) along with
-their driving work, and operations inherits the money desk. Two consequences are
-deliberate and worth reviewing if you want tighter limits later:
+their driving work, and operations inherits the money desk. Three consequences
+are deliberate and worth reviewing if you want tighter limits later:
 
 - A driver can read the audit log and record fuel (inherited from `MAINTENANCE`).
+- Operations can record maintenance that has already been completed — including
+  its cost — because the same desk pays the invoice, but cannot create, verify
+  or close work orders.
 - A driver may verify the completion of a repair they recorded themselves. The
   safety-hold release stays with `ADMIN` as the backstop against unsafe vehicles.
 
