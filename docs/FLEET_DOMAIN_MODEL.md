@@ -120,6 +120,16 @@ and mirrored onto the canonical `Expense` in the same request. It is distinct
 from `supplierName`, which stays the station/garage business, and is shown in
 the fuel ledger, the expense ledger and the CSV export.
 
+Completed service records can also be corrected by operations/admin: completion
+date, label, work performed, provider, technician, payee, notes and the cost
+breakdown are editable, while the vehicle and odometer stay immutable. A date
+correction moves the schedules this record last reset and the linked expense
+date; a cost correction updates the linked MAINTENANCE expense in the same
+transaction. A work-order completion carries the corrected narrative and date
+back to the work order. Money is never cleared silently — an existing cost must
+be voided with a reason instead. Corrections are audited as
+`service.corrected`.
+
 Fuel purchases can be corrected by operations/admin: date, amount, fuel type,
 station, payee and full-tank flag are editable, while the vehicle, odometer
 link and recorder stay immutable. The linked expense is updated in the same

@@ -26,6 +26,7 @@ describe("permission catalog", () => {
       "schedule:manage",
       "service:record",
       "service:read",
+      "service:update",
       "assignment:read",
       "assignment:create",
       "assignment:start",
@@ -75,6 +76,7 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.ASSIGNMENT_CREATE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.EXPENSE_CREATE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.FUEL_UPDATE)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.SERVICE_UPDATE)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.USER_INVITE)).toBe(false);
   });
 
@@ -109,6 +111,7 @@ describe("baseline role matrix", () => {
     // Records that completed maintenance happened (and books its cost), because
     // the same desk pays the invoice — but still cannot run or release.
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_RECORD)).toBe(true);
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_UPDATE)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.WORK_ORDER_CREATE)).toBe(false);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.VEHICLE_RELEASE)).toBe(false);
   });

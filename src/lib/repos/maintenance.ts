@@ -345,6 +345,19 @@ export async function listServiceRecords(vehicleId: string): Promise<ServiceReco
     .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
 }
 
+/**
+ * Completed service across the fleet, newest first. The maintenance board only
+ * knows schedules — a direct log (or a work-order completion) has no schedule
+ * row of its own, so the page lists these records explicitly.
+ */
+export async function listRecentServiceRecords(limit = 50): Promise<ServiceRecord[]> {
+  const snap = await serviceRecordsRef().limit(1000).get();
+  return snap.docs
+    .map((d) => toServiceRecord(d.id, d.data()))
+    .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
+    .slice(0, limit);
+}
+
 export async function findServiceRecordByKey(key: string): Promise<ServiceRecord | null> {
   const snap = await serviceRecordsRef().where("idempotencyKey", "==", key).limit(1).get();
   if (snap.empty) return null;

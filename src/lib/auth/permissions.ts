@@ -38,6 +38,7 @@ export const PERMISSIONS = {
   SCHEDULE_MANAGE: "schedule:manage",
   SERVICE_RECORD: "service:record",
   SERVICE_READ: "service:read",
+  SERVICE_UPDATE: "service:update",
 
   ASSIGNMENT_READ: "assignment:read",
   ASSIGNMENT_CREATE: "assignment:create",
@@ -182,6 +183,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     // already owns expenses) without letting operations run or verify repairs.
     PERMISSIONS.SERVICE_RECORD,
     PERMISSIONS.SERVICE_READ,
+    PERMISSIONS.SERVICE_UPDATE,
     PERMISSIONS.ASSIGNMENT_READ,
     PERMISSIONS.ASSIGNMENT_CREATE,
     PERMISSIONS.ASSIGNMENT_CANCEL,

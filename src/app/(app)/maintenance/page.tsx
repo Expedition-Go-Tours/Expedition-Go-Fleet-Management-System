@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Clock3 } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  History,
+} from "lucide-react";
 
 import { MaintenanceFilters } from "@/components/maintenance/MaintenanceFilters";
 import { Card } from "@/components/ui/Card";
@@ -9,11 +16,16 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { computeScheduleStatus, type ScheduleStatus } from "@/lib/domain/maintenance";
-import { formatDate, formatIsoDate, formatKm, humanizeEnum } from "@/lib/format";
-import { listAllSchedules, type MaintenanceSchedule } from "@/lib/repos/maintenance";
+import { formatDate, formatIsoDate, formatKm, formatMoney, humanizeEnum } from "@/lib/format";
+import {
+  listAllSchedules,
+  listRecentServiceRecords,
+  type MaintenanceSchedule,
+} from "@/lib/repos/maintenance";
 import { listVehicles } from "@/lib/repos/vehicles";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { PERMISSIONS, permissionsForRoles } from "@/lib/auth/permissions";
+import { EditServiceDialog } from "@/components/maintenance/EditServiceDialog";
 import { LogServiceDialog } from "@/components/maintenance/LogServiceDialog";
 
 export const metadata = { title: "Maintenance" };
@@ -44,15 +56,25 @@ export default async function MaintenancePage({
   searchParams: Promise<{ state?: string; vehicleId?: string }>;
 }) {
   const context = await requirePagePermission(PERMISSIONS.SCHEDULE_READ);
-  const canLogService = permissionsForRoles(context.user.roles).has(PERMISSIONS.SERVICE_RECORD);
+  const permissions = permissionsForRoles(context.user.roles);
+  const canLogService = permissions.has(PERMISSIONS.SERVICE_RECORD);
+  const canReadService = permissions.has(PERMISSIONS.SERVICE_READ);
+  const canEditService = permissions.has(PERMISSIONS.SERVICE_UPDATE);
   const { state, vehicleId } = await searchParams;
   const validState = STATE_ORDER.includes(state as ScheduleStatus)
     ? (state as ScheduleStatus)
     : null;
 
-  const [schedules, vehicles] = await Promise.all([listAllSchedules(), listVehicles()]);
+  const [schedules, vehicles, recentService] = await Promise.all([
+    listAllSchedules(),
+    listVehicles(),
+    canReadService ? listRecentServiceRecords(200) : Promise.resolve([]),
+  ]);
 
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+  const serviceRows = recentService
+    .filter((record) => !vehicleId || record.vehicleId === vehicleId)
+    .slice(0, 20);
   const vehicleLabels = vehicles
     .slice()
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
@@ -269,10 +291,125 @@ export default async function MaintenancePage({
         </DataTable>
       </Card>
 
+      {canReadService && (
+        <Card
+          title="Completed service records"
+          icon={History}
+          flush
+          action={<span className="text-body-xs text-muted">Work orders and direct logs</span>}
+        >
+          <DataTable
+            caption="Completed maintenance records"
+            columns={[
+              { key: "date", header: "Completed" },
+              { key: "vehicle", header: "Vehicle" },
+              { key: "work", header: "Work" },
+              { key: "odometer", header: "Odometer" },
+              { key: "cost", header: "Cost" },
+              { key: "paidTo", header: "Paid to" },
+              { key: "source", header: "Source" },
+              ...(canEditService ? [{ key: "actions", header: "" }] : []),
+            ]}
+            empty={
+              <EmptyState
+                icon={History}
+                title="No completed service"
+                description="Records appear here when maintenance is recorded from the dashboard, this page, a vehicle, or a completed work order."
+              />
+            }
+          >
+            {serviceRows.map((record) => {
+              const vehicle = vehicleById.get(record.vehicleId);
+              return (
+                <tr key={record.id} className="hover:bg-subtle transition-colors">
+                  <Td>
+                    <span className="text-data text-ink">{formatDate(record.completedAt)}</span>
+                  </Td>
+                  <Td>
+                    <Link
+                      href={`/vehicles/${record.vehicleId}`}
+                      className="text-data text-link font-medium hover:underline"
+                    >
+                      {vehicle?.regNumber ?? "—"}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <span className="text-data text-ink font-medium">{record.taskName}</span>
+                    {record.providerName && (
+                      <CellMeta className="block">{record.providerName}</CellMeta>
+                    )}
+                  </Td>
+                  <Td>
+                    {record.odometerKm !== null ? (
+                      <span className="text-data text-ink tabular-nums">
+                        {record.odometerKm.toLocaleString()} km
+                      </span>
+                    ) : (
+                      <CellMeta>No reading</CellMeta>
+                    )}
+                  </Td>
+                  <Td>
+                    {typeof record.repairCostMinor === "number" ? (
+                      <span className="text-data text-ink tabular-nums">
+                        {formatMoney(record.repairCostMinor, record.repairCostCurrency ?? "GHS")}
+                      </span>
+                    ) : (
+                      <CellMeta>—</CellMeta>
+                    )}
+                  </Td>
+                  <Td>
+                    {record.paidTo ? (
+                      <span className="text-data text-ink">{record.paidTo}</span>
+                    ) : (
+                      <CellMeta>—</CellMeta>
+                    )}
+                  </Td>
+                  <Td>
+                    {record.workOrderId ? (
+                      <Link
+                        href={`/work-orders/${record.workOrderId}`}
+                        className="text-data-xs text-link font-medium hover:underline"
+                      >
+                        Work order
+                      </Link>
+                    ) : (
+                      <CellMeta>Direct log</CellMeta>
+                    )}
+                  </Td>
+                  {canEditService && (
+                    <Td>
+                      <EditServiceDialog
+                        record={{
+                          id: record.id,
+                          vehicleLabel: vehicle?.regNumber ?? "Vehicle",
+                          completedOn: record.completedAt.toISOString().slice(0, 10),
+                          taskName: record.taskName,
+                          workPerformed: record.workPerformed,
+                          providerName: record.providerName,
+                          technicianName: record.technicianName,
+                          paidTo: record.paidTo,
+                          notes: record.notes,
+                          odometerKm: record.odometerKm,
+                          repairCostMinor: record.repairCostMinor,
+                          repairCostCurrency: record.repairCostCurrency,
+                          labourCostMinor: record.labourCostMinor,
+                          costItems: record.costItems,
+                        }}
+                      />
+                    </Td>
+                  )}
+                </tr>
+              );
+            })}
+          </DataTable>
+        </Card>
+      )}
+
       <p className="text-body-xs text-muted">
         States follow the documented engine: each configured limit is evaluated separately and the
         task takes the worst of them — a task is never “on schedule” while one of its limits is
-        overdue. Baselines only move when work is completed through a work order.
+        overdue. Baselines move whenever completed service is recorded, whether through a work order
+        or a direct log; direct logs appear above.
       </p>
     </div>
   );

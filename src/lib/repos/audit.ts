@@ -41,6 +41,7 @@ export const AUDIT_EVENTS = {
   SCHEDULE_CREATED: "schedule.created",
   SCHEDULE_UPDATED: "schedule.updated",
   SERVICE_RECORDED: "service.recorded",
+  SERVICE_CORRECTED: "service.corrected",
   WORK_ORDER_WAITED: "work_order.waited",
   WORK_ORDER_VERIFIED: "work_order.verified",
   ISSUE_TRIAGED: "issue.triaged",

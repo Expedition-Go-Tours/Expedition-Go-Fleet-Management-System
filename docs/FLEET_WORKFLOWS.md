@@ -203,6 +203,23 @@ GET  /odometer/recent              → recent readings across the fleet
   driver)”** name as fuel. `paidTo` is stored on the service record and mirrored
   to its linked MAINTENANCE expense (retries fall back to the record's value), so
   the expense ledger and CSV identify who was paid.
+- Direct logs are completed service records, not schedules, so they have no row
+  on the preventive board. The maintenance page lists them under **Completed
+  service records** (newest first, with vehicle, work, odometer, cost, payee and
+  source), alongside work-order completions, so recording from the dashboard is
+  visible without opening the vehicle.
+- A completed service can be **corrected** by `OPERATIONS` and `ADMIN`
+  (`service:update`) from the maintenance page — drivers can record but not
+  edit. Editable fields are the completion date, label, work performed,
+  provider, technician, payee, notes and the cost breakdown. The vehicle and
+  odometer are immutable: a wrong reading is corrected through the odometer
+  ledger. A date correction moves the baselines of the schedules this record
+  last reset (only those still pointing at it) and the linked expense date; a
+  cost correction updates the linked MAINTENANCE expense in the same
+  transaction. A work-order completion also carries its corrected narrative and
+  date back to the work order, so the two records never disagree. An existing
+  cost cannot be cleared here — the expense must be voided with a reason
+  instead. Every correction is audited before/after as `service.corrected`.
 - Standard fixtures (`oil-change` 5,000 km / 500 km) are seeded by the
   migration/bootstrap scripts.
 
