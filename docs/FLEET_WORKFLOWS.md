@@ -235,14 +235,23 @@ POST /assignments/:id/end          { endOdometerKm, notes? }
 ## 6. Fuel
 
 ```
-POST /fuel                         { vehicleId, odometerKm, litres, pricePerLitre, … }
+POST /fuel                         { vehicleId, litres, pricePerLitre, odometerKm?, … }
 ```
 
 - A fuel entry creates its **canonical `Expense`** (category FUEL, integer
-  pesewas via `toPesewas`) in the same transaction; the expense id is linked
-  back on the fuel entry. Money is never figured twice.
+  pesewas via `toPesewas`) and links the expense id back on the fuel entry.
+  Money is never figured twice.
+- **The odometer is optional.** The person paying for fuel may not have access
+  to the dashboard; a blank reading is stored as absent, never fabricated as
+  `0`, and no odometer-ledger reading is written. The cost and litres are still
+  recorded normally.
 - Consumption is only recorded on **full-tank purchases** (fuel level
-  semantics); the odometer flows into the ledger (`FUEL_PURCHASE`).
+  semantics). When a reading is supplied it flows into the ledger
+  (`FUEL_PURCHASE`, monotonic). When it is absent, the fill-up **breaks the
+  efficiency chain**: later fill-ups are not paired across it, because skipping
+  it would attribute its litres to a later segment and overstate km/l.
+- The fuel ledger shows a missing reading as **No reading** and its efficiency
+  as **Not measured**. Such entries still count in spend and volume totals.
 - Expenses are **recorded here; approval happens outside the app**. A new
   expense is stored as `PENDING` (kept for backward compatibility, presented
   as **Recorded**) and can be corrected immediately — there is no approval

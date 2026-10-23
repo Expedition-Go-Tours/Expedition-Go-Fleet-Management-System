@@ -8,7 +8,7 @@ import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { computeConsumption, type FuelEntry } from "@/lib/domain/fuel";
+import { consumptionByEntry, type FuelEntry } from "@/lib/domain/fuel";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { listFuelEntries } from "@/lib/repos/fuel";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -42,29 +42,15 @@ export default async function FuelPage({
 
   const entriesForVehicle = vehicleId ? entries.filter((e) => e.vehicleId === vehicleId) : entries;
 
-  // Defensible consumption: only consecutive full-tank fill-ups on the same
-  // vehicle, in odometer order. The figure lands on the SECOND fill-up.
-  const consumptionByEntry = new Map<string, number>();
-  const byVehicle = new Map<string, FuelEntry[]>();
-  for (const entry of entries) {
-    const list = byVehicle.get(entry.vehicleId) ?? [];
-    list.push(entry);
-    byVehicle.set(entry.vehicleId, list);
-  }
-  for (const list of byVehicle.values()) {
-    const ordered = list.slice().sort((a, b) => a.odometerKm - b.odometerKm);
-    for (let i = 0; i < ordered.length - 1; i++) {
-      const first = ordered[i]!;
-      const second = ordered[i + 1]!;
-      const result = computeConsumption(first, second);
-      if (result.kmPerLitre !== null) consumptionByEntry.set(second.id, result.kmPerLitre);
-    }
-  }
+  // Defensible consumption: adjacent full-tank fill-ups on the same vehicle,
+  // in purchase order. A fill-up without a reading breaks the chain, so the
+  // figure lands on the SECOND fill-up and never spans a gap.
+  const consumptionByFill = consumptionByEntry(entries);
 
   const rows: DisplayEntry[] = entriesForVehicle
     .map((entry) => {
       const vehicle = vehicleById.get(entry.vehicleId);
-      const kmPerLitre = consumptionByEntry.get(entry.id) ?? null;
+      const kmPerLitre = consumptionByFill.get(entry.id) ?? null;
       return {
         ...entry,
         vehicleLabel: vehicle?.regNumber ?? "—",
@@ -84,7 +70,7 @@ export default async function FuelPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Fuel"
-        description="Fuel ledger. Costs are mirrored into the canonical expense records; efficiency is only reported from consecutive full-tank fill-ups."
+        description="Fuel ledger. Costs are mirrored into canonical expenses; an odometer reading is optional, and efficiency is only reported from consecutive full-tank fill-ups that both carry one."
         crumbs={[{ label: "Finance & compliance" }, { label: "Fuel" }]}
         actions={<AddFuelDialog canCreate={canCreate} vehicles={vehicleOptions} />}
       />
@@ -157,9 +143,13 @@ export default async function FuelPage({
                 </Link>
               </Td>
               <Td>
-                <span className="text-data text-ink tabular-nums">
-                  {row.odometerKm.toLocaleString()} km
-                </span>
+                {typeof row.odometerKm === "number" ? (
+                  <span className="text-data text-ink tabular-nums">
+                    {row.odometerKm.toLocaleString()} km
+                  </span>
+                ) : (
+                  <CellMeta>No reading</CellMeta>
+                )}
               </Td>
               <Td>
                 <span className="text-data text-ink tabular-nums">
@@ -200,8 +190,9 @@ export default async function FuelPage({
       </Card>
 
       <p className="text-body-xs text-muted">
-        Efficiency requires two consecutive full-tank fill-ups with increasing odometer readings —
-        anything less reports &ldquo;not measured&rdquo; rather than an unreliable figure.
+        Efficiency requires two consecutive full-tank fill-ups with increasing odometer readings. A
+        fill-up without a reading still records its cost and litres, but it breaks the chain — later
+        fill-ups are not measured rather than paired across the gap.
       </p>
     </div>
   );

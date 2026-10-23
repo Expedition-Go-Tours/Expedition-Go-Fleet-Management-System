@@ -16,7 +16,7 @@ function toFuelEntry(id: string, data: DocumentData): FuelEntry {
     id,
     vehicleId: String(data.vehicleId ?? ""),
     transactedOn: String(data.transactedOn ?? ""),
-    odometerKm: Number(data.odometerKm ?? 0),
+    odometerKm: typeof data.odometerKm === "number" ? data.odometerKm : undefined,
     odometerReadingId: data.odometerReadingId ? String(data.odometerReadingId) : undefined,
     fuelType: String(data.fuelType ?? "PETROL"),
     litres: Number(data.litres ?? 0),
@@ -35,7 +35,7 @@ function toFuelEntry(id: string, data: DocumentData): FuelEntry {
 export interface CreateFuelEntryInput {
   vehicleId: string;
   transactedOn: string;
-  odometerKm: number;
+  odometerKm?: number;
   odometerReadingId?: string;
   fuelType: string;
   litres: number;
@@ -63,7 +63,7 @@ export async function createFuelEntry(input: CreateFuelEntryInput): Promise<Fuel
     .set({
       vehicleId: input.vehicleId,
       transactedOn: input.transactedOn,
-      odometerKm: input.odometerKm,
+      odometerKm: input.odometerKm ?? null,
       odometerReadingId: input.odometerReadingId ?? null,
       fuelType: input.fuelType,
       litres: input.litres,

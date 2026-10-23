@@ -143,7 +143,9 @@ Remaining production items are unchanged from section 6 below.
 - "Available" = `ACTIVE` status **and** no safety hold **and** no open critical
   issue **and** no active assignment — derived, not just the status field.
 - Fuel efficiency is shown only when two consecutive full-tank fill-ups make a
-  defensible computation (same rule as the fuel API's `computeConsumption`).
+  defensible computation (same rule as the fuel API's `computeConsumption`). A
+  fill-up without an odometer reading still records cost and litres, but breaks
+  the chain; it is shown as **No reading / Not measured**.
 
 ## 5. Fix/slice map (aligned with the brief's 15 sections)
 

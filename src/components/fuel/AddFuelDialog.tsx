@@ -86,7 +86,7 @@ export function AddFuelDialog({
         open={open}
         onClose={() => setOpen(false)}
         title="Record fuel purchase"
-        description="The cost is mirrored into the expense ledger and the odometer is recorded through the odometer ledger."
+        description="The cost is mirrored into the expense ledger. If you enter the odometer, it is also recorded through the odometer ledger."
         size="lg"
         footer={
           <>
@@ -136,8 +136,7 @@ export function AddFuelDialog({
           </Field>
           <Field
             label="Odometer (km)"
-            required
-            hint="Must not go backwards — the ledger enforces it."
+            hint="Optional — leave blank if nobody could read the dashboard. It must not go backwards when entered."
             htmlFor="af-odometer"
           >
             <Input
@@ -148,7 +147,6 @@ export function AddFuelDialog({
               step={1}
               inputMode="numeric"
               placeholder="e.g. 128450"
-              required
             />
           </Field>
           <Field label="Fuel type" htmlFor="af-fuel">
@@ -209,7 +207,8 @@ export function AddFuelDialog({
               )}
             </div>
             <p className="text-body-xs text-muted">
-              Efficiency is only measured between consecutive full-tank fill-ups.
+              Efficiency is only measured between consecutive full-tank fill-ups that both carry an
+              odometer reading. Without one, this purchase still records its cost and litres.
             </p>
           </div>
         </form>

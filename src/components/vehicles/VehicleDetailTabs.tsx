@@ -99,7 +99,7 @@ export interface TabFuelData {
   litres: number;
   amountMinor: number;
   currency: string;
-  odometerKm: number;
+  odometerKm: number | null;
   fullTank: boolean;
 }
 
@@ -708,7 +708,8 @@ function FuelPanel({
                   ) : null}
                 </span>
                 <span className="text-data-xs text-muted">
-                  {f.transactedOn} · {f.odometerKm.toLocaleString()} km
+                  {f.transactedOn} ·{" "}
+                  {f.odometerKm !== null ? `${f.odometerKm.toLocaleString()} km` : "No reading"}
                 </span>
               </div>
               <span className="text-data text-ink tabular-nums">

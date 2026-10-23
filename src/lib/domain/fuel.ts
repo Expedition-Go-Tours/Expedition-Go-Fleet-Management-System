@@ -6,8 +6,11 @@ import { toPesewas } from "@/lib/domain/expense";
  *
  * A fuel entry is the operational record; its cost lives in the canonical
  * Expense (linked by expenseId) so reports count each pesewa exactly once.
- * Efficiency is only computed from full-tank-to-full-tank sequences —
- * anything less reports "unknown" rather than an unreliable figure.
+ * The odometer is optional because the person paying for fuel may not have
+ * access to the dashboard. A purchase without a reading is still a real cost
+ * and volume; it is simply not measured. Efficiency is only computed from
+ * full-tank-to-full-tank sequences — anything less (including a missing
+ * reading) reports "unknown" rather than an unreliable figure.
  */
 
 export const FUEL_TYPES_SUPPORTED = ["PETROL", "DIESEL", "HYBRID", "OTHER"] as const;
@@ -17,7 +20,8 @@ export interface FuelEntry {
   vehicleId: string;
   /** Transaction/purchase date. */
   transactedOn: string;
-  odometerKm: number;
+  /** Odometer at the fill-up; absent when no reading was available. */
+  odometerKm?: number;
   odometerReadingId?: string;
   fuelType: string;
   litres: number;
@@ -48,6 +52,12 @@ export function computeConsumption(
   if (!first.fullTank || !second.fullTank) {
     return { kmPerLitre: null, reason: "Both fill-ups must be full-tank for a defensible figure" };
   }
+  if (first.odometerKm === undefined || second.odometerKm === undefined) {
+    return {
+      kmPerLitre: null,
+      reason: "Both fill-ups need an odometer reading for a defensible figure",
+    };
+  }
   const distance = second.odometerKm - first.odometerKm;
   if (distance <= 0) {
     return { kmPerLitre: null, reason: "Odometer readings are missing or contradictory" };
@@ -56,6 +66,98 @@ export function computeConsumption(
     return { kmPerLitre: null, reason: "Refill volume is missing" };
   }
   return { kmPerLitre: Math.round((distance / second.litres) * 100) / 100 };
+}
+
+/**
+ * Normalise an odometer value from a form or request body. Absence is a
+ * deliberate state — never coerce it to 0, which would fabricate a reading
+ * and corrupt both the ledger and the efficiency chain.
+ */
+export function parseOdometerKm(
+  value: unknown,
+): { ok: true; odometerKm?: number } | { ok: false; message: string } {
+  if (value === undefined || value === null || (typeof value === "string" && value.trim() === "")) {
+    return { ok: true };
+  }
+  const km =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value.trim())
+        : Number.NaN;
+  if (!Number.isSafeInteger(km) || km < 0) {
+    return { ok: false, message: "odometerKm must be a non-negative integer when provided" };
+  }
+  return { ok: true, odometerKm: km };
+}
+
+/** The fields needed to place a fill-up in a vehicle's consumption chain. */
+export interface ConsumptionEntry {
+  id: string;
+  vehicleId: string;
+  transactedOn: string;
+  createdAt?: Date;
+  odometerKm?: number;
+  fullTank: boolean;
+  litres: number;
+}
+
+/** Purchase order — date, then creation time, then id. Never odometer order. */
+function fillOrder(a: ConsumptionEntry, b: ConsumptionEntry): number {
+  const byDate = a.transactedOn.localeCompare(b.transactedOn);
+  if (byDate !== 0) return byDate;
+  const byCreated = (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0);
+  if (byCreated !== 0) return byCreated;
+  return a.id.localeCompare(b.id);
+}
+
+/**
+ * km/l keyed by the entry that closes each measured segment.
+ *
+ * Only ADJACENT fill-ups are paired, so any intervening entry — partial or
+ * without an odometer — breaks the chain. Skipping a reading-less entry would
+ * attribute its litres to a later segment and overstate efficiency.
+ */
+export function consumptionByEntry(entries: readonly ConsumptionEntry[]): Map<string, number> {
+  const byVehicle = new Map<string, ConsumptionEntry[]>();
+  for (const entry of entries) {
+    const list = byVehicle.get(entry.vehicleId) ?? [];
+    list.push(entry);
+    byVehicle.set(entry.vehicleId, list);
+  }
+
+  const measured = new Map<string, number>();
+  for (const list of byVehicle.values()) {
+    const ordered = list.slice().sort(fillOrder);
+    for (let i = 1; i < ordered.length; i++) {
+      const first = ordered[i - 1]!;
+      const second = ordered[i]!;
+      const result = computeConsumption(first, second);
+      if (result.kmPerLitre !== null) measured.set(second.id, result.kmPerLitre);
+    }
+  }
+  return measured;
+}
+
+/** The most recent measured segment across the supplied entries. */
+export function latestConsumption(
+  entries: readonly ConsumptionEntry[],
+  vehicleId?: string,
+): { kmPerLitre: number | null; reason?: string } {
+  const relevant = vehicleId ? entries.filter((entry) => entry.vehicleId === vehicleId) : entries;
+  const measured = consumptionByEntry(relevant);
+  if (measured.size === 0) {
+    return {
+      kmPerLitre: null,
+      reason: "Not enough consecutive full-tank fill-ups with odometer readings",
+    };
+  }
+  const latest = relevant
+    .slice()
+    .sort(fillOrder)
+    .reverse()
+    .find((entry) => measured.has(entry.id));
+  return { kmPerLitre: latest ? (measured.get(latest.id) ?? null) : null };
 }
 
 /** Guard for fuel entry amounts and volumes. */
@@ -92,7 +194,8 @@ export interface FuelPurchaseFormValues {
 export interface FuelCreatePayload {
   vehicleId: string;
   transactedOn: string;
-  odometerKm: number;
+  /** Present only when the operator actually has a reading. */
+  odometerKm?: number;
   litres: number;
   /** Unit price in major units (what the operator typed). */
   unitPrice: number;
@@ -120,10 +223,8 @@ export function buildFuelCreatePayload(
     return { ok: false, message: "transactedOn must be YYYY-MM-DD" };
   }
 
-  const odometerRaw = values.odometerKm.trim();
-  if (!/^\d+$/.test(odometerRaw)) {
-    return { ok: false, message: "odometerKm is required (non-negative integer)" };
-  }
+  const odometer = parseOdometerKm(values.odometerKm);
+  if (!odometer.ok) return odometer;
 
   const litres = Number(values.litres);
   const unitMinor = toPesewas(values.unitPrice);
@@ -145,7 +246,7 @@ export function buildFuelCreatePayload(
     payload: {
       vehicleId,
       transactedOn,
-      odometerKm: Number(odometerRaw),
+      ...(odometer.odometerKm !== undefined ? { odometerKm: odometer.odometerKm } : {}),
       litres,
       unitPrice: unitMinor / 100,
       totalMinor,

@@ -259,7 +259,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       litres: f.litres,
       amountMinor: f.totalMinor,
       currency: f.currency,
-      odometerKm: f.odometerKm,
+      odometerKm: f.odometerKm ?? null,
       fullTank: f.fullTank,
     })),
     documents: documents.map((d) => ({

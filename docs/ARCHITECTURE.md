@@ -133,8 +133,10 @@ AUTHENTICATION_AUTHORIZATION.md §3.3 for the decision table).
     raise a safety hold; completion never releases the hold.
   - Trip distance = end − start ledger readings; decreasing end readings are
     `409 DECREASE_REJECTED`.
-  - Fuel entries create the canonical `Expense` in one transaction; full-tank
-    purchases only.
+  - Fuel entries create the canonical `Expense` and link it on the entry;
+    full-tank purchases only. The odometer is optional (office-paid fuel often
+    has no dashboard access): when absent no ledger reading is written, and the
+    fill-up breaks the efficiency chain instead of being skipped.
   - A vehicle with a missing/expired mandatory document cannot start an
     assignment (409 naming the document).
   - Incidents (breakdown/accident/passenger/security) are restricted:

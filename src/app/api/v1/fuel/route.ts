@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 import { ApiError, jsonOk, toErrorResponse } from "@/lib/api/errors";
 import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { computeConsumption, isValidFuelEntry } from "@/lib/domain/fuel";
+import { isValidFuelEntry, latestConsumption, parseOdometerKm } from "@/lib/domain/fuel";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { createExpense } from "@/lib/repos/expenses";
 import { createFuelEntry, listFuelEntries } from "@/lib/repos/fuel";
@@ -34,15 +34,10 @@ export async function GET(request: NextRequest) {
       limit,
     });
 
-    // Consumption from the two most recent consecutive full-tank fill-ups.
-    let consumption: { kmPerLitre: number | null; reason?: string } = {
-      kmPerLitre: null,
-      reason: "Not enough full-tank fill-ups yet",
-    };
-    const fullTanks = entries.filter((e) => e.fullTank);
-    if (fullTanks.length >= 2) {
-      consumption = computeConsumption(fullTanks[1]!, fullTanks[0]!);
-    }
+    // Consumption from the latest consecutive full-tank pair that both carry
+    // readings. A reading-less fill-up breaks the chain rather than being
+    // skipped (its litres must not be attributed to a later segment).
+    const consumption = latestConsumption(entries, params.get("vehicleId") ?? undefined);
 
     return jsonOk({ entries, consumption });
   } catch (error) {
@@ -54,9 +49,9 @@ export async function GET(request: NextRequest) {
  * POST /api/v1/fuel
  * Record a fuel purchase (fuel:create).
  *
- * Creates the canonical Expense for the cost (so reports count it once) and
- * records the odometer through the ledger. `clientToken` makes retried
- * submissions idempotent.
+ * Creates the canonical Expense for the cost (so reports count it once) and,
+ * when the operator supplied one, records the odometer through the ledger.
+ * `clientToken` makes retried submissions idempotent.
  */
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
@@ -71,7 +66,9 @@ export async function POST(request: NextRequest) {
     const vehicleId = typeof body.vehicleId === "string" ? body.vehicleId : "";
     const transactedOn =
       typeof body.transactedOn === "string" ? body.transactedOn.slice(0, 10) : "";
-    const odometerKm = Number(body.odometerKm);
+    const odometer = parseOdometerKm(body.odometerKm);
+    if (!odometer.ok) throw ApiError.badRequest(odometer.message);
+    const odometerKm = odometer.odometerKm;
     const litres = Number(body.litres);
     const fuelType = typeof body.fuelType === "string" ? body.fuelType : "PETROL";
     const currency = typeof body.currency === "string" ? body.currency.toUpperCase() : "GHS";
@@ -79,9 +76,6 @@ export async function POST(request: NextRequest) {
     if (!vehicleId) throw ApiError.badRequest("vehicleId is required");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(transactedOn)) {
       throw ApiError.badRequest("transactedOn must be YYYY-MM-DD");
-    }
-    if (!Number.isSafeInteger(odometerKm) || odometerKm < 0) {
-      throw ApiError.badRequest("odometerKm is required (non-negative integer)");
     }
 
     // Total: prefer explicit totalMinor; else unit price × litres via pesewas.
@@ -103,16 +97,21 @@ export async function POST(request: NextRequest) {
     const vehicle = await getVehicleById(vehicleId);
     if (!vehicle) throw ApiError.badRequest("Unknown vehicleId");
 
-    // Odometer through the ledger (monotonicity enforced there).
-    const reading = await recordReading({
-      vehicleId,
-      km: odometerKm,
-      source: "FUEL_PURCHASE",
-      recordedByUserId: context.user.id,
-      effectiveAt: new Date(`${transactedOn}T12:00:00Z`),
-      notes: `Fuel purchase${typeof body.station === "string" ? ` — ${body.station}` : ""}`,
-      clientToken: typeof body.clientToken === "string" ? `fuel-${body.clientToken}` : undefined,
-    });
+    // Odometer through the ledger only when a reading was actually supplied
+    // (monotonicity enforced there). A blank reading is not fabricated as 0.
+    const reading =
+      odometerKm !== undefined
+        ? await recordReading({
+            vehicleId,
+            km: odometerKm,
+            source: "FUEL_PURCHASE",
+            recordedByUserId: context.user.id,
+            effectiveAt: new Date(`${transactedOn}T12:00:00Z`),
+            notes: `Fuel purchase${typeof body.station === "string" ? ` — ${body.station}` : ""}`,
+            clientToken:
+              typeof body.clientToken === "string" ? `fuel-${body.clientToken}` : undefined,
+          })
+        : null;
 
     // Canonical expense for the cost — counted once in reports.
     const expense = await createExpense({
@@ -130,8 +129,8 @@ export async function POST(request: NextRequest) {
     const entry = await createFuelEntry({
       vehicleId,
       transactedOn,
-      odometerKm,
-      odometerReadingId: reading.reading.id,
+      ...(odometerKm !== undefined ? { odometerKm } : {}),
+      ...(reading ? { odometerReadingId: reading.reading.id } : {}),
       fuelType,
       litres,
       unitPriceMinor: body.unitPriceMinor !== undefined ? Number(body.unitPriceMinor) : undefined,
@@ -151,7 +150,14 @@ export async function POST(request: NextRequest) {
       actorId: context.user.id,
       entityType: "fuelEntry",
       entityId: entry.id,
-      after: { vehicleId, litres, totalMinor, fullTank: entry.fullTank, expenseId: expense.id },
+      after: {
+        vehicleId,
+        litres,
+        totalMinor,
+        fullTank: entry.fullTank,
+        odometerKm: odometerKm ?? null,
+        expenseId: expense.id,
+      },
       requestId,
     });
 
