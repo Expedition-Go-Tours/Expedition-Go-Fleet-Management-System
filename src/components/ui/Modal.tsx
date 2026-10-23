@@ -31,6 +31,14 @@ export function Modal({
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  // Keep the latest callback in a ref so a parent re-render (for example, one
+  // caused by typing in a controlled input) does not tear down and re-run the
+  // focus effect below. Re-running it moved focus to the panel after every
+  // keystroke, making controlled inputs unusable.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -40,7 +48,7 @@ export function Modal({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
       if (event.key === "Tab") {
         // Keep focus inside the panel.
@@ -67,7 +75,7 @@ export function Modal({
       document.removeEventListener("keydown", onKeyDown);
       previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Search, X } from "lucide-react";
 
 import { Input, Select } from "@/components/ui/fields";
@@ -21,6 +21,26 @@ export function VehicleFilters() {
   const type = searchParams.get("type") ?? "";
   const availability = searchParams.get("availability") ?? "";
 
+  // The search box keeps its own value while typing. Driving it straight from
+  // the URL made every keystroke wait for a server navigation, which reset the
+  // cursor and made continuous typing unreliable. The URL is still authoritative
+  // for the filtered result; it is just updated after a short pause.
+  const [query, setQuery] = useState(q);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Reflect external URL changes (clear, back/forward) unless the user is
+    // actively typing in the box.
+    if (document.activeElement !== inputRef.current) setQuery(q);
+  }, [q]);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
   function update(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(next)) {
@@ -38,7 +58,31 @@ export function VehicleFilters() {
     startTransition(() => router.replace(`/vehicles?${params.toString()}`));
   }
 
-  const hasFilters = Boolean(q || status || type || availability);
+  function updateQuery(value: string) {
+    setQuery(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      searchTimer.current = null;
+      update({ q: value });
+    }, 250);
+  }
+
+  /** Apply a select filter without losing text still waiting on the debounce. */
+  function updateFilter(next: Record<string, string>) {
+    if (searchTimer.current) {
+      clearTimeout(searchTimer.current);
+      searchTimer.current = null;
+    }
+    update({ ...next, q: query });
+  }
+
+  function clearFilters() {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    setQuery("");
+    router.replace("/vehicles");
+  }
+
+  const hasFilters = Boolean(query || status || type || availability);
 
   return (
     <div
@@ -52,9 +96,10 @@ export function VehicleFilters() {
           className="text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
         />
         <Input
+          ref={inputRef}
           aria-label="Search vehicles"
-          value={q}
-          onChange={(e) => update({ q: e.target.value })}
+          value={query}
+          onChange={(e) => updateQuery(e.target.value)}
           placeholder="Search registration, make, model…"
           className="pl-9"
         />
@@ -62,7 +107,7 @@ export function VehicleFilters() {
       <Select
         aria-label="Filter by status"
         value={status}
-        onChange={(e) => update({ status: e.target.value })}
+        onChange={(e) => updateFilter({ status: e.target.value })}
         className="w-full sm:w-auto"
       >
         <option value="">All statuses</option>
@@ -75,7 +120,7 @@ export function VehicleFilters() {
       <Select
         aria-label="Filter by type"
         value={type}
-        onChange={(e) => update({ type: e.target.value })}
+        onChange={(e) => updateFilter({ type: e.target.value })}
         className="w-full sm:w-auto"
       >
         <option value="">All types</option>
@@ -88,7 +133,7 @@ export function VehicleFilters() {
       <Select
         aria-label="Filter by availability"
         value={availability}
-        onChange={(e) => update({ availability: e.target.value })}
+        onChange={(e) => updateFilter({ availability: e.target.value })}
         className="w-full sm:w-auto"
       >
         <option value="">Any availability</option>
@@ -98,7 +143,7 @@ export function VehicleFilters() {
       {hasFilters && (
         <button
           type="button"
-          onClick={() => router.replace("/vehicles")}
+          onClick={clearFilters}
           className="hover:bg-subtle text-body-sm text-muted inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium transition-colors"
         >
           <X aria-hidden="true" className="h-3.5 w-3.5" />
