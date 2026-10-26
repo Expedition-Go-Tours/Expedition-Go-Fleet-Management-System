@@ -10,6 +10,7 @@ import {
   parseOdometerKm,
   type FuelPurchaseFormValues,
 } from "@/lib/domain/fuel";
+import type { RentedVehicleInput } from "@/lib/domain/vehicle";
 
 const validForm: FuelPurchaseFormValues = {
   vehicleId: "veh_1",
@@ -123,6 +124,60 @@ describe("buildFuelCreatePayload — form to POST /api/v1/fuel body", () => {
         ok: false,
         message: "amount must be a positive amount",
       });
+    }
+  });
+});
+
+describe("buildFuelCreatePayload — hired-in bus", () => {
+  const rented: RentedVehicleInput = {
+    regNumber: "GR 1234-24",
+    make: "Yutong",
+    model: "ZK6126",
+    year: 2019,
+    type: "BUS",
+  };
+
+  it("carries the rented bus details and leaves vehicleId empty", () => {
+    const result = build({ vehicleId: "", rentedVehicle: rented });
+    expect(result).toEqual({
+      ok: true,
+      payload: {
+        vehicleId: "",
+        rentedVehicle: rented,
+        transactedOn: "2026-10-21",
+        odometerKm: 128450,
+        totalMinor: 50000,
+        fuelType: "PETROL",
+        station: "Goil, Accra Central",
+        fullTank: true,
+      },
+    });
+  });
+
+  it("keeps the cost and odometer validation on the rented path", () => {
+    // Same ledger and money rules apply to a hired-in bus as to our own fleet.
+    const negative = build({
+      vehicleId: "",
+      rentedVehicle: rented,
+      odometerKm: "-10",
+    });
+    expect(negative.ok).toBe(false);
+
+    const noAmount = build({ vehicleId: "", rentedVehicle: rented, amount: "" });
+    expect(noAmount.ok).toBe(false);
+  });
+
+  it("still refuses when neither a fleet vehicle nor a hired bus is supplied", () => {
+    const result = build({ vehicleId: "", rentedVehicle: null });
+    expect(result).toEqual({ ok: false, message: "Choose the vehicle that was filled up" });
+  });
+
+  it("prefers the chosen fleet vehicle when both are present", () => {
+    // The form shows one or the other; if both arrive, the explicit choice wins.
+    const result = build({ rentedVehicle: rented });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.payload.vehicleId).toBe("veh_1");
     }
   });
 });

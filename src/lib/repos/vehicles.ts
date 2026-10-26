@@ -193,6 +193,57 @@ export async function getVehicleByRegNumber(regNumber: string): Promise<Vehicle 
   return toVehicle(doc.id, doc.data());
 }
 
+export interface RentedVehicleSpec {
+  regNumber: string;
+  make: string;
+  model: string;
+  year: number;
+  type: Vehicle["type"];
+  createdBy: string;
+}
+
+/**
+ * Resolve a hired-in bus by its plate, recording it the first time it is used.
+ *
+ * A rented bus is a real vehicle for the duration of the rental: the odometer
+ * ledger, fuel consumption and the expense mirror all need a vehicle to hang
+ * off, and there is no honest way to calculate a fill-up without one. So rather
+ * than inventing a parallel "unregistered vehicle" path, the first record
+ * creates the bus and every later one finds it by plate.
+ *
+ * Registration is uniquely enforced through a lock document, so two people
+ * recording fuel for the same new bus at the same instant cannot create two
+ * vehicles — the loser of that race re-reads and uses the winner's record.
+ */
+export async function findOrCreateRentedVehicle(
+  spec: RentedVehicleSpec,
+): Promise<{ vehicle: Vehicle; created: boolean }> {
+  const regNumber = spec.regNumber.trim().toUpperCase();
+
+  const existing = await getVehicleByRegNumber(regNumber);
+  if (existing) return { vehicle: existing, created: false };
+
+  try {
+    const vehicle = await createVehicleAtomic({
+      regNumber,
+      make: spec.make.trim(),
+      model: spec.model.trim(),
+      year: spec.year,
+      type: spec.type,
+      ownership: "RENTED",
+      odometerKm: 0,
+      createdBy: spec.createdBy,
+    });
+    return { vehicle, created: true };
+  } catch (error) {
+    if (error instanceof VehicleCreationError && error.code === "DUPLICATE_REGISTRATION") {
+      const winner = await getVehicleByRegNumber(regNumber);
+      if (winner) return { vehicle: winner, created: false };
+    }
+    throw error;
+  }
+}
+
 /** Newest-first list. Optionally exclude archived vehicles. */
 export async function listVehicles(options?: {
   includeArchived?: boolean;

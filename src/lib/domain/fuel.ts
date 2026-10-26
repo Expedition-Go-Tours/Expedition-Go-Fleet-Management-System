@@ -1,5 +1,6 @@
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { parsePaidTo, toPesewas } from "@/lib/domain/expense";
+import type { RentedVehicleInput } from "@/lib/domain/vehicle";
 
 /*
  * Fuel purchase records.
@@ -191,7 +192,13 @@ export function isValidFuelEntry(input: {
 
 /** Raw form values for a fuel purchase, as typed by the operator. */
 export interface FuelPurchaseFormValues {
+  /** Empty when recording a bus that is not on the fleet list yet. */
   vehicleId: string;
+  /**
+   * Details of a hired-in bus, supplied when it has no vehicle record yet. The
+   * server resolves it by plate — creating it the first time it is used.
+   */
+  rentedVehicle?: RentedVehicleInput | null;
   transactedOn: string;
   odometerKm: string;
   /** Total amount paid on the receipt, in major units. */
@@ -205,7 +212,9 @@ export interface FuelPurchaseFormValues {
 
 /** The validated POST /api/v1/fuel body. */
 export interface FuelCreatePayload {
+  /** Empty when a hired-in bus was supplied instead. */
   vehicleId: string;
+  rentedVehicle?: RentedVehicleInput;
   transactedOn: string;
   /** Present only when the operator actually has a reading. */
   odometerKm?: number;
@@ -303,7 +312,13 @@ export function buildFuelCreatePayload(
   values: FuelPurchaseFormValues,
 ): { ok: true; payload: FuelCreatePayload } | { ok: false; message: string } {
   const vehicleId = values.vehicleId.trim();
-  if (!vehicleId) return { ok: false, message: "Choose the vehicle that was filled up" };
+  const rentedVehicle = values.rentedVehicle ?? null;
+  // Either a vehicle from the fleet, or the details of a hired-in bus — the
+  // server resolves the latter by plate and records it the first time it is
+  // used. Never both, and never neither.
+  if (!vehicleId && !rentedVehicle) {
+    return { ok: false, message: "Choose the vehicle that was filled up" };
+  }
 
   const odometer = parseOdometerKm(values.odometerKm);
   if (!odometer.ok) return odometer;
@@ -315,6 +330,7 @@ export function buildFuelCreatePayload(
     ok: true,
     payload: {
       vehicleId,
+      ...(rentedVehicle ? { rentedVehicle } : {}),
       ...(odometer.odometerKm !== undefined ? { odometerKm: odometer.odometerKm } : {}),
       ...fields.payload,
     },

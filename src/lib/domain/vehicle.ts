@@ -12,8 +12,62 @@ export type VehicleType = (typeof VEHICLE_TYPES)[number];
 export const FUEL_TYPES = ["PETROL", "DIESEL", "HYBRID", "ELECTRIC", "OTHER"] as const;
 export type FuelType = (typeof FUEL_TYPES)[number];
 
-export const OWNERSHIP_CLASSES = ["COMPANY_OWNED"] as const;
+/**
+ * Who owns the vehicle. `RENTED` covers a bus hired in for a tour — it behaves
+ * exactly like a company vehicle (odometer ledger, fuel, expenses, trips all
+ * work the same) but is recorded honestly, so reports can tell the difference
+ * and the bus can be archived when the rental ends without losing its history.
+ */
+export const OWNERSHIP_CLASSES = ["COMPANY_OWNED", "RENTED"] as const;
 export type OwnershipClass = (typeof OWNERSHIP_CLASSES)[number];
+
+export interface RentedVehicleInput {
+  regNumber: string;
+  make: string;
+  model: string;
+  year: number;
+  type: VehicleType;
+}
+
+/**
+ * Validate the details supplied for a bus that is not on the fleet list yet.
+ *
+ * Plate, make, model and year are all required. That is deliberate: the odometer
+ * ledger, fuel consumption and the expense mirror all hang off a real,
+ * identifiable vehicle, and a record carrying a placeholder name is worse than
+ * no record at all — it reads as real data in every report it lands in.
+ */
+export function parseRentedVehicleSpec(
+  raw: unknown,
+): { ok: true; spec: RentedVehicleInput } | { ok: false; message: string } {
+  const body = (raw ?? {}) as Record<string, unknown>;
+
+  const regNumber = typeof body.regNumber === "string" ? body.regNumber.trim() : "";
+  if (!regNumber) return { ok: false, message: "Registration number is required" };
+  if (regNumber.length > 20)
+    return { ok: false, message: "Registration is too long (max 20 chars)" };
+
+  const make = typeof body.make === "string" ? body.make.trim() : "";
+  if (!make) return { ok: false, message: "Make is required" };
+  if (make.length > 100) return { ok: false, message: "Make is too long (max 100 chars)" };
+
+  const model = typeof body.model === "string" ? body.model.trim() : "";
+  if (!model) return { ok: false, message: "Model is required" };
+  if (model.length > 100) return { ok: false, message: "Model is too long (max 100 chars)" };
+
+  const year = Number(body.year);
+  const currentYear = new Date().getFullYear();
+  if (!Number.isInteger(year) || year < 1980 || year > currentYear + 1) {
+    return { ok: false, message: `Year must be between 1980 and ${currentYear + 1}` };
+  }
+
+  const type = typeof body.type === "string" && body.type ? body.type : "BUS";
+  if (!(VEHICLE_TYPES as readonly string[]).includes(type)) {
+    return { ok: false, message: `Type must be one of: ${VEHICLE_TYPES.join(", ")}` };
+  }
+
+  return { ok: true, spec: { regNumber, make, model, year, type: type as VehicleType } };
+}
 
 export interface Vehicle {
   id: string;

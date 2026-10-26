@@ -10,8 +10,9 @@ import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { createExpense } from "@/lib/repos/expenses";
 import { createFuelEntry, listFuelEntries } from "@/lib/repos/fuel";
 import { parsePaidTo, toPesewas } from "@/lib/domain/expense";
+import { parseRentedVehicleSpec } from "@/lib/domain/vehicle";
 import { recordReading } from "@/lib/repos/odometers";
-import { getVehicleById } from "@/lib/repos/vehicles";
+import { findOrCreateRentedVehicle, getVehicleById } from "@/lib/repos/vehicles";
 
 export const runtime = "nodejs";
 
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body) throw ApiError.badRequest("Invalid JSON body");
 
-    const vehicleId = typeof body.vehicleId === "string" ? body.vehicleId : "";
+    let vehicleId = typeof body.vehicleId === "string" ? body.vehicleId : "";
     const transactedOn =
       typeof body.transactedOn === "string" ? body.transactedOn.slice(0, 10) : "";
     const odometer = parseOdometerKm(body.odometerKm);
@@ -75,6 +76,20 @@ export async function POST(request: NextRequest) {
         : Number(body.litres);
     const fuelType = typeof body.fuelType === "string" ? body.fuelType : "PETROL";
     const currency = typeof body.currency === "string" ? body.currency.toUpperCase() : "GHS";
+
+    // A hired-in bus may not be on the fleet list yet. Resolve it by plate —
+    // recording it the first time it is used — so the fill-up still lands on a
+    // real vehicle with an odometer ledger, an expense and a consumption
+    // history rather than a free-text row nothing else can join to.
+    if (!vehicleId && body.rentedVehicle) {
+      const parsed = parseRentedVehicleSpec(body.rentedVehicle);
+      if (!parsed.ok) throw ApiError.badRequest(parsed.message);
+      const resolved = await findOrCreateRentedVehicle({
+        ...parsed.spec,
+        createdBy: context.user.id,
+      });
+      vehicleId = resolved.vehicle.id;
+    }
 
     if (!vehicleId) throw ApiError.badRequest("vehicleId is required");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(transactedOn)) {

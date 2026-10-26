@@ -13,6 +13,11 @@ import {
   FUEL_TYPES_SUPPORTED,
   type FuelPurchaseFormValues,
 } from "@/lib/domain/fuel";
+import {
+  parseRentedVehicleSpec,
+  VEHICLE_TYPES,
+  type RentedVehicleInput,
+} from "@/lib/domain/vehicle";
 
 /**
  * Record a fuel purchase. The server is the authority (it also mirrors the
@@ -32,11 +37,15 @@ export function AddFuelDialog({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A hired-in bus is not on the fleet list — the operator enters its details
+  // instead of picking it, and the server records it the first time it is used.
+  const [isRented, setIsRented] = useState(false);
   // One token per opened form: a retried submission cannot double-record.
   const clientTokenRef = useRef<string>("");
 
   function openDialog() {
     clientTokenRef.current = crypto.randomUUID();
+    setIsRented(false);
     setOpen(true);
   }
 
@@ -45,7 +54,27 @@ export function AddFuelDialog({
     setBusy(true);
     setError(null);
     const form = new FormData(event.currentTarget);
-    const result = buildFuelCreatePayload(readValues(form));
+
+    // Validate the hired-in bus details first — the domain payload builder only
+    // checks that *something* was supplied, not that it is a usable vehicle.
+    let rentedVehicle: RentedVehicleInput | null = null;
+    if (isRented) {
+      const parsed = parseRentedVehicleSpec({
+        regNumber: form.get("rentedRegNumber"),
+        make: form.get("rentedMake"),
+        model: form.get("rentedModel"),
+        year: form.get("rentedYear"),
+        type: form.get("rentedType"),
+      });
+      if (!parsed.ok) {
+        setError(parsed.message);
+        setBusy(false);
+        return;
+      }
+      rentedVehicle = parsed.spec;
+    }
+
+    const result = buildFuelCreatePayload({ ...readValues(form), rentedVehicle });
     if (!result.ok) {
       setError(result.message);
       setBusy(false);
@@ -102,18 +131,82 @@ export function AddFuelDialog({
               {error}
             </p>
           )}
-          <Field label="Vehicle" required htmlFor="af-vehicle">
-            <Select id="af-vehicle" name="vehicleId" defaultValue={defaultVehicleId ?? ""} required>
-              <option value="" disabled>
-                Choose a vehicle
-              </option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.label}
+          <div className="sm:col-span-2">
+            <label className="hover:bg-subtle border-hairline flex w-fit cursor-pointer items-center gap-2 rounded-md border p-2.5">
+              <input
+                type="checkbox"
+                checked={isRented}
+                onChange={(e) => setIsRented(e.target.checked)}
+                className="accent-orange h-4 w-4"
+              />
+              <span className="text-data text-ink">
+                This is a rented bus (not on our fleet list)
+              </span>
+            </label>
+          </div>
+
+          {isRented ? (
+            <>
+              <Field
+                label="Registration number"
+                required
+                hint="Recorded once — every later fill-up for this bus is found by plate."
+                htmlFor="af-plate"
+              >
+                <Input
+                  id="af-plate"
+                  name="rentedRegNumber"
+                  required
+                  placeholder="e.g. GR 1234-24"
+                />
+              </Field>
+              <Field label="Make" required htmlFor="af-make">
+                <Input id="af-make" name="rentedMake" required placeholder="e.g. Yutong" />
+              </Field>
+              <Field label="Model" required htmlFor="af-model">
+                <Input id="af-model" name="rentedModel" required placeholder="e.g. ZK6126" />
+              </Field>
+              <Field label="Year" required htmlFor="af-year">
+                <Input
+                  id="af-year"
+                  name="rentedYear"
+                  type="number"
+                  min={1980}
+                  step={1}
+                  inputMode="numeric"
+                  required
+                  defaultValue={new Date().getFullYear()}
+                />
+              </Field>
+              <Field label="Vehicle type" htmlFor="af-vtype">
+                <Select id="af-vtype" name="rentedType" defaultValue="BUS">
+                  {VEHICLE_TYPES.map((vehicleType) => (
+                    <option key={vehicleType} value={vehicleType}>
+                      {vehicleType.charAt(0) + vehicleType.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </>
+          ) : (
+            <Field label="Vehicle" required htmlFor="af-vehicle">
+              <Select
+                id="af-vehicle"
+                name="vehicleId"
+                defaultValue={defaultVehicleId ?? ""}
+                required
+              >
+                <option value="" disabled>
+                  Choose a vehicle
                 </option>
-              ))}
-            </Select>
-          </Field>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="Date" required htmlFor="af-date">
             <Input
               id="af-date"

@@ -743,9 +743,10 @@ try {
       { action: "approve" },
     );
     check(
-      "WORKSHOP cannot approve expenses (403 expense:approve)",
-      approveAttempt.status === 403 &&
-        /expense:approve/.test(approveAttempt.body?.error?.message ?? ""),
+      // Business rule: approval happens outside this system, so `approve` is
+      // not a valid in-app action for any role — not even the money desk.
+      "approval is not an in-app action (400 UNKNOWN_ACTION)",
+      approveAttempt.status === 400 && approveAttempt.body?.error?.code === "UNKNOWN_ACTION",
       JSON.stringify(approveAttempt.body),
     );
 
@@ -938,6 +939,87 @@ try {
         resolve.body?.incident?.status === "RESOLVED" &&
         resolve.body?.incident?.resolution,
       JSON.stringify(resolve.body).slice(0, 250),
+    );
+  }
+
+  // ── J. Rented (hired-in) bus: record fuel for a vehicle we do not own ──────
+  {
+    const rentedPlate = `RNT-${EMAIL_SUFFIX.slice(-8)}`;
+    const spec = {
+      regNumber: rentedPlate,
+      make: "Yutong",
+      model: "ZK6126",
+      year: 2019,
+      type: "BUS",
+    };
+
+    // First fill-up: the bus is not on the fleet list, so it is recorded now.
+    const first = await send("POST", "/api/v1/fuel", sOps.cookies, {
+      transactedOn: "2026-10-15",
+      totalMinor: 95050,
+      fuelType: "DIESEL",
+      rentedVehicle: spec,
+      fullTank: true,
+      clientToken: `e2e-rent-1-${EMAIL_SUFFIX}`,
+    });
+    check(
+      "fuel for a rented bus is recorded (201, vehicle created)",
+      first.status === 201 && !!first.body?.entry?.vehicleId && !!first.body?.expense?.id,
+      JSON.stringify(first.body).slice(0, 300),
+    );
+    const rentedVehicleId = first.body?.entry?.vehicleId;
+    if (rentedVehicleId) created.docIds.push(["vehicles", rentedVehicleId]);
+    if (first.body?.entry?.id) created.docIds.push(["fuelEntries", first.body.entry.id]);
+    if (first.body?.expense?.id) created.docIds.push(["expenses", first.body.expense.id]);
+
+    // A second fill-up from the same plate must find it, not create a twin.
+    const second = await send("POST", "/api/v1/fuel", sOps.cookies, {
+      transactedOn: "2026-10-20",
+      totalMinor: 110000,
+      fuelType: "DIESEL",
+      rentedVehicle: spec,
+      fullTank: true,
+      clientToken: `e2e-rent-2-${EMAIL_SUFFIX}`,
+    });
+    check(
+      "a repeated plate reuses the same rented vehicle (no duplicate)",
+      second.status === 201 && second.body?.entry?.vehicleId === rentedVehicleId,
+      JSON.stringify(second.body).slice(0, 300),
+    );
+    if (second.body?.entry?.id) created.docIds.push(["fuelEntries", second.body.entry.id]);
+    if (second.body?.expense?.id) created.docIds.push(["expenses", second.body.expense.id]);
+
+    // Recorded honestly — not filed as a company vehicle.
+    const vehicle = await get(`/api/v1/vehicles/${rentedVehicleId}`, sOps.cookies);
+    check(
+      "the hired bus is stored as RENTED, not COMPANY_OWNED",
+      vehicle.status === 200 &&
+        vehicle.body?.vehicle?.ownership === "RENTED" &&
+        vehicle.body?.vehicle?.regNumber === rentedPlate.toUpperCase(),
+      JSON.stringify(vehicle.body).slice(0, 200),
+    );
+
+    // Incomplete details are refused rather than inventing a bus.
+    const bad = await send("POST", "/api/v1/fuel", sOps.cookies, {
+      transactedOn: "2026-10-15",
+      totalMinor: 95050,
+      rentedVehicle: { regNumber: rentedPlate, make: "", model: "", year: 2019 },
+    });
+    check(
+      "rented bus details are validated (400, make required)",
+      bad.status === 400 && /Make is required/.test(bad.body?.error?.message ?? ""),
+      JSON.stringify(bad.body).slice(0, 200),
+    );
+
+    // Two typed fields are still required when nothing is supplied at all.
+    const neither = await send("POST", "/api/v1/fuel", sOps.cookies, {
+      transactedOn: "2026-10-15",
+      totalMinor: 95050,
+    });
+    check(
+      "neither a fleet vehicle nor a hired bus is refused (400)",
+      neither.status === 400 && /vehicleId/.test(neither.body?.error?.message ?? ""),
+      JSON.stringify(neither.body).slice(0, 200),
     );
   }
 
