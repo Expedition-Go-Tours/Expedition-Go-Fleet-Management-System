@@ -7,10 +7,7 @@ import { assertCsrfAndOrigin, requireAuthContext, requirePermission } from "@/li
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { parseDeletionReason } from "@/lib/domain/deletion";
 import { parsePaidTo } from "@/lib/domain/expense";
-import {
-  correctServiceRecord,
-  ServiceCorrectionError,
-} from "@/lib/domain/service-correction";
+import { correctServiceRecord, ServiceCorrectionError } from "@/lib/domain/service-correction";
 import { resolveServiceCostInput, ServiceCostError } from "@/lib/domain/service-cost";
 import { deleteServiceRecord } from "@/lib/repos/maintenance";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
@@ -39,8 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body) throw ApiError.badRequest("Invalid JSON body");
 
-    const workPerformed =
-      typeof body.workPerformed === "string" ? body.workPerformed.trim() : "";
+    const workPerformed = typeof body.workPerformed === "string" ? body.workPerformed.trim() : "";
     if (!workPerformed || workPerformed.length > 5000) {
       throw ApiError.badRequest("workPerformed is required (max 5000 chars)");
     }

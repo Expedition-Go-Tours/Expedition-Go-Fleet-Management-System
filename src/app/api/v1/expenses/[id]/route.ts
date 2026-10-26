@@ -20,7 +20,10 @@ export const runtime = "nodejs";
  * transaction; a service record's cost intent is cleared when this was its
  * only expense, while a fuel purchase keeps its recorded amount.
  */
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const requestId = randomUUID();
   try {
     await assertCsrfAndOrigin();

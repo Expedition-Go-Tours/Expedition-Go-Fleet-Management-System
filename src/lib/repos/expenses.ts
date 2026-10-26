@@ -331,10 +331,7 @@ export async function deleteExpenseRecord(
       };
       // The service's cost is the linked expense. When this was the only
       // expense and the amounts agree, remove the cost intent as well.
-      if (
-        remaining.length === 0 &&
-        Number(service.repairCostMinor ?? 0) === before.amountMinor
-      ) {
+      if (remaining.length === 0 && Number(service.repairCostMinor ?? 0) === before.amountMinor) {
         update.repairCostMinor = null;
         update.repairCostCurrency = null;
         update.labourCostMinor = null;

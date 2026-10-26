@@ -56,12 +56,10 @@ export async function correctServiceRecord(
 ): Promise<CorrectServiceResult> {
   const { COLLECTIONS } = await import("@/lib/db/collections");
   const { getAdminDb } = await import("@/lib/firebase/admin");
-  const { getServiceRecordById, linkExpenseToServiceRecord } = await import(
-    "@/lib/repos/maintenance"
-  );
-  const { ensureServiceExpense, findExpenseByServiceRecordId } = await import(
-    "@/lib/repos/expenses"
-  );
+  const { getServiceRecordById, linkExpenseToServiceRecord } =
+    await import("@/lib/repos/maintenance");
+  const { ensureServiceExpense, findExpenseByServiceRecordId } =
+    await import("@/lib/repos/expenses");
   const { serviceExpenseId } = await import("@/lib/domain/service-cost");
   const { FieldValue } = await import("firebase-admin/firestore");
 
@@ -150,7 +148,8 @@ export async function correctServiceRecord(
     // follows the corrected service date.
     for (const scheduleSnap of scheduleSnaps) {
       if (!scheduleSnap.exists) continue;
-      if (String(scheduleSnap.data()?.lastServiceRecordId ?? "") !== input.serviceRecordId) continue;
+      if (String(scheduleSnap.data()?.lastServiceRecordId ?? "") !== input.serviceRecordId)
+        continue;
       tx.update(scheduleSnap.ref, { lastServiceDate: input.completedAt, updatedAt: now });
     }
 

@@ -128,7 +128,12 @@ describe("PATCH /api/v1/service-records/[id] — correct a completed service", (
   });
 
   it("accepts a legacy flat cost and clears the payee when emptied", async () => {
-    await patch({ completedAt: "2026-10-21", workPerformed: "Repair", costMinor: 50000, paidTo: "" });
+    await patch({
+      completedAt: "2026-10-21",
+      workPerformed: "Repair",
+      costMinor: 50000,
+      paidTo: "",
+    });
     expect(mocks.correctServiceRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         paidTo: undefined,
