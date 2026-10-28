@@ -121,7 +121,6 @@ export default async function FuelPage({
             { key: "vehicle", header: "Vehicle" },
             { key: "paidTo", header: "Paid to" },
             { key: "odometer", header: "Odometer" },
-            { key: "price", header: "Unit price" },
             { key: "total", header: "Total" },
             { key: "tank", header: "Tank" },
             ...(canEdit || canDelete
@@ -165,13 +164,6 @@ export default async function FuelPage({
                 ) : (
                   <CellMeta>No reading</CellMeta>
                 )}
-              </Td>
-              <Td>
-                <span className="text-data text-ink tabular-nums">
-                  {typeof row.unitPriceMinor === "number"
-                    ? formatMoney(row.unitPriceMinor, row.currency)
-                    : "—"}
-                </span>
               </Td>
               <Td>
                 <span className="text-data text-ink font-medium tabular-nums">
