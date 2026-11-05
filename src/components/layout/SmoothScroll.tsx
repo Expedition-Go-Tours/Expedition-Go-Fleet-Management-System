@@ -23,9 +23,12 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
  *     horizontal swipes inside data tables and carousels.
  *   • `autoRaf: true` — delegates the animation loop to Lenis, avoiding a
  *     manual requestAnimationFrame lifecycle.
- *   • `data-lenis-prevent` on nested scroll containers (sidebar nav, table
- *     wrappers, search results, notification popovers, modals) so their
- *     native overflow scrolling is never intercepted.
+ *   • `data-lenis-prevent` on nested scroll containers (sidebar nav, search
+ *     results, notification popovers, modals) so their native overflow
+ *     scrolling is never intercepted. Horizontally scrolling strips (data
+ *     tables, tab bars) use `data-lenis-prevent-horizontal` instead, so only
+ *     horizontal gestures are handed back to the browser while the vertical
+ *     wheel keeps smooth-scrolling the page.
  *   • `prefers-reduced-motion` — disables Lenis smoothing entirely when the
  *     user has requested reduced motion, falling back to native scroll.
  *

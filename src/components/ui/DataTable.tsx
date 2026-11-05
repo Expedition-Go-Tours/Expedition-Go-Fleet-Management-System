@@ -44,7 +44,7 @@ export function DataTable({
   const hasRows = Children.count(children) > 0;
   return (
     <div
-      data-lenis-prevent
+      data-lenis-prevent-horizontal
       className={cn("w-full overflow-x-auto", className)}
       tabIndex={0}
       role="region"

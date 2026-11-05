@@ -466,3 +466,19 @@
     }
   }
 }
+
+/*
+ * Horizontal-only scroll strips — data tables and tab bars — use
+ * `data-lenis-prevent-horizontal`: Lenis leaves horizontal gestures to the
+ * strip's native scrolling while vertical wheel events keep smooth-scrolling
+ * the page.
+ *
+ * lenis.css gives every prevent-variant `overscroll-behavior: contain`, which
+ * once the strip has real overflow swallowed vertical wheel events at its
+ * boundary before they could reach the page (the "pointer over the table
+ * won't scroll" bug). Keep containment on the strip's own horizontal axis and
+ * let vertical scrolling chain through. Unlayered so it outranks lenis.css.
+ */
+.lenis [data-lenis-prevent-horizontal] {
+  overscroll-behavior-y: auto;
+}
