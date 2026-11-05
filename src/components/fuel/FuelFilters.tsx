@@ -4,18 +4,27 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import { X } from "lucide-react";
 
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { Select } from "@/components/ui/fields";
 
-/** Fuel ledger filter (vehicle) — URL-driven, server page owns the rows. */
+/** Fuel ledger filters (date period, vehicle) — URL-driven, server page owns the rows. */
 export function FuelFilters({ vehicles }: { vehicles: { id: string; label: string }[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
   const vehicleId = searchParams.get("vehicleId") ?? "";
+  const from = searchParams.get("from") ?? "";
+  const to = searchParams.get("to") ?? "";
+  const hasFilters = Boolean(vehicleId || from || to);
 
   return (
     <div className="flex flex-wrap items-center gap-2" aria-busy={isPending}>
+      <DateRangePicker
+        basePath="/fuel"
+        placeholder="Any date"
+        description="Filter fuel purchases by transaction date. Choose a start and end date, or a single day — both are inclusive."
+      />
       <Select
         aria-label="Filter by vehicle"
         value={vehicleId}
@@ -34,14 +43,14 @@ export function FuelFilters({ vehicles }: { vehicles: { id: string; label: strin
           </option>
         ))}
       </Select>
-      {vehicleId && (
+      {hasFilters && (
         <button
           type="button"
           onClick={() => router.replace("/fuel")}
           className="hover:bg-subtle text-body-sm text-muted inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium transition-colors"
         >
           <X aria-hidden="true" className="h-3.5 w-3.5" />
-          Clear filter
+          Clear filters
         </button>
       )}
     </div>

@@ -5,12 +5,14 @@ import { useTransition } from "react";
 import { X } from "lucide-react";
 
 import { Select } from "@/components/ui/fields";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { EXPENSE_CATEGORIES } from "@/lib/domain/expense";
 import { humanizeEnum } from "@/lib/format";
 
 /**
  * Expenses board filters. State lives in the URL so the server page owns
- * filtering: `category` (exact type) and `vehicleId` (specific unit).
+ * filtering: `from`/`to` (incurred period), `category` (exact type) and
+ * `vehicleId` (specific unit).
  */
 export function ExpenseFilters({ vehicles }: { vehicles: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -19,6 +21,8 @@ export function ExpenseFilters({ vehicles }: { vehicles: { id: string; label: st
 
   const category = searchParams.get("category") ?? "";
   const vehicleId = searchParams.get("vehicleId") ?? "";
+  const from = searchParams.get("from") ?? "";
+  const to = searchParams.get("to") ?? "";
 
   function update(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -26,13 +30,19 @@ export function ExpenseFilters({ vehicles }: { vehicles: { id: string; label: st
       if (value) params.set(key, value);
       else params.delete(key);
     }
+    params.delete("page");
     startTransition(() => router.replace(`/expenses?${params.toString()}`));
   }
 
-  const hasFilters = Boolean(category || vehicleId);
+  const hasFilters = Boolean(category || vehicleId || from || to);
 
   return (
     <div className="flex flex-wrap items-center gap-2" aria-busy={isPending}>
+      <DateRangePicker
+        basePath="/expenses"
+        placeholder="Any date"
+        description="Filter expenses by the date they were incurred. Choose a start and end date, or a single day — both are inclusive."
+      />
       <Select
         aria-label="Filter by category"
         value={category}

@@ -16,6 +16,7 @@ import {
   EXPENSE_CATEGORIES,
   summarizeExpenses,
 } from "@/lib/domain/expense";
+import { dateInRange, resolveDateRange } from "@/lib/domain/date-range";
 import { formatDate, formatMoney, humanizeEnum } from "@/lib/format";
 import { listExpenses } from "@/lib/repos/expenses";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -33,7 +34,13 @@ const PAGE_SIZE = 20;
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; vehicleId?: string; page?: string }>;
+  searchParams: Promise<{
+    category?: string;
+    vehicleId?: string;
+    page?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   const context = await requirePagePermission(PERMISSIONS.EXPENSE_READ);
   const permissions = [...permissionsForRoles(context.user.roles)];
@@ -44,6 +51,7 @@ export default async function ExpensesPage({
   const params = await searchParams;
   const category = params.category?.trim() || undefined;
   const vehicleId = params.vehicleId?.trim() || undefined;
+  const dateRange = resolveDateRange({ from: params.from, to: params.to });
   const pageRaw = Number(params.page);
   const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1;
 
@@ -53,15 +61,21 @@ export default async function ExpensesPage({
     listVehicles(),
   ]);
 
-  // Category narrows the visible ledger only; vehicle narrows the ledger and
-  // the totals, matching the filter the user applied.
+  const matchesPeriod = (incurredOn: Date) => !dateRange || dateInRange(incurredOn, dateRange);
+
+  // Category narrows the visible ledger only; vehicle and the date period
+  // narrow the ledger and the totals, matching the filters the user applied.
   const expenses = allExpenses.filter(
     (expense) =>
       (!category || expense.category === category) &&
-      (!vehicleId || expense.vehicleId === vehicleId),
+      (!vehicleId || expense.vehicleId === vehicleId) &&
+      matchesPeriod(expense.incurredOn),
   );
   const summary = summarizeExpenses(
-    vehicleId ? allExpenses.filter((expense) => expense.vehicleId === vehicleId) : allExpenses,
+    allExpenses.filter(
+      (expense) =>
+        (!vehicleId || expense.vehicleId === vehicleId) && matchesPeriod(expense.incurredOn),
+    ),
   );
   const expenseTotal = expenses.length;
 
@@ -74,6 +88,10 @@ export default async function ExpensesPage({
     const url = new URLSearchParams();
     if (category) url.set("category", category);
     if (vehicleId) url.set("vehicleId", vehicleId);
+    if (dateRange) {
+      url.set("from", dateRange.from);
+      url.set("to", dateRange.to);
+    }
     if (nextPage > 1) url.set("page", String(nextPage));
     const query = url.toString();
     return query ? `/expenses?${query}` : "/expenses";

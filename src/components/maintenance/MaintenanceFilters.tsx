@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import { X } from "lucide-react";
 
 import { Select } from "@/components/ui/fields";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
 const STATE_OPTIONS = [
   { value: "OVERDUE", label: "Overdue" },
@@ -16,15 +17,25 @@ const STATE_OPTIONS = [
 
 /**
  * Maintenance board filters. State lives in the URL so the server page owns
- * the derivation: `state` (schedule state) and `vehicleId` (specific unit).
+ * the derivation: `state` (schedule state), `vehicleId` (specific unit) and
+ * `from`/`to` (completion date on the service-record ledger).
  */
-export function MaintenanceFilters({ vehicles }: { vehicles: { id: string; label: string }[] }) {
+export function MaintenanceFilters({
+  vehicles,
+  showDateFilter = true,
+}: {
+  vehicles: { id: string; label: string }[];
+  /** The date range only affects the service-record ledger, when it is visible. */
+  showDateFilter?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
   const state = searchParams.get("state") ?? "";
   const vehicleId = searchParams.get("vehicleId") ?? "";
+  const from = searchParams.get("from") ?? "";
+  const to = searchParams.get("to") ?? "";
 
   function update(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -35,10 +46,17 @@ export function MaintenanceFilters({ vehicles }: { vehicles: { id: string; label
     startTransition(() => router.replace(`/maintenance?${params.toString()}`));
   }
 
-  const hasFilters = Boolean(state || vehicleId);
+  const hasFilters = Boolean(state || vehicleId || from || to);
 
   return (
     <div className="flex flex-wrap items-center gap-2" aria-busy={isPending}>
+      {showDateFilter && (
+        <DateRangePicker
+          basePath="/maintenance"
+          placeholder="Any service date"
+          description="Filter the completed service records below by completion date. Choose a start and end date, or a single day — both are inclusive."
+        />
+      )}
       <Select
         aria-label="Filter by state"
         value={state}

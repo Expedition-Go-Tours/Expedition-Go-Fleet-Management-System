@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { consumptionByEntry, type FuelEntry } from "@/lib/domain/fuel";
+import { dateInRange, resolveDateRange } from "@/lib/domain/date-range";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { listFuelEntries } from "@/lib/repos/fuel";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -29,30 +30,36 @@ interface DisplayEntry extends FuelEntry {
 export default async function FuelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ vehicleId?: string }>;
+  searchParams: Promise<{ vehicleId?: string; from?: string; to?: string }>;
 }) {
   const context = await requirePagePermission(PERMISSIONS.FUEL_READ);
   const permissions = permissionsForRoles(context.user.roles);
   const canCreate = permissions.has(PERMISSIONS.FUEL_CREATE);
   const canEdit = permissions.has(PERMISSIONS.FUEL_UPDATE);
   const canDelete = permissions.has(PERMISSIONS.FUEL_DELETE);
-  const { vehicleId } = await searchParams;
+  const { vehicleId, from, to } = await searchParams;
+  const dateRange = resolveDateRange({ from, to });
 
-  const [entries, vehicles] = await Promise.all([listFuelEntries({ limit: 300 }), listVehicles()]);
+  const [entries, vehicles] = await Promise.all([listFuelEntries({ limit: 2000 }), listVehicles()]);
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
   const vehicleOptions = vehicles
     .slice()
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
     .map((v) => ({ id: v.id, label: v.regNumber }));
 
-  const entriesForVehicle = vehicleId ? entries.filter((e) => e.vehicleId === vehicleId) : entries;
+  const filteredEntries = entries.filter(
+    (entry) =>
+      (!vehicleId || entry.vehicleId === vehicleId) &&
+      (!dateRange || dateInRange(entry.transactedOn, dateRange)),
+  );
 
   // Defensible consumption: adjacent full-tank fill-ups on the same vehicle,
   // in purchase order. A fill-up without a reading breaks the chain, so the
-  // figure lands on the SECOND fill-up and never spans a gap.
+  // figure lands on the SECOND fill-up and never spans a gap. Computed over the
+  // whole ledger so a filtered period never breaks the chain at its edge.
   const consumptionByFill = consumptionByEntry(entries);
 
-  const rows: DisplayEntry[] = entriesForVehicle
+  const rows: DisplayEntry[] = filteredEntries
     .map((entry) => {
       const vehicle = vehicleById.get(entry.vehicleId);
       const kmPerLitre = consumptionByFill.get(entry.id) ?? null;

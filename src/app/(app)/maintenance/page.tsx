@@ -17,6 +17,7 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { computeScheduleStatus, type ScheduleStatus } from "@/lib/domain/maintenance";
+import { dateInRange, formatDateRangeLabel, resolveDateRange } from "@/lib/domain/date-range";
 import { formatDate, formatIsoDate, formatKm, formatMoney, humanizeEnum } from "@/lib/format";
 import {
   listAllSchedules,
@@ -54,7 +55,7 @@ interface Row {
 export default async function MaintenancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ state?: string; vehicleId?: string }>;
+  searchParams: Promise<{ state?: string; vehicleId?: string; from?: string; to?: string }>;
 }) {
   const context = await requirePagePermission(PERMISSIONS.SCHEDULE_READ);
   const permissions = permissionsForRoles(context.user.roles);
@@ -62,7 +63,8 @@ export default async function MaintenancePage({
   const canReadService = permissions.has(PERMISSIONS.SERVICE_READ);
   const canEditService = permissions.has(PERMISSIONS.SERVICE_UPDATE);
   const canDeleteService = permissions.has(PERMISSIONS.SERVICE_DELETE);
-  const { state, vehicleId } = await searchParams;
+  const { state, vehicleId, from, to } = await searchParams;
+  const dateRange = resolveDateRange({ from, to });
   const validState = STATE_ORDER.includes(state as ScheduleStatus)
     ? (state as ScheduleStatus)
     : null;
@@ -70,13 +72,19 @@ export default async function MaintenancePage({
   const [schedules, vehicles, recentService] = await Promise.all([
     listAllSchedules(),
     listVehicles(),
-    canReadService ? listRecentServiceRecords(200) : Promise.resolve([]),
+    canReadService ? listRecentServiceRecords(1000) : Promise.resolve([]),
   ]);
 
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+  // The date range applies to completed service (a record with a real event
+  // date); the preventive board stays a live status view with no single date.
   const serviceRows = recentService
-    .filter((record) => !vehicleId || record.vehicleId === vehicleId)
-    .slice(0, 20);
+    .filter(
+      (record) =>
+        (!vehicleId || record.vehicleId === vehicleId) &&
+        (!dateRange || dateInRange(record.completedAt, dateRange)),
+    )
+    .slice(0, 50);
   const vehicleLabels = vehicles
     .slice()
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
@@ -219,7 +227,7 @@ export default async function MaintenancePage({
         }
       >
         <div className="border-hairline border-b px-4 py-3">
-          <MaintenanceFilters vehicles={vehicleLabels} />
+          <MaintenanceFilters vehicles={vehicleLabels} showDateFilter={canReadService} />
         </div>
 
         <DataTable
@@ -298,7 +306,11 @@ export default async function MaintenancePage({
           title="Completed service records"
           icon={History}
           flush
-          action={<span className="text-body-xs text-muted">Work orders and direct logs</span>}
+          action={
+            <span className="text-body-xs text-muted">
+              {dateRange ? formatDateRangeLabel(dateRange) : "Work orders and direct logs"}
+            </span>
+          }
         >
           <DataTable
             caption="Completed maintenance records"
@@ -317,8 +329,12 @@ export default async function MaintenancePage({
             empty={
               <EmptyState
                 icon={History}
-                title="No completed service"
-                description="Records appear here when maintenance is recorded from the dashboard, this page, a vehicle, or a completed work order."
+                title={dateRange ? "No service in this period" : "No completed service"}
+                description={
+                  dateRange
+                    ? "No completed service records fall inside the selected dates."
+                    : "Records appear here when maintenance is recorded from the dashboard, this page, a vehicle, or a completed work order."
+                }
               />
             }
           >

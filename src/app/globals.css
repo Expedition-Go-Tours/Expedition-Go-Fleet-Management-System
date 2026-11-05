@@ -266,3 +266,203 @@
     }
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Date-range calendar (React DayPicker).
+ *
+ * DayPicker supplies the grid, keyboard model and range modifiers. Its
+ * stylesheet is deliberately not imported — these rules map its structural
+ * class hooks onto the product tokens so the picker reads as part of the app
+ * instead of a third-party widget.
+ * ------------------------------------------------------------------ */
+@layer components {
+  .egt-date-range {
+    position: relative;
+  }
+
+  .egt-date-range .rdp-months {
+    display: flex;
+    gap: 1.75rem;
+  }
+
+  .egt-date-range .rdp-month {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .egt-date-range .rdp-month_caption {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.25rem;
+    margin: 0 2.25rem;
+    font-family: var(--font-display);
+    font-size: var(--fs-body-sm);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    color: var(--text-primary);
+  }
+
+  .egt-date-range .rdp-caption_label {
+    border: 0;
+    white-space: nowrap;
+  }
+
+  .egt-date-range .rdp-button_previous,
+  .egt-date-range .rdp-button_next {
+    position: absolute;
+    top: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--r-sm);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    appearance: none;
+    transition:
+      color var(--motion-fast) var(--ease-standard),
+      background-color var(--motion-fast) var(--ease-standard),
+      border-color var(--motion-fast) var(--ease-standard);
+  }
+
+  .egt-date-range .rdp-button_previous {
+    left: 0;
+  }
+
+  .egt-date-range .rdp-button_next {
+    right: 0;
+  }
+
+  .egt-date-range .rdp-button_previous:hover,
+  .egt-date-range .rdp-button_next:hover,
+  .egt-date-range .rdp-button_previous:focus-visible,
+  .egt-date-range .rdp-button_next:focus-visible {
+    background: var(--bg-subtle);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+
+  .egt-date-range .rdp-button_previous[aria-disabled="true"],
+  .egt-date-range .rdp-button_next[aria-disabled="true"] {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .egt-date-range .rdp-chevron {
+    width: 0.875rem;
+    height: 0.875rem;
+    fill: currentColor;
+  }
+
+  .egt-date-range .rdp-month_grid {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+  }
+
+  .egt-date-range .rdp-weekday {
+    padding: 0 0 0.5rem;
+    font-family: var(--font-ui);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: var(--tracking-ui);
+    text-transform: uppercase;
+    text-align: center;
+    color: var(--text-faint);
+  }
+
+  .egt-date-range .rdp-day {
+    position: relative;
+    height: 2.625rem;
+    padding: 2px 0;
+    vertical-align: middle;
+    text-align: center;
+  }
+
+  .egt-date-range .rdp-day_button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 2.25rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--fs-data);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition:
+      background-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard);
+  }
+
+  .egt-date-range .rdp-day_button:hover {
+    background: var(--bg-subtle);
+  }
+
+  .egt-date-range .rdp-day_button:focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: -2px;
+  }
+
+  .egt-date-range .rdp-outside {
+    opacity: 0.4;
+  }
+
+  .egt-date-range .rdp-today:not(.rdp-selected) .rdp-day_button {
+    box-shadow: inset 0 0 0 1px var(--border-accent);
+    color: var(--c-accent);
+    font-weight: 600;
+  }
+
+  /* Contiguous band behind the selected days. */
+  .egt-date-range .rdp-range_middle {
+    background: var(--accent-tint);
+  }
+
+  .egt-date-range .rdp-range_start {
+    background: linear-gradient(90deg, transparent 50%, var(--accent-tint) 50%);
+  }
+
+  .egt-date-range .rdp-range_end {
+    background: linear-gradient(90deg, var(--accent-tint) 50%, transparent 50%);
+  }
+
+  .egt-date-range .rdp-range_start.rdp-range_end {
+    background: transparent;
+  }
+
+  .egt-date-range .rdp-range_start .rdp-day_button,
+  .egt-date-range .rdp-range_end .rdp-day_button {
+    background: var(--c-ink);
+    color: var(--c-white);
+    font-weight: 600;
+  }
+
+  .egt-date-range .rdp-range_start .rdp-day_button:hover,
+  .egt-date-range .rdp-range_end .rdp-day_button:hover {
+    background: var(--bg-panel-3);
+  }
+
+  .egt-date-range .rdp-day_button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  @media (max-width: 767px) {
+    .egt-date-range .rdp-months {
+      gap: 0;
+    }
+  }
+}
