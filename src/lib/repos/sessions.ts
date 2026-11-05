@@ -25,8 +25,6 @@ function toSessionRecord(tokenHash: string, data: DocumentData): SessionRecord {
     userId: String(data.userId),
     createdAt: toDate(data.createdAt) ?? new Date(0),
     lastSeenAt: toDate(data.lastSeenAt) ?? new Date(0),
-    idleExpiresAt: toDate(data.idleExpiresAt) ?? new Date(0),
-    expiresAt: toDate(data.expiresAt) ?? new Date(0),
     mfaSatisfied: Boolean(data.mfaSatisfied),
     mustChangePassword: Boolean(data.mustChangePassword),
     mfaEnrollmentRequired: Boolean(data.mfaEnrollmentRequired),
@@ -47,12 +45,8 @@ export async function getSession(tokenHash: string): Promise<SessionRecord | nul
   return toSessionRecord(snap.id, snap.data() ?? {});
 }
 
-export async function touchSession(
-  tokenHash: string,
-  lastSeenAt: Date,
-  idleExpiresAt: Date,
-): Promise<void> {
-  await sessionsRef().doc(tokenHash).update({ lastSeenAt, idleExpiresAt });
+export async function touchSession(tokenHash: string, lastSeenAt: Date): Promise<void> {
+  await sessionsRef().doc(tokenHash).update({ lastSeenAt });
 }
 
 /**

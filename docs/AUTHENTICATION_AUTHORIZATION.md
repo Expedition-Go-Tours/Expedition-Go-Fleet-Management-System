@@ -174,20 +174,19 @@ Use a cookie with these attributes:
 
 The `__Host-` prefix requires a secure cookie, root path, and no `Domain` attribute. If session cookies are used, CSRF protections are still required.
 
-### 4.2 Recommended timeouts
+### 4.2 Session lifetime
 
-Set the browser cookie lifetime and Redis TTL consistently. A practical baseline is:
+Set the browser cookie lifetime and the session registry consistently. This application deliberately keeps users signed in:
 
-- Standard staff: 60-minute idle timeout, 12-hour absolute lifetime.
-- Privileged users (`ADMIN`, `OPERATIONS`): 30-minute idle timeout, 8-hour absolute lifetime.
-- Warn users shortly before expiry and preserve unsaved form drafts safely where practical.
+- Sessions are indefinite — no idle timeout and no absolute lifetime. Only explicit revocation (logout, account disablement, password change) ends a session.
+- The session cookie lasts 400 days (the maximum browsers allow for a persistent cookie) and is re-issued with a fresh window on every page navigation (`src/proxy.ts`), so it never lapses for an active user.
 - Require recent reauthentication (e.g. within 10 minutes) for privileged operations such as role assignment, account recovery/security changes, expense voiding, and clearing a safety hold/releasing a vehicle where policy requires it.
 
-These are starting policy values. Adjust them for the company's operating hours and device risk, but do not create indefinite sessions.
+Indefinite sessions are a product decision. Because expiry no longer backstops a lost cookie, administrative revocation (disable user, force sign-out) and the MFA requirement are the controls that must stay reliable.
 
 ### 4.3 Session registry and revocation
 
-Maintain a session index so an administrator can revoke all sessions for a user and the user can sign out. If the MVP exposes an active-sessions page, store non-secret metadata such as creation time, last activity, expiry, and a coarse user-agent label. Never store or display raw session IDs.
+Maintain a session index so an administrator can revoke all sessions for a user and the user can sign out. If the MVP exposes an active-sessions page, store non-secret metadata such as creation time, last activity, and a coarse user-agent label. Never store or display raw session IDs.
 
 On logout, destroy the current Redis session. On suspension, disablement, role changes, suspected compromise, or forced sign-out, revoke sessions associated with the user. A request from a revoked session must fail even if its cookie has not expired.
 
@@ -420,7 +419,7 @@ Suggested core models (adapt names to the existing codebase):
 ### `UserSession` (session index/audit)
 
 - `id`, `userId`, opaque session reference or keyed hash (never raw secret)
-- `createdAt`, `lastSeenAt`, `expiresAt`, `revokedAt`
+- `createdAt`, `lastSeenAt`, `revokedAt`
 - Optional coarse `userAgentLabel` and risk metadata
 - Link entries to Redis sessions so all sessions for one employee can be revoked.
 
@@ -516,7 +515,7 @@ Maintenance photos, invoices, and receipts may contain business and personal inf
 - Invalid, expired, revoked, wrong-project, or malformed Firebase token cannot create a session.
 - Session fixation is prevented by regenerating the session ID at authentication.
 - Logout destroys the session; a revoked session is rejected even if a stale cookie remains.
-- Session expiry and idle timeout work as configured.
+- Sessions stay valid indefinitely; only revocation ends them.
 - Privileged users cannot bypass the MFA requirement.
 - Password-reset and login responses do not disclose account existence.
 

@@ -10,13 +10,12 @@ import { secureCookies } from "@/lib/auth/guards";
 import { decideMfa, hasEnrolledMfaFactor } from "@/lib/auth/mfa";
 import { permissionsForRoles } from "@/lib/auth/permissions";
 import {
-  computeSessionExpiry,
   csrfCookieName,
   csrfCookieOptions,
   generateSessionToken,
   hashSessionToken,
   isPrivileged,
-  policyForRoles,
+  SESSION_COOKIE_MAX_AGE_SECONDS,
   sessionCookieName,
   sessionCookieOptions,
 } from "@/lib/auth/session";
@@ -122,21 +121,19 @@ export async function POST(request: NextRequest) {
     }
     const mfaEnrollmentRequired = mfaDecision === "enroll";
 
-    // Mint the opaque session.
+    // Mint the opaque session. Sessions are indefinite: no idle or absolute
+    // deadline is stored — only revocation (logout, disable, password change)
+    // ends them.
     const secure = secureCookies();
     const sessionToken = generateSessionToken();
     const tokenHash = hashSessionToken(sessionToken, serverEnv.sessionSecret);
     const now = new Date();
-    const policy = policyForRoles(user.roles);
-    const expiry = computeSessionExpiry(now, policy);
 
     await createSession({
       tokenHash,
       userId: user.id,
       createdAt: now,
       lastSeenAt: now,
-      idleExpiresAt: expiry.idleExpiresAt,
-      expiresAt: expiry.expiresAt,
       mfaSatisfied,
       mustChangePassword: passwordChangeRequired,
       mfaEnrollmentRequired,
@@ -148,14 +145,17 @@ export async function POST(request: NextRequest) {
     clearRateLimit(`signin:${clientAddress(request)}`);
 
     const csrfToken = generateCsrfToken();
-    const maxAgeSeconds = Math.floor(policy.absoluteMs / 1000);
     const cookieStore = await cookies();
     cookieStore.set(
       sessionCookieName(secure),
       sessionToken,
-      sessionCookieOptions(maxAgeSeconds, secure),
+      sessionCookieOptions(SESSION_COOKIE_MAX_AGE_SECONDS, secure),
     );
-    cookieStore.set(csrfCookieName(secure), csrfToken, csrfCookieOptions(secure, maxAgeSeconds));
+    cookieStore.set(
+      csrfCookieName(secure),
+      csrfToken,
+      csrfCookieOptions(secure, SESSION_COOKIE_MAX_AGE_SECONDS),
+    );
 
     await touchLastLogin(user.id);
     await writeAuditEvent({
@@ -174,7 +174,6 @@ export async function POST(request: NextRequest) {
       permissions:
         passwordChangeRequired || mfaEnrollmentRequired ? [] : [...permissionsForRoles(user.roles)],
       csrfToken,
-      expiresAt: expiry.expiresAt.toISOString(),
       passwordChangeRequired,
       mfaEnrollmentRequired,
     });

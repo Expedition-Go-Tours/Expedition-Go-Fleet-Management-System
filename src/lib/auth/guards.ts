@@ -9,7 +9,6 @@ import {
   hashSessionToken,
   isPrivileged,
   isSessionActive,
-  policyForRoles,
   sessionCookieName,
 } from "@/lib/auth/session";
 import { rolesHavePermission, type PermissionKey } from "@/lib/auth/permissions";
@@ -42,7 +41,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   if (!session) return null;
 
   const now = new Date();
-  if (!isSessionActive(session, now)) return null;
+  if (!isSessionActive(session)) return null;
 
   const user = await getUserById(session.userId);
   if (!user) return null;
@@ -53,19 +52,14 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     return null;
   }
 
-  // Sliding idle window, capped by the absolute deadline. Fail closed: if the
-  // session store cannot be updated, reject rather than extend silently.
-  const policy = policyForRoles(user.roles);
-  const idleExpiresAt = new Date(
-    Math.min(now.getTime() + policy.idleMs, session.expiresAt.getTime()),
-  );
-  if (idleExpiresAt.getTime() > session.idleExpiresAt.getTime()) {
-    await touchSession(tokenHash, now, idleExpiresAt);
-  }
+  // Record activity for the session registry (admin-visible "last seen").
+  // Sessions themselves never expire — revocation, above, is the only exit.
+  // Fail closed: if the store cannot be updated, reject rather than proceed.
+  await touchSession(tokenHash, now);
 
   return {
     user,
-    session: { ...session, lastSeenAt: now, idleExpiresAt },
+    session: { ...session, lastSeenAt: now },
     isPrivileged: isPrivileged(user.roles),
   };
 }

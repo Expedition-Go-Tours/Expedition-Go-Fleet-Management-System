@@ -75,10 +75,6 @@ export interface SessionRecord {
   userId: string;
   createdAt: Date;
   lastSeenAt: Date;
-  /** Sliding idle deadline, extended on activity. */
-  idleExpiresAt: Date;
-  /** Absolute deadline; the session cannot outlive this. */
-  expiresAt: Date;
   mfaSatisfied: boolean;
   /**
    * Snapshot of the user's `mustChangePassword` flag at session creation.

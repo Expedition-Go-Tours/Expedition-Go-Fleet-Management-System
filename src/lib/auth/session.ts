@@ -9,6 +9,10 @@ import type { RoleKey } from "@/lib/auth/types";
  * sent to the browser in an opaque cookie and never stored. Firestore stores
  * only `hashSessionToken(token)`, which is also used as the document id so
  * validation is a single point read.
+ *
+ * Sessions are indefinite: there is no idle timeout and no absolute deadline,
+ * so an active user stays signed in. Only explicit revocation (logout,
+ * account disablement, password change) ends a session.
  */
 
 /** Cookie name in secure contexts. The `__Host-` prefix pins host + path + Secure. */
@@ -42,56 +46,24 @@ export function csrfCookieName(secure: boolean): string {
   return secure ? HOST_CSRF_COOKIE : DEV_CSRF_COOKIE;
 }
 
-export interface SessionPolicy {
-  idleMs: number;
-  absoluteMs: number;
-}
+/**
+ * Persistent-cookie lifetime in seconds: 400 days, the maximum browsers allow
+ * for `Max-Age`. `src/proxy.ts` re-issues the session and CSRF cookies with a
+ * fresh window on every page navigation, so the cookie never lapses for an
+ * active user even though sessions themselves never expire.
+ */
+export const SESSION_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 
-export const SESSION_POLICIES = {
-  standard: { idleMs: 60 * 60 * 1000, absoluteMs: 12 * 60 * 60 * 1000 },
-  privileged: { idleMs: 30 * 60 * 1000, absoluteMs: 8 * 60 * 60 * 1000 },
-} as const satisfies Record<string, SessionPolicy>;
-
-/** Roles that require MFA and receive the shorter session timeouts. */
+/** Roles that require MFA. */
 export const PRIVILEGED_ROLES: readonly RoleKey[] = ["ADMIN", "OPERATIONS"];
 
 export function isPrivileged(roles: readonly RoleKey[]): boolean {
   return roles.some((role) => PRIVILEGED_ROLES.includes(role));
 }
 
-export function policyForRoles(roles: readonly RoleKey[]): SessionPolicy {
-  return isPrivileged(roles) ? SESSION_POLICIES.privileged : SESSION_POLICIES.standard;
-}
-
-export interface SessionExpiry {
-  idleExpiresAt: Date;
-  expiresAt: Date;
-}
-
-export function computeSessionExpiry(
-  now: Date,
-  policy: SessionPolicy,
-  absoluteAnchor: Date = now,
-): SessionExpiry {
-  return {
-    idleExpiresAt: new Date(now.getTime() + policy.idleMs),
-    expiresAt: new Date(absoluteAnchor.getTime() + policy.absoluteMs),
-  };
-}
-
-/** A session is invalid once revoked, past its absolute deadline, or idle too long. */
-export function isSessionActive(
-  session: {
-    revokedAt?: Date;
-    idleExpiresAt: Date;
-    expiresAt: Date;
-  },
-  now: Date,
-): boolean {
-  if (session.revokedAt) return false;
-  if (now.getTime() >= session.expiresAt.getTime()) return false;
-  if (now.getTime() >= session.idleExpiresAt.getTime()) return false;
-  return true;
+/** A session is invalid only once revoked. */
+export function isSessionActive(session: { revokedAt?: Date }): boolean {
+  return !session.revokedAt;
 }
 
 export function sessionCookieOptions(maxAgeSeconds: number, secure: boolean) {

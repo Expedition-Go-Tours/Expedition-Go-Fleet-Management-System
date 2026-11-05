@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  computeSessionExpiry,
   generateSessionToken,
   hashSessionToken,
   isPrivileged,
   isSessionActive,
-  policyForRoles,
-  SESSION_POLICIES,
+  SESSION_COOKIE_MAX_AGE_SECONDS,
   sessionCookieName,
 } from "@/lib/auth/session";
 
@@ -45,56 +43,32 @@ describe("hashSessionToken", () => {
   });
 });
 
-describe("policy selection ($4.2)", () => {
-  it("uses the shorter privileged policy for ADMIN and OPERATIONS", () => {
-    expect(policyForRoles(["ADMIN"])).toEqual(SESSION_POLICIES.privileged);
-    expect(policyForRoles(["OPERATIONS"])).toEqual(SESSION_POLICIES.privileged);
+describe("privileged roles (MFA applies to them)", () => {
+  it("marks ADMIN and OPERATIONS privileged", () => {
     expect(isPrivileged(["ADMIN", "DRIVER"])).toBe(true);
     expect(isPrivileged(["OPERATIONS"])).toBe(true);
   });
 
-  it("uses the standard policy for DRIVER", () => {
-    expect(policyForRoles(["DRIVER"])).toEqual(SESSION_POLICIES.standard);
+  it("leaves other roles unprivileged", () => {
     expect(isPrivileged(["DRIVER"])).toBe(false);
   });
 });
 
 describe("isSessionActive", () => {
-  const active = {
-    idleExpiresAt: new Date("2026-01-01T10:00:00Z"),
-    expiresAt: new Date("2026-01-01T12:00:00Z"),
-  };
-
-  it("accepts a live session", () => {
-    expect(isSessionActive(active, new Date("2026-01-01T09:00:00Z"))).toBe(true);
+  it("accepts a session that has never been revoked — sessions do not expire", () => {
+    expect(isSessionActive({})).toBe(true);
+    // A session idle for years stays valid; only revocation ends it.
+    expect(isSessionActive({ revokedAt: undefined })).toBe(true);
   });
 
-  it("rejects a revoked session even if unexpired", () => {
-    expect(
-      isSessionActive(
-        { ...active, revokedAt: new Date("2026-01-01T09:30:00Z") },
-        new Date("2026-01-01T09:00:00Z"),
-      ),
-    ).toBe(false);
-  });
-
-  it("rejects a session past its absolute deadline", () => {
-    expect(isSessionActive(active, new Date("2026-01-01T12:00:00Z"))).toBe(false);
-  });
-
-  it("rejects a session past its idle deadline", () => {
-    expect(isSessionActive(active, new Date("2026-01-01T10:00:00Z"))).toBe(false);
+  it("rejects a revoked session", () => {
+    expect(isSessionActive({ revokedAt: new Date("2026-01-01T09:30:00Z") })).toBe(false);
   });
 });
 
-describe("computeSessionExpiry", () => {
-  it("sets the sliding idle window from now and the absolute window from the anchor", () => {
-    const now = new Date("2026-01-01T09:00:00Z");
-    const firstSeen = new Date("2026-01-01T08:00:00Z");
-    const expiry = computeSessionExpiry(now, SESSION_POLICIES.standard, firstSeen);
-    expect(expiry.idleExpiresAt.toISOString()).toBe("2026-01-01T10:00:00.000Z");
-    // Absolute lifetime anchored to session creation, not to this request.
-    expect(expiry.expiresAt.toISOString()).toBe("2026-01-01T20:00:00.000Z");
+describe("cookie lifetime", () => {
+  it("uses the 400-day browser maximum, refreshed on navigation by proxy.ts", () => {
+    expect(SESSION_COOKIE_MAX_AGE_SECONDS).toBe(400 * 24 * 60 * 60);
   });
 });
 
