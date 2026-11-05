@@ -50,6 +50,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Security-advisory upgrade reminders during `next dev` / `next build`.
+    agentUpgrade: "security",
+  },
   serverExternalPackages: ["jose", "jwks-rsa"],
   turbopack: {
     rules: {
