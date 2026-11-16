@@ -11,7 +11,7 @@ import { fuelEntryMatches } from "@/lib/domain/fuel";
 import { buildCsv, exportFilename } from "@/lib/export/csv";
 import { csvResponse, describeRange, pdfResponse } from "@/lib/export/http";
 import { buildExportPdf } from "@/lib/export/pdf";
-import { formatDate, formatKm, formatMoney, formatNumber } from "@/lib/format";
+import { formatDate, formatKm, formatMoney } from "@/lib/format";
 import { AUDIT_EVENTS, writeAuditEvent } from "@/lib/repos/audit";
 import { listFuelEntries } from "@/lib/repos/fuel";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -72,25 +72,16 @@ export async function GET(request: NextRequest) {
         title: "EXPEDITION-GO TOURS LTD FUEL RECORD",
         subtitle,
         meta,
-        columns: ["Date", "Vehicle", "Paid to", "Odometer", "Litres", "Amount", "Tank"],
+        columns: ["Date", "Vehicle", "Paid to", "Odometer", "Amount", "Tank"],
         rows: rows.map((entry) => [
           `${formatDate(entry.transactedOn)}${entry.station ? `\n${entry.station}` : ""}`,
           vehicleById.get(entry.vehicleId)?.regNumber ?? "—",
           entry.paidTo ?? "—",
           typeof entry.odometerKm === "number" ? formatKm(entry.odometerKm) : "No reading",
-          typeof entry.litres === "number" ? `${formatNumber(entry.litres)} L` : "—",
           formatMoney(entry.totalMinor, entry.currency),
           entry.fullTank ? "Full" : "Partial",
         ]),
-        totals: [
-          "TOTAL",
-          "",
-          "",
-          "",
-          litreCount > 0 ? `${formatNumber(totalLitres)} L` : "",
-          formatMoney(totalMinor),
-          "",
-        ],
+        totals: ["TOTAL", "", "", "", formatMoney(totalMinor), ""],
       });
       return pdfResponse(pdf, filename);
     }
