@@ -40,6 +40,7 @@ export const PERMISSIONS = {
   SERVICE_READ: "service:read",
   SERVICE_UPDATE: "service:update",
   SERVICE_DELETE: "service:delete",
+  SERVICE_EXPORT: "service:export",
 
   ASSIGNMENT_READ: "assignment:read",
   ASSIGNMENT_CREATE: "assignment:create",
@@ -66,6 +67,7 @@ export const PERMISSIONS = {
   FUEL_CREATE: "fuel:create",
   FUEL_UPDATE: "fuel:update",
   FUEL_DELETE: "fuel:delete",
+  FUEL_EXPORT: "fuel:export",
 
   DOCUMENT_READ: "document:read",
   DOCUMENT_UPLOAD: "document:upload",
@@ -187,6 +189,10 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.SERVICE_RECORD,
     PERMISSIONS.SERVICE_READ,
     PERMISSIONS.SERVICE_UPDATE,
+    // Bulk download of the completed-service ledger sits with the money desk,
+    // exactly like `expense:export` — a driver may read the records but not
+    // export the whole history.
+    PERMISSIONS.SERVICE_EXPORT,
     PERMISSIONS.ASSIGNMENT_READ,
     PERMISSIONS.ASSIGNMENT_CREATE,
     PERMISSIONS.ASSIGNMENT_CANCEL,
@@ -203,6 +209,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly PermissionKey[]> = {
     PERMISSIONS.FUEL_CREATE,
     PERMISSIONS.FUEL_READ,
     PERMISSIONS.FUEL_UPDATE,
+    PERMISSIONS.FUEL_EXPORT,
     PERMISSIONS.DOCUMENT_READ,
     PERMISSIONS.DOCUMENT_UPLOAD,
     PERMISSIONS.TRIP_CREATE,

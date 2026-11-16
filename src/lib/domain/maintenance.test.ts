@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeScheduleStatus } from "@/lib/domain/maintenance";
+import { computeScheduleStatus, serviceRecordMatchesFilters } from "@/lib/domain/maintenance";
 
 /*
  * Mandated oil-change boundary tests:
@@ -196,5 +196,49 @@ describe("boundary precision", () => {
       now: NOW, // 2026-06-15
     });
     expect(r.timeState).toBe("DUE");
+  });
+});
+
+describe("serviceRecordMatchesFilters — the page and the export share one predicate", () => {
+  const record = { vehicleId: "veh_1", completedAt: new Date("2026-10-12T12:00:00Z") };
+
+  it("accepts every record when no filter is set", () => {
+    expect(serviceRecordMatchesFilters(record, {})).toBe(true);
+  });
+
+  it("narrows to one vehicle", () => {
+    expect(serviceRecordMatchesFilters(record, { vehicleId: "veh_1" })).toBe(true);
+    expect(serviceRecordMatchesFilters(record, { vehicleId: "veh_2" })).toBe(false);
+  });
+
+  it("includes both ends of the date range", () => {
+    const range = { from: "2026-10-12", to: "2026-10-18" };
+    expect(serviceRecordMatchesFilters(record, { range })).toBe(true);
+    expect(
+      serviceRecordMatchesFilters(
+        { ...record, completedAt: new Date("2026-10-18T08:00:00Z") },
+        {
+          range,
+        },
+      ),
+    ).toBe(true);
+    expect(
+      serviceRecordMatchesFilters(
+        { ...record, completedAt: new Date("2026-10-19T08:00:00Z") },
+        {
+          range,
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("reads the local day of a completion timestamp", () => {
+    // Late-evening completion must stay on its own calendar day.
+    expect(
+      serviceRecordMatchesFilters(
+        { ...record, completedAt: new Date("2026-10-11T23:30:00Z") },
+        { range: { from: "2026-10-12", to: "2026-10-12" } },
+      ),
+    ).toBe(false);
   });
 });

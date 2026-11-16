@@ -116,4 +116,10 @@ export const RATE_LIMITS = {
   invite: { limit: 10, windowMs: 15 * 60_000 },
   /** Uploads — bounded abuse of storage and of the storage provider. */
   upload: { limit: 30, windowMs: 15 * 60_000 },
+  /**
+   * Ledger exports — bounds per-user CSV/PDF generation work. Keyed by user
+   * (not address), and deliberately NOT cleared on success: unlike the
+   * invitation buckets above, the cost being bounded is the successful work.
+   */
+  export: { limit: 20, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;

@@ -13,11 +13,17 @@ import { Card } from "@/components/ui/Card";
 import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
 import { DeleteRecordDialog } from "@/components/ui/DeleteRecordDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { computeScheduleStatus, type ScheduleStatus } from "@/lib/domain/maintenance";
-import { dateInRange, formatDateRangeLabel, resolveDateRange } from "@/lib/domain/date-range";
+import {
+  computeScheduleStatus,
+  serviceRecordMatchesFilters,
+  type ScheduleStatus,
+} from "@/lib/domain/maintenance";
+import { formatDateRangeLabel, resolveDateRange } from "@/lib/domain/date-range";
+import { exportHref } from "@/lib/export/http";
 import { formatDate, formatIsoDate, formatKm, formatMoney, humanizeEnum } from "@/lib/format";
 import {
   listAllSchedules,
@@ -63,6 +69,9 @@ export default async function MaintenancePage({
   const canReadService = permissions.has(PERMISSIONS.SERVICE_READ);
   const canEditService = permissions.has(PERMISSIONS.SERVICE_UPDATE);
   const canDeleteService = permissions.has(PERMISSIONS.SERVICE_DELETE);
+  // The export is the completed-service ledger, so it needs that ledger to be
+  // readable as well as the export grant itself.
+  const canExport = canReadService && permissions.has(PERMISSIONS.SERVICE_EXPORT);
   const { state, vehicleId, from, to } = await searchParams;
   const dateRange = resolveDateRange({ from, to });
   const validState = STATE_ORDER.includes(state as ScheduleStatus)
@@ -78,13 +87,19 @@ export default async function MaintenancePage({
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
   // The date range applies to completed service (a record with a real event
   // date); the preventive board stays a live status view with no single date.
+  // The same predicate drives the service export, so the file matches the card.
   const serviceRows = recentService
-    .filter(
-      (record) =>
-        (!vehicleId || record.vehicleId === vehicleId) &&
-        (!dateRange || dateInRange(record.completedAt, dateRange)),
-    )
+    .filter((record) => serviceRecordMatchesFilters(record, { vehicleId, range: dateRange }))
     .slice(0, 50);
+
+  // What the export will contain, shown in the export menu. The preventive
+  // board is a live status view and is deliberately not part of the file.
+  const exportHint = [
+    "Completed service",
+    dateRange ? formatDateRangeLabel(dateRange) : "all dates",
+    vehicleId ? (vehicleById.get(vehicleId)?.regNumber ?? vehicleId) : "all vehicles",
+  ].join(" · ");
+  const exportFilters = { from: dateRange?.from, to: dateRange?.to, vehicleId };
   const vehicleLabels = vehicles
     .slice()
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
@@ -150,24 +165,33 @@ export default async function MaintenancePage({
         description="Preventive maintenance across the fleet, computed from the documented schedule engine against accepted odometer readings."
         crumbs={[{ label: "Fleet" }, { label: "Maintenance" }]}
         actions={
-          <LogServiceDialog
-            variant="accent"
-            canCreate={canLogService}
-            defaultVehicleId={vehicleId}
-            vehicles={vehicles
-              .slice()
-              .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
-              .map((v) => ({
-                id: v.id,
-                label: `${v.regNumber} — ${v.make} ${v.model}`,
-                odometerKm: v.odometerKm,
+          <>
+            {canExport && (
+              <ExportMenu
+                hint={exportHint}
+                csvHref={exportHref("/api/v1/service-records/export", "csv", exportFilters)}
+                pdfHref={exportHref("/api/v1/service-records/export", "pdf", exportFilters)}
+              />
+            )}
+            <LogServiceDialog
+              variant="accent"
+              canCreate={canLogService}
+              defaultVehicleId={vehicleId}
+              vehicles={vehicles
+                .slice()
+                .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
+                .map((v) => ({
+                  id: v.id,
+                  label: `${v.regNumber} — ${v.make} ${v.model}`,
+                  odometerKm: v.odometerKm,
+                }))}
+              schedules={schedules.map((s) => ({
+                id: s.id,
+                vehicleId: s.vehicleId,
+                taskName: s.taskName,
               }))}
-            schedules={schedules.map((s) => ({
-              id: s.id,
-              vehicleId: s.vehicleId,
-              taskName: s.taskName,
-            }))}
-          />
+            />
+          </>
         }
       />
 

@@ -293,7 +293,7 @@ export const TOURS: readonly TourDefinition[] = [
         fallbacks: ["expense-header"],
         title: "Find and export records",
         description:
-          "Use the headers to read the totals, ⌘K global search to locate a specific record, and export the permitted report as CSV. The export counts exactly what the screen counts, so the two never disagree.",
+          "Use the headers to read the totals, ⌘K global search to locate a specific record, and export the permitted report as CSV or PDF — the export carries the active date range and filters, so it counts exactly what the screen counts.",
         side: "bottom",
         requires: [PERMISSIONS.EXPENSE_EXPORT],
       },

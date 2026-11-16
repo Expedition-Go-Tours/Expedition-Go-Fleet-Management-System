@@ -6,17 +6,21 @@ import { ExpenseFilters } from "@/components/expenses/ExpenseFilters";
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
 import { DeleteRecordDialog } from "@/components/ui/DeleteRecordDialog";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requirePagePermission } from "@/lib/auth/page-guard";
 import { permissionsForRoles, PERMISSIONS } from "@/lib/auth/permissions";
 import {
   availableExpenseActions,
+  expenseMatchesLedger,
+  expenseMatchesTotals,
   expenseStatusLabel,
   EXPENSE_CATEGORIES,
   summarizeExpenses,
 } from "@/lib/domain/expense";
-import { dateInRange, resolveDateRange } from "@/lib/domain/date-range";
+import { formatDateRangeLabel, resolveDateRange } from "@/lib/domain/date-range";
+import { exportHref } from "@/lib/export/http";
 import { formatDate, formatMoney, humanizeEnum } from "@/lib/format";
 import { listExpenses } from "@/lib/repos/expenses";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -61,21 +65,15 @@ export default async function ExpensesPage({
     listVehicles(),
   ]);
 
-  const matchesPeriod = (incurredOn: Date) => !dateRange || dateInRange(incurredOn, dateRange);
-
-  // Category narrows the visible ledger only; vehicle and the date period
-  // narrow the ledger and the totals, matching the filters the user applied.
-  const expenses = allExpenses.filter(
-    (expense) =>
-      (!category || expense.category === category) &&
-      (!vehicleId || expense.vehicleId === vehicleId) &&
-      matchesPeriod(expense.incurredOn),
+  // One pair of predicates drives the page and the export, so the downloaded
+  // file can never contain different rows than the ledger on screen. Category
+  // narrows the visible ledger only; vehicle and the date period narrow the
+  // ledger and the totals, matching the filters the user applied.
+  const expenses = allExpenses.filter((expense) =>
+    expenseMatchesLedger(expense, { category, vehicleId, range: dateRange }),
   );
   const summary = summarizeExpenses(
-    allExpenses.filter(
-      (expense) =>
-        (!vehicleId || expense.vehicleId === vehicleId) && matchesPeriod(expense.incurredOn),
-    ),
+    allExpenses.filter((expense) => expenseMatchesTotals(expense, { vehicleId, range: dateRange })),
   );
   const expenseTotal = expenses.length;
 
@@ -107,6 +105,19 @@ export default async function ExpensesPage({
     return wo ? wo.title : "—";
   };
 
+  // What the export will contain, shown in the export menu.
+  const exportHint = [
+    dateRange ? formatDateRangeLabel(dateRange) : "All dates",
+    category ? humanizeEnum(category) : "All categories",
+    vehicleId ? (vehicles.find((v) => v.id === vehicleId)?.regNumber ?? vehicleId) : "All vehicles",
+  ].join(" · ");
+  const exportFilters = {
+    from: dateRange?.from,
+    to: dateRange?.to,
+    vehicleId,
+    category,
+  };
+
   return (
     <Container className="flex flex-col gap-8 py-10">
       <PageHeader
@@ -115,15 +126,12 @@ export default async function ExpensesPage({
         dataTour="expense-header"
         actions={
           canExport ? (
-            // A file download, not a client-side page navigation.
-            // eslint-disable-next-line @next/next/no-html-link-for-pages
-            <a
-              href="/api/v1/expenses/export"
-              data-tour="expense-export"
-              className="border-strong hover:border-ink rounded-pill font-ui border px-4 py-2 text-[length:var(--fs-ui-xs)] tracking-[var(--tracking-ui)] uppercase transition-colors"
-            >
-              Export CSV ↓
-            </a>
+            <ExportMenu
+              dataTour="expense-export"
+              hint={exportHint}
+              csvHref={exportHref("/api/v1/expenses/export", "csv", exportFilters)}
+              pdfHref={exportHref("/api/v1/expenses/export", "pdf", exportFilters)}
+            />
           ) : undefined
         }
       />

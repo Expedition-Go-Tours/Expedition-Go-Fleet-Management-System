@@ -1,4 +1,5 @@
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { dateInRange, type DateRangeValue } from "@/lib/domain/date-range";
 import { parsePaidTo, toPesewas } from "@/lib/domain/expense";
 import type { RentedVehicleInput } from "@/lib/domain/vehicle";
 
@@ -339,3 +340,20 @@ export function buildFuelCreatePayload(
 
 export const FUEL_CREATE_PERMISSION = PERMISSIONS.FUEL_CREATE;
 export const FUEL_READ_PERMISSION = PERMISSIONS.FUEL_READ;
+
+/* ------------------------------------------------------------------ *
+ * Ledger selection — shared by the fuel page and the fuel export so
+ * the downloaded file always contains exactly the rows on screen.
+ * ------------------------------------------------------------------ */
+
+export interface FuelEntryFilter {
+  vehicleId?: string | null;
+  /** Inclusive transaction-date period; absent = all dates. */
+  range?: DateRangeValue | null;
+}
+
+export function fuelEntryMatches(entry: FuelEntry, filter: FuelEntryFilter): boolean {
+  if (filter.vehicleId && entry.vehicleId !== filter.vehicleId) return false;
+  if (filter.range && !dateInRange(entry.transactedOn, filter.range)) return false;
+  return true;
+}

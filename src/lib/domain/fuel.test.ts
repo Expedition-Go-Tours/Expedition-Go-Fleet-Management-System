@@ -5,9 +5,11 @@ import {
   buildFuelUpdatePayload,
   computeConsumption,
   consumptionByEntry,
+  fuelEntryMatches,
   isValidFuelEntry,
   latestConsumption,
   parseOdometerKm,
+  type FuelEntry,
   type FuelPurchaseFormValues,
 } from "@/lib/domain/fuel";
 import type { RentedVehicleInput } from "@/lib/domain/vehicle";
@@ -424,5 +426,41 @@ describe("buildFuelUpdatePayload — correcting a recorded purchase", () => {
       ok: false,
       message: "paidTo must be 200 characters or fewer",
     });
+  });
+});
+
+describe("fuelEntryMatches — the page and the export share one predicate", () => {
+  const entry = (overrides: Partial<FuelEntry> = {}): FuelEntry => ({
+    id: "fuel_1",
+    vehicleId: "veh_1",
+    transactedOn: "2026-10-12",
+    fuelType: "PETROL",
+    totalMinor: 500_00,
+    currency: "GHS",
+    fullTank: true,
+    recordedBy: "user_1",
+    createdAt: new Date("2026-10-12T12:00:00Z"),
+    ...overrides,
+  });
+
+  it("accepts every entry when no filter is set", () => {
+    expect(fuelEntryMatches(entry(), {})).toBe(true);
+  });
+
+  it("narrows to one vehicle", () => {
+    expect(fuelEntryMatches(entry(), { vehicleId: "veh_1" })).toBe(true);
+    expect(fuelEntryMatches(entry(), { vehicleId: "veh_2" })).toBe(false);
+  });
+
+  it("includes both ends of the date range", () => {
+    const range = { from: "2026-10-12", to: "2026-10-18" };
+    expect(fuelEntryMatches(entry(), { range })).toBe(true);
+    expect(fuelEntryMatches(entry({ transactedOn: "2026-10-18" }), { range })).toBe(true);
+  });
+
+  it("excludes days outside the range", () => {
+    const range = { from: "2026-10-12", to: "2026-10-18" };
+    expect(fuelEntryMatches(entry({ transactedOn: "2026-10-11" }), { range })).toBe(false);
+    expect(fuelEntryMatches(entry({ transactedOn: "2026-10-19" }), { range })).toBe(false);
   });
 });

@@ -8,6 +8,8 @@
  * missing the baseline needed to compute".
  */
 
+import { dateInRange, type DateRangeValue } from "@/lib/domain/date-range";
+
 export const SCHEDULE_STATUSES = ["NOT_CONFIGURED", "OK", "DUE_SOON", "DUE", "OVERDUE"] as const;
 export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
 
@@ -167,4 +169,32 @@ export function computeScheduleStatus(input: ScheduleInput): ScheduleResult {
     result.note = `Partially configured: ${incomplete}`;
   }
   return result;
+}
+
+/* ------------------------------------------------------------------ *
+ * Ledger selection — shared by the maintenance page and the service
+ * export so the downloaded file always contains exactly the rows on
+ * screen (the preventive board itself is a live status view and is
+ * never exported).
+ * ------------------------------------------------------------------ */
+
+/** Minimal record shape the predicate needs — keeps this module free of I/O imports. */
+export interface ServiceRecordFilterable {
+  vehicleId: string;
+  completedAt: Date | string;
+}
+
+export interface ServiceRecordFilter {
+  vehicleId?: string | null;
+  /** Inclusive completion-date period; absent = all dates. */
+  range?: DateRangeValue | null;
+}
+
+export function serviceRecordMatchesFilters(
+  record: ServiceRecordFilterable,
+  filter: ServiceRecordFilter,
+): boolean {
+  if (filter.vehicleId && record.vehicleId !== filter.vehicleId) return false;
+  if (filter.range && !dateInRange(record.completedAt, filter.range)) return false;
+  return true;
 }

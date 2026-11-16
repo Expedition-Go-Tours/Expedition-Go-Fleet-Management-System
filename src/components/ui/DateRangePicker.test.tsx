@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
-import { formatDateRangeLabel, toDateKey } from "@/lib/domain/date-range";
+import { toDateKey } from "@/lib/domain/date-range";
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -76,11 +76,12 @@ describe("DateRangePicker", () => {
     render(<DateRangePicker basePath="/fuel" />);
 
     await user.click(screen.getByRole("button", { name: /Filter by date/ }));
-    await user.click(screen.getByRole("button", { name: /^Today, / }));
+    // The picker opens on October 2026 (the applied range), so click a fixed
+    // day in that month — "Today" drifts out of the grid as time passes.
+    await user.click(screen.getByRole("button", { name: /18 October 2026$/ }));
 
     // A new anchor wins immediately; the summary shows the freshly clicked day.
-    const today = toDateKey(new Date());
-    expect(screen.getByText(formatDateRangeLabel({ from: today, to: today }))).toBeInTheDocument();
+    expect(screen.getByText("18 Oct 2026")).toBeInTheDocument();
     expect(screen.getByText("Now choose an end date")).toBeInTheDocument();
   });
 });

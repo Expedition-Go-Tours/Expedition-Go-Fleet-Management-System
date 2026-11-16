@@ -97,6 +97,8 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.INCIDENT_READ_OWN)).toBe(true);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.INCIDENT_READ_ALL)).toBe(false);
     expect(rolesHavePermission(["DRIVER"], PERMISSIONS.EXPENSE_EXPORT)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.FUEL_EXPORT)).toBe(false);
+    expect(rolesHavePermission(["DRIVER"], PERMISSIONS.SERVICE_EXPORT)).toBe(false);
 
     // The roles that coordinate and own the business do see everything.
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.REPORT_READ_ALL)).toBe(true);
@@ -114,6 +116,9 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.EXPENSE_EXPORT)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.FUEL_CREATE)).toBe(true);
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.FUEL_UPDATE)).toBe(true);
+    // Bulk downloads sit with the money desk, exactly like expense:export.
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.FUEL_EXPORT)).toBe(true);
+    expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_EXPORT)).toBe(true);
     // Records that completed maintenance happened (and books its cost), because
     // the same desk pays the invoice — but still cannot run or release.
     expect(rolesHavePermission(["OPERATIONS"], PERMISSIONS.SERVICE_RECORD)).toBe(true);
@@ -136,6 +141,8 @@ describe("baseline role matrix", () => {
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.EXPENSE_DELETE)).toBe(true);
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.FUEL_DELETE)).toBe(true);
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.SERVICE_DELETE)).toBe(true);
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.FUEL_EXPORT)).toBe(true);
+    expect(rolesHavePermission(["ADMIN"], PERMISSIONS.SERVICE_EXPORT)).toBe(true);
     // Only ADMIN may clear a safety hold; the route still re-checks open
     // critical issues, so the grant does not bypass the safety invariant.
     expect(rolesHavePermission(["ADMIN"], PERMISSIONS.VEHICLE_RELEASE)).toBe(true);

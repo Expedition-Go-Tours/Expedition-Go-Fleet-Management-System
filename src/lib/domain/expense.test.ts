@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   availableExpenseActions,
+  expenseMatchesLedger,
+  expenseMatchesTotals,
   expenseStatusLabel,
   EXPENSE_ACTIONS,
   IN_APP_EXPENSE_ACTIONS,
@@ -13,6 +15,7 @@ import {
   parsePaidTo,
   summarizeExpenses,
   toPesewas,
+  type Expense,
   type ExpenseSummaryRow,
 } from "@/lib/domain/expense";
 
@@ -205,5 +208,59 @@ describe("parsePaidTo — optional payee on a recorded payment", () => {
       ok: false,
       message: `paidTo must be ${MAX_PAID_TO_LENGTH} characters or fewer`,
     });
+  });
+});
+
+describe("expense ledger filters — the page and the export share one predicate", () => {
+  const expense = (overrides: Partial<Expense> = {}): Expense => {
+    const now = new Date("2026-10-12T12:00:00Z");
+    return {
+      id: "exp_1",
+      vehicleId: "veh_1",
+      category: "FUEL",
+      amountMinor: 500_00,
+      currency: "GHS",
+      description: "Fill",
+      incurredOn: new Date("2026-10-12T12:00:00Z"),
+      status: "PENDING",
+      createdBy: "user_1",
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  };
+
+  it("narrows the visible ledger by category, vehicle and period", () => {
+    expect(expenseMatchesLedger(expense(), {})).toBe(true);
+    expect(expenseMatchesLedger(expense(), { category: "FUEL" })).toBe(true);
+    expect(expenseMatchesLedger(expense(), { category: "TYRES" })).toBe(false);
+    expect(expenseMatchesLedger(expense(), { vehicleId: "veh_2" })).toBe(false);
+
+    const range = { from: "2026-10-12", to: "2026-10-18" };
+    expect(expenseMatchesLedger(expense(), { range })).toBe(true);
+    expect(
+      expenseMatchesLedger(expense({ incurredOn: new Date("2026-10-19T12:00:00Z") }), { range }),
+    ).toBe(false);
+    expect(
+      expenseMatchesLedger(expense({ incurredOn: new Date("2026-10-18T23:59:00Z") }), { range }),
+    ).toBe(true);
+  });
+
+  it("keeps category out of the totals predicate — the page's documented rule", () => {
+    // The totals predicate has no category dimension at all: category narrows
+    // the visible ledger only, so a TYRES row still counts toward the totals
+    // for the chosen vehicle and period.
+    expect(expenseMatchesTotals(expense({ category: "TYRES" }), {})).toBe(true);
+    expect(expenseMatchesTotals(expense({ category: "TYRES" }), { vehicleId: "veh_1" })).toBe(true);
+  });
+
+  it("honours vehicle and period in the totals predicate", () => {
+    expect(expenseMatchesTotals(expense(), { vehicleId: "veh_1" })).toBe(true);
+    expect(expenseMatchesTotals(expense(), { vehicleId: "veh_2" })).toBe(false);
+    expect(
+      expenseMatchesTotals(expense({ incurredOn: new Date("2026-09-30T12:00:00Z") }), {
+        range: { from: "2026-10-01", to: "2026-10-31" },
+      }),
+    ).toBe(false);
   });
 });

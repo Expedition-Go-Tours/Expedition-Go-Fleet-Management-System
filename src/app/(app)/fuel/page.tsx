@@ -8,10 +8,12 @@ import { Card } from "@/components/ui/Card";
 import { CellMeta, DataTable, Td } from "@/components/ui/DataTable";
 import { DeleteRecordDialog } from "@/components/ui/DeleteRecordDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { consumptionByEntry, type FuelEntry } from "@/lib/domain/fuel";
-import { dateInRange, resolveDateRange } from "@/lib/domain/date-range";
+import { consumptionByEntry, fuelEntryMatches, type FuelEntry } from "@/lib/domain/fuel";
+import { formatDateRangeLabel, resolveDateRange } from "@/lib/domain/date-range";
+import { exportHref } from "@/lib/export/http";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { listFuelEntries } from "@/lib/repos/fuel";
 import { listVehicles } from "@/lib/repos/vehicles";
@@ -37,6 +39,7 @@ export default async function FuelPage({
   const canCreate = permissions.has(PERMISSIONS.FUEL_CREATE);
   const canEdit = permissions.has(PERMISSIONS.FUEL_UPDATE);
   const canDelete = permissions.has(PERMISSIONS.FUEL_DELETE);
+  const canExport = permissions.has(PERMISSIONS.FUEL_EXPORT);
   const { vehicleId, from, to } = await searchParams;
   const dateRange = resolveDateRange({ from, to });
 
@@ -47,10 +50,10 @@ export default async function FuelPage({
     .sort((a, b) => a.regNumber.localeCompare(b.regNumber))
     .map((v) => ({ id: v.id, label: v.regNumber }));
 
-  const filteredEntries = entries.filter(
-    (entry) =>
-      (!vehicleId || entry.vehicleId === vehicleId) &&
-      (!dateRange || dateInRange(entry.transactedOn, dateRange)),
+  // One predicate (`fuelEntryMatches`) drives the page and the export, so the
+  // downloaded file can never contain different rows than the ledger on screen.
+  const filteredEntries = entries.filter((entry) =>
+    fuelEntryMatches(entry, { vehicleId, range: dateRange }),
   );
 
   // Defensible consumption: adjacent full-tank fill-ups on the same vehicle,
@@ -79,13 +82,31 @@ export default async function FuelPage({
   const measuredCount = rows.filter((r) => r.measured).length;
   const vehicleCount = new Set(rows.map((r) => r.vehicleId)).size;
 
+  // What the export will contain, shown in the export menu.
+  const exportHint = [
+    dateRange ? formatDateRangeLabel(dateRange) : "All dates",
+    vehicleId ? (vehicleById.get(vehicleId)?.regNumber ?? vehicleId) : "All vehicles",
+  ].join(" · ");
+  const exportFilters = { from: dateRange?.from, to: dateRange?.to, vehicleId };
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Fuel"
         description="Fuel ledger. Record the amount paid; the odometer is optional and the cost is mirrored into the expense ledger."
         crumbs={[{ label: "Finance & compliance" }, { label: "Fuel" }]}
-        actions={<AddFuelDialog canCreate={canCreate} vehicles={vehicleOptions} />}
+        actions={
+          <>
+            {canExport && (
+              <ExportMenu
+                hint={exportHint}
+                csvHref={exportHref("/api/v1/fuel/export", "csv", exportFilters)}
+                pdfHref={exportHref("/api/v1/fuel/export", "pdf", exportFilters)}
+              />
+            )}
+            <AddFuelDialog canCreate={canCreate} vehicles={vehicleOptions} />
+          </>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

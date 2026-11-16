@@ -1,4 +1,5 @@
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { dateInRange, type DateRangeValue } from "@/lib/domain/date-range";
 import type { ActionMap } from "@/lib/domain/lifecycle";
 
 /*
@@ -249,4 +250,38 @@ export function toPesewas(amount: unknown, exponent = 2): number | null {
     return Number(whole) * 10 ** exponent + Number((frac + "0000").slice(0, exponent));
   }
   return null;
+}
+
+/* ------------------------------------------------------------------ *
+ * Ledger selection — shared by the expenses page and the export so
+ * the downloaded file always contains exactly the rows on screen.
+ * ------------------------------------------------------------------ */
+
+export interface ExpenseLedgerFilter {
+  category?: string | null;
+  vehicleId?: string | null;
+  /** Inclusive incurred-date period; absent = all dates. */
+  range?: DateRangeValue | null;
+}
+
+/** Row predicate for the visible ledger (category + vehicle + period). */
+export function expenseMatchesLedger(expense: Expense, filter: ExpenseLedgerFilter): boolean {
+  if (filter.category && expense.category !== filter.category) return false;
+  if (filter.vehicleId && expense.vehicleId !== filter.vehicleId) return false;
+  if (filter.range && !dateInRange(expense.incurredOn, filter.range)) return false;
+  return true;
+}
+
+/**
+ * Totals predicate: the category filter narrows the visible ledger only,
+ * while vehicle and period narrow the totals too — the page's documented rule,
+ * kept here so the exported TOTAL can never diverge from the summary cards.
+ */
+export function expenseMatchesTotals(
+  expense: Expense,
+  filter: { vehicleId?: string | null; range?: DateRangeValue | null },
+): boolean {
+  if (filter.vehicleId && expense.vehicleId !== filter.vehicleId) return false;
+  if (filter.range && !dateInRange(expense.incurredOn, filter.range)) return false;
+  return true;
 }
