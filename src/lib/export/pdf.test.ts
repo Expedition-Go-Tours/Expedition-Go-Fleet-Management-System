@@ -75,4 +75,24 @@ describe("buildExportPdf", () => {
     expect(new Uint8Array(empty).slice(0, 5)).toEqual(new Uint8Array([37, 80, 68, 70, 45]));
     expect(text).toContain("No records match the selected filters.");
   });
+
+  it("shows TOTAL once, at the end of the table — never repeated on earlier pages", () => {
+    const manyRows = Array.from({ length: 90 }, (_, i) => [
+      "12 Oct 2026",
+      `GT-${1000 + i}-26`,
+      "GHS 100.00",
+    ]);
+    const pdf = buildExportPdf({
+      title: "EXPEDITION-GO TOURS LTD FUEL RECORD",
+      columns: ["Date", "Vehicle", "Amount"],
+      rows: manyRows,
+      totals: ["TOTAL", "", "GHS 9,000.00"],
+    });
+    const text = asText(pdf);
+
+    // The document really is multi-page …
+    expect(text).toMatch(/Page \d+ of [2-9]\d*/);
+    // … and the total appears exactly once (it would be one per page as a foot).
+    expect(text.match(/TOTAL/g)).toHaveLength(1);
+  });
 });

@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { autoTable } from "jspdf-autotable";
+import { autoTable, type RowInput } from "jspdf-autotable";
 
 /**
  * Server-side PDF export for ledger records (A4 landscape).
@@ -96,7 +96,7 @@ export function buildExportPdf(input: ExportPdfInput): ArrayBuffer {
   doc.line(MARGIN_MM, HEADER_BOTTOM_MM - 0.5, pageWidth - MARGIN_MM, HEADER_BOTTOM_MM - 0.5);
 
   const sanitizedColumns = input.columns.map(sanitizePdfText);
-  const body =
+  const body: RowInput[] =
     input.rows.length > 0
       ? input.rows.map((row) => row.map(sanitizePdfText))
       : [
@@ -109,10 +109,21 @@ export function buildExportPdf(input: ExportPdfInput): ArrayBuffer {
           ],
         ];
 
+  // The TOTAL is a final body row, deliberately not the table's `foot`:
+  // autotable repeats a foot on every page, and the total belongs once — at
+  // the end of the table, on the last page only.
+  if (input.totals) {
+    body.push(
+      input.totals.map((content) => ({
+        content: sanitizePdfText(content),
+        styles: { fillColor: SUBTLE, textColor: INK, fontStyle: "bold" as const },
+      })),
+    );
+  }
+
   autoTable(doc, {
     head: [sanitizedColumns],
     body,
-    ...(input.totals ? { foot: [input.totals.map(sanitizePdfText)] } : {}),
     startY: HEADER_BOTTOM_MM + 3,
     theme: "grid",
     margin: { top: HEADER_BOTTOM_MM + 3, right: MARGIN_MM, bottom: 16, left: MARGIN_MM },
@@ -129,11 +140,6 @@ export function buildExportPdf(input: ExportPdfInput): ArrayBuffer {
     headStyles: {
       fillColor: INK,
       textColor: WHITE,
-      fontStyle: "bold",
-    },
-    footStyles: {
-      fillColor: SUBTLE,
-      textColor: INK,
       fontStyle: "bold",
     },
     alternateRowStyles: {
