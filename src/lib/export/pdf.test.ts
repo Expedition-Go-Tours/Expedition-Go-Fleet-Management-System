@@ -25,6 +25,11 @@ describe("sanitizePdfText", () => {
     expect(sanitizePdfText("a\u00A0b")).toBe("a b");
   });
 
+  it("renders the cedi sign as the ISO code — Windows-1252 has no ₵", () => {
+    expect(sanitizePdfText("GH₵1,210.00")).toBe("GHS1,210.00");
+    expect(sanitizePdfText("₵50")).toBe("C50");
+  });
+
   it("keeps newlines so multi-line cells break where the caller intended", () => {
     expect(sanitizePdfText("12 Nov 2026\nGoil Station")).toBe("12 Nov 2026\nGoil Station");
   });

@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
 
     if (format === "pdf") {
       const pdf = buildExportPdf({
-        title: "Expense ledger export",
+        title: "EXPEDITION-GO TOURS LTD EXPENSE RECORD",
         subtitle,
         meta,
         columns: ["Date", "Vehicle", "Category", "Description", "Supplier", "Paid to", "Amount"],

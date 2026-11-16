@@ -69,10 +69,10 @@ export async function GET(request: NextRequest) {
 
     if (format === "pdf") {
       const pdf = buildExportPdf({
-        title: "Fuel ledger export",
+        title: "EXPEDITION-GO TOURS LTD FUEL RECORD",
         subtitle,
         meta,
-        columns: ["Date", "Vehicle", "Paid to", "Odometer", "Litres", "Total", "Tank"],
+        columns: ["Date", "Vehicle", "Paid to", "Odometer", "Litres", "Amount", "Tank"],
         rows: rows.map((entry) => [
           `${formatDate(entry.transactedOn)}${entry.station ? `\n${entry.station}` : ""}`,
           vehicleById.get(entry.vehicleId)?.regNumber ?? "—",
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       "odometerKm",
       "litres",
       "unitPriceMinor",
-      "totalMinor",
+      "amountMinor",
       "currency",
       "fullTank",
     ];

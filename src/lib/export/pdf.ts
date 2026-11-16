@@ -25,12 +25,15 @@ const WHITE: [number, number, number] = [255, 255, 255];
  * Keep text renderable by the built-in WinAnsi fonts: printable ASCII, the
  * Latin-1 supplement, newlines (autotable line-breaks on them), and the
  * typographic marks (dashes, quotes, ellipsis, euro) Windows-1252 actually
- * defines. NBSP becomes a plain space; anything else — emoji, Twi characters,
- * CJK — becomes `?`.
+ * defines. NBSP becomes a plain space; the cedi sign (not in Windows-1252)
+ * becomes the ISO code `GHS`; anything else — emoji, Twi characters, CJK —
+ * becomes `?`.
  */
 export function sanitizePdfText(value: string): string {
   return value
     .replace(/\u00A0/g, " ")
+    .replace(/GH₵/g, "GHS")
+    .replace(/₵/g, "C")
     .replace(
       /[^\n\r\u0020-\u007E\u00A1-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2026\u2020\u2021\u2030\u20AC]/gu,
       "?",
@@ -70,9 +73,11 @@ export function buildExportPdf(input: ExportPdfInput): ArrayBuffer {
 
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Header block (first page).
+  // Header block (first page). The title is the branded record name — the
+  // company line plus what the document is — set smaller than a page headline
+  // so the table stays the focus.
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(13);
   doc.setTextColor(...INK);
   doc.text(title, MARGIN_MM, 16);
 

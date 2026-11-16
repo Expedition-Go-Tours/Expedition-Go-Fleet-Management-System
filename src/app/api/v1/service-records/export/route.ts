@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       // The PDF mirrors the on-screen table's columns; the CSV below carries
       // the fuller record (work performed, provider, technician, ids).
       const pdf = buildExportPdf({
-        title: "Completed service records",
+        title: "EXPEDITION-GO TOURS LTD SERVICE RECORD",
         subtitle,
         meta,
         columns: ["Completed", "Vehicle", "Task", "Odometer", "Cost", "Paid to", "Source"],
